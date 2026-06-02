@@ -1,0 +1,196 @@
+# =============================================================================
+# SMT replication baseline — domain spec (the contract).
+#
+# This file is the single source of truth for the surface-mount-assembly (SMT)
+# reproduction of Shenoy & Ameri (2026). The generator READS this file; nothing
+# domain-specific is hard-coded in Python. The medical-device port later swaps
+# this file for domain/insulin_pump.yaml with no generator code changes.
+#
+# Conventions:
+#   - Every parameter has a two-sided spec [lsl, usl] and a process sigma.
+#   - "deviation" = (value - nominal) / half_width, so |deviation| = 1.0 is the
+#     nearer spec limit. Risk and labels are computed from these normalized devs.
+# =============================================================================
+
+device_class: smt_assembly
+standards:
+  - IPC-A-610     # acceptability of electronic assemblies
+  - J-STD-001     # soldering requirements
+
+# ---------------------------------------------------------------------------
+# Defect classes. Priors are CALIBRATION TARGETS: the generator solves per-class
+# logit offsets so all three realized marginals match these. Priors are the
+# paper's exact Table I counts as fractions of 200,000:
+#   no_defect 175,420 -> 0.877100;  open_circuit 12,011 -> 0.060055;
+#   solder_bridging 12,569 -> 0.062845.
+# Labels are not sampled from the priors directly — they come from p(y|x).
+# ---------------------------------------------------------------------------
+defects:
+  - name: no_defect
+    prior: 0.877100
+  - name: open_circuit
+    prior: 0.060055
+  - name: solder_bridging
+    prior: 0.062845
+
+# ---------------------------------------------------------------------------
+# Two process stages (faithful to the paper: paste printing, then reflow).
+# Each stage gets its own mechanism softmax head in the MLP.
+# ---------------------------------------------------------------------------
+mechanisms:
+  stage_printing:
+    - no_mechanism
+    - aperture_overfill
+    - poor_paste_transfer
+  stage_reflow:
+    - no_mechanism
+    - reflow_spreading
+    - non_coalescence
+
+# ---------------------------------------------------------------------------
+# Six monitored process parameters. sigma is the natural process spread; the
+# spec half-width divided by sigma sets how often a parameter drifts out of spec.
+# ---------------------------------------------------------------------------
+parameters:
+  - id: ambient_relative_humidity
+    nominal: 50.0
+    lsl: 30.0
+    usl: 70.0
+    sigma: 8.0
+    unit: "%RH"
+    stage: stage_printing
+  - id: ambient_temperature
+    nominal: 25.0
+    lsl: 20.0
+    usl: 30.0
+    sigma: 2.5
+    unit: "C"
+    stage: stage_printing
+    # Causal per the paper (Fig. 2): high -> solder_bridging via aperture_overfill,
+    # low -> open_circuit via poor_paste_transfer.
+  - id: paste_viscosity
+    nominal: 100.0
+    lsl: 90.0
+    usl: 110.0
+    sigma: 5.0
+    unit: "Pa.s"
+    stage: stage_printing
+  - id: stencil_thickness
+    nominal: 100.0
+    lsl: 95.0
+    usl: 105.0
+    sigma: 2.0
+    unit: "um"
+    stage: stage_printing
+  - id: time_above_liquidus
+    nominal: 60.0
+    lsl: 45.0
+    usl: 75.0
+    sigma: 3.0
+    unit: "s"
+    stage: stage_reflow
+  - id: peak_reflow_temperature
+    nominal: 255.0
+    lsl: 250.0
+    usl: 260.0
+    sigma: 2.5
+    unit: "C"
+    stage: stage_reflow
+
+# ---------------------------------------------------------------------------
+# Ishikawa-style causal map: defect <- via mechanism <- parameter (+ direction).
+# Used to (a) build defect logits, (b) assign ground-truth mechanism labels,
+# (c) build RCA chains downstream. 'direction' = which side of nominal drives
+# the defect; it is NOT used for risk magnitude (risk is two-sided).
+# ---------------------------------------------------------------------------
+causal_edges:
+  # Matches paper Fig. 2: solder bridging via aperture_overfill (printing) and
+  # reflow_spreading (reflow); open circuit is the mirror image with the opposite
+  # non-compliance direction on every parameter (the paper's didactic point).
+  # solder bridging: too much paste / too much heat
+  - {defect: solder_bridging, via: aperture_overfill,   parameter: stencil_thickness,         direction: high, weight: 1.5}
+  - {defect: solder_bridging, via: aperture_overfill,   parameter: ambient_temperature,       direction: high, weight: 0.7}
+  - {defect: solder_bridging, via: aperture_overfill,   parameter: paste_viscosity,           direction: low,  weight: 1.3}
+  - {defect: solder_bridging, via: aperture_overfill,   parameter: ambient_relative_humidity, direction: high, weight: 0.8}
+  - {defect: solder_bridging, via: reflow_spreading,    parameter: peak_reflow_temperature,   direction: high, weight: 1.4}
+  - {defect: solder_bridging, via: reflow_spreading,    parameter: time_above_liquidus,       direction: high, weight: 1.0}
+  # open circuit: too little paste / insufficient heat (mirror of bridging)
+  - {defect: open_circuit,    via: poor_paste_transfer, parameter: stencil_thickness,         direction: low,  weight: 1.5}
+  - {defect: open_circuit,    via: poor_paste_transfer, parameter: ambient_temperature,       direction: low,  weight: 0.7}
+  - {defect: open_circuit,    via: poor_paste_transfer, parameter: paste_viscosity,           direction: high, weight: 1.3}
+  - {defect: open_circuit,    via: poor_paste_transfer, parameter: ambient_relative_humidity, direction: low,  weight: 0.8}
+  - {defect: open_circuit,    via: non_coalescence,     parameter: peak_reflow_temperature,   direction: low,  weight: 1.4}
+  - {defect: open_circuit,    via: non_coalescence,     parameter: time_above_liquidus,       direction: low,  weight: 1.0}
+
+# ---------------------------------------------------------------------------
+# Gaussian copula correlation structure over the 6 parameters (symmetric;
+# unspecified pairs default to 0). Nearest-PD corrected at load time.
+# ---------------------------------------------------------------------------
+correlations:
+  ambient_relative_humidity:
+    ambient_temperature: -0.30
+    paste_viscosity: 0.10
+  ambient_temperature:
+    paste_viscosity: -0.40
+    peak_reflow_temperature: 0.20
+  paste_viscosity:
+    stencil_thickness: 0.15
+  time_above_liquidus:
+    peak_reflow_temperature: 0.60
+
+# ---------------------------------------------------------------------------
+# Non-stationary structure layered on top of the copula draw.
+#   wear:    linear trend over the full run, in sigma units (equipment aging).
+#   diurnal: sinusoid amplitude in sigma units, per shift hour-offset.
+# ---------------------------------------------------------------------------
+drift:
+  diurnal_period_hours: 24
+  parameters:
+    ambient_relative_humidity: {diurnal: 0.40}
+    ambient_temperature: {diurnal: 0.50}
+    stencil_thickness: {wear: 0.60}
+    peak_reflow_temperature: {wear: 0.30}
+    time_above_liquidus: {wear: 0.20}
+
+# ---------------------------------------------------------------------------
+# Graded risk target — the paper's Eq. (8) with (9)-(10), two-sided in |dev|:
+#   z = min(1, max(0, (|dev| - delta_1)/(delta_2 - delta_1)))   (Eq. 9)
+#   t = max(0, |dev| - delta_2)                                 (Eq. 10)
+#   P = p_L + (p_M - p_L) z^2 + (p_H - p_M)(1 - exp(-kappa t))   (Eq. 8)
+# Risk = p_L in the safe region, rises quadratically to p_M AT the spec limit
+# (delta_2 = 1.0), and asymptotes to p_H out of spec. p_L/p_M/p_H are the
+# paper's stated 0.05/0.70/0.99; delta_1, delta_2, kappa are reproducibility
+# gaps (the paper gives the form, not the constants).
+# ---------------------------------------------------------------------------
+risk_function:
+  p_L: 0.05
+  p_M: 0.70
+  p_H: 0.99
+  delta_1: 0.50
+  delta_2: 1.00
+  kappa: 3.0
+
+# ---------------------------------------------------------------------------
+# Defect-logit model used ONLY to generate labels and the exact posterior
+# p(y|x). score(defect) = sum_edges weight * relu(directional deviation).
+#   logit(no_defect) = offset_no_defect (reference, 0)
+#   logit(defect)    = gain * score(defect) + offset(defect)
+# 'gain' is solved so the Bayes error E_x[1 - max_y p(y|x)] == target_bayes_error
+# (reproduces the paper's separability: defect head ~95% accuracy => Bayes <~ 0.05).
+# Per-class offsets are then solved so E[p(y)] matches the defect priors above.
+# ---------------------------------------------------------------------------
+label_model:
+  target_bayes_error: 0.045
+  calibrate_priors: true
+
+generator:
+  n_records: 200000
+  n_batches: 100
+  records_per_batch: 2000
+  seed: 42
+  train_frac: 0.70
+  val_frac: 0.15
+  test_frac: 0.15
+  generator_version: "smt-gen-v2"
+  # Fixed ISO timestamp keeps output byte-reproducible (no wall clock in data).
+  build_timestamp: "2026-06-02T00:00:00Z"

@@ -1,0 +1,18 @@
+# Reproducible environment for the SMT replication baseline.
+#   conda env create -f environment.yml
+#   conda activate paper
+name: paper
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - pyyaml
+  - matplotlib
+  - scikit-learn
+  - pip
+  - pip:
+      - rdflib
+      - python-docx

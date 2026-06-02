@@ -1,0 +1,40 @@
+{
+  "n_records": 200000,
+  "class_fractions": {
+    "no_defect": 0.87705,
+    "open_circuit": 0.060215,
+    "solder_bridging": 0.062735
+  },
+  "mechanism_fractions": {
+    "stage_printing": {
+      "no_mechanism": 0.8772,
+      "aperture_overfill": 0.062705,
+      "poor_paste_transfer": 0.060095
+    },
+    "stage_reflow": {
+      "no_mechanism": 0.8847,
+      "reflow_spreading": 0.06028,
+      "non_coalescence": 0.05502
+    }
+  },
+  "bayes_error": {
+    "exact_mc_bayes_error": 0.04500000000000001,
+    "exact_mc_bayes_error_test_split": 0.047282720592994626,
+    "bayes_optimal_vs_sampled_labels": 0.04481,
+    "per_true_class_mean_irreducible": {
+      "no_defect": 0.0304023570802987,
+      "open_circuit": 0.15282704898689511,
+      "solder_bridging": 0.1455827204587256
+    }
+  },
+  "classifier_upper_bounds": {
+    "majority_baseline_error": 0.13426666666666667,
+    "majority_class": "no_defect",
+    "hist_gradient_boosting_test_error": 0.0519,
+    "knn15_test_error": 0.0714
+  },
+  "nn_asymptotic_bracket": {
+    "R_star": 0.047282720592994626,
+    "asymptotic_1nn_error_upper": 0.09121195768597645
+  }
+}

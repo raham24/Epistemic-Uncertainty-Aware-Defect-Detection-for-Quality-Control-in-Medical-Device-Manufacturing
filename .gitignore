@@ -1,0 +1,13 @@
+# Generated dataset (large; reproducible from generator.py given the seed)
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Editor
+*.swp
