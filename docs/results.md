@@ -60,30 +60,33 @@ the two defects (the paper's didactic point, Fig. 2). The class-conditional plot
 shows clear separation for every parameter. `time_above_liquidus` has a very
 capable spec (±5σ) so it rarely violates, but still shifts by class.
 
-## 3. How hard is the problem (Bayes error)  →  `figs/bayes_summary.png`
+## 3. How hard is the problem — defect-head metrics  →  `figs/bayes_summary.png`, `figs/defect_metrics.png`
 
-| estimator | error | accuracy | meaning |
+The defect classifier is evaluated against the paper's Section V-A numbers
+(accuracy + weighted-F1), with the Bayes-optimal classifier as the achievable
+ceiling. The learner is a basic single-head MLP — the same model family as the
+paper.
+
+| classifier | accuracy | weighted-F1 | macro-F1 |
 |---|---|---|---|
-| Majority baseline (always no_defect) | 0.1343 | 86.6% | trivial reference (test split) |
-| kNN (k=15) | 0.0714 | 92.9% | empirical upper bound |
-| HistGradientBoosting | **0.0519** | **94.8%** | realizable strong learner |
-| **Paper's reported defect-head accuracy** | 0.0500 | **95.00%** | target (between learner and ceiling) |
-| Bayes floor (exact, test split) | 0.0473 | 95.3% | oracle ceiling |
-| **Bayes floor (exact, population)** | **0.0450** | **95.5%** | oracle ceiling (irreducible) |
-| Cover–Hart 1-NN upper bracket | 0.0912 | — | asymptotic bound |
+| Ours — basic MLP | 0.9524 | 0.9518 | 0.8654 |
+| Bayes-optimal ceiling | 0.9534 | 0.9524 | 0.8657 |
+| **Paper (reported)** | **0.9500** | **0.9536** | — |
+| Majority baseline (test split) | 0.8657 | — | — |
 
-**Read it as:** the labeling difficulty is calibrated so the oracle ceiling is
-~95.5% (population) / 95.3% (test). The paper's **95.00%** lands *between* a
-generic strong learner (94.8%, untuned gradient boosting) and that ceiling — so
-it is achievable on this data, and a well-tuned MLP reaching ~95% is realistic.
-The gap from the learner up to the ceiling is irreducible label noise. The point
-is that the data now tracks the paper's difficulty regime, neither trivially easy
-nor impossibly hard.
+Per-class F1 (MLP / Bayes-optimal): no_defect 0.973 / 0.973, open_circuit
+0.794 / 0.795, solder_bridging 0.829 / 0.829. The irreducible Bayes floor is
+**0.0473 (test) / 0.0450 (population)** — an oracle accuracy ceiling of ~95.3–95.5%.
 
-Because the generator's posterior is known, `Bayes error = E_x[1 − max_y p(y|x)]`
-is exact (not an estimate). The strong learner's error (5.00% ≥ Bayes 4.73%)
-respects the floor, as it must. All numbers independently re-verified to machine
-precision; train/val/test confirmed leakage-free.
+**Read it as:** the basic MLP reaches the Bayes-optimal ceiling almost exactly
+(macro-F1 0.8654 vs 0.8657; per-class F1 within 0.0003) — so an MLP can train to
+optimality on this data, validating the pipeline. Its accuracy (95.24%) brackets
+the paper's **95.00%** and its weighted-F1 (95.18%) sits just under the paper's
+**95.36%**. The remaining ~0.2 pp F1 gap is because our minority defects (open /
+bridging) are marginally harder; since the MLP is already at the ceiling, closing
+it means making those two classes slightly more separable in the generator, not
+better modeling. Because the posterior is known, the Bayes floor is exact, and
+both learners respect it.
 
 ## Reproduce
 

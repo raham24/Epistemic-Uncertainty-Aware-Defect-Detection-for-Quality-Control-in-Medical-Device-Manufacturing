@@ -77,34 +77,34 @@ The posterior `p(y|x)` is stored as columns `p_no_defect`, `p_open_circuit`,
 
 ---
 
-## C. Bayes error estimation
+## C. Difficulty + defect-head metrics (paper comparison)
 
 The generator samples `y ~ Categorical(p(y|x))` with a **known** posterior, and
 the model sees exactly the features the posterior is built from. So the Bayes
-error is available in closed form, and learned classifiers should approach it
-from above.
+error (oracle ceiling) is available in closed form, and we report the paper's
+Section V-A metrics (accuracy + weighted-F1) against it.
 
 ```
-# Exact (Monte-Carlo over the known posterior):
-R*  <- mean_x [ 1 - max_y p(y|x) ]
+# Exact Bayes error (oracle ceiling), Monte-Carlo over the known posterior:
+R*  <- mean_x [ 1 - max_y p(y|x) ]              # overall and on the test split
 
-# Finite-sample cross-check:
-R_argmax <- mean[ argmax_y p(y|x) != y_sampled ]      # should equal R*
+# Bayes-optimal classifier (the ceiling): argmax of the posterior
+y_opt <- argmax_y p(y|x)
+acc, weighted_F1, macro_F1, per_class_PRF <- metrics(y_opt, y_sampled)   on test
 
-# Upper bounds (strong learners; error >= Bayes error):
-R_GB  <- test_error( HistGradientBoosting fit on (X, y) )
-R_kNN <- test_error( kNN(15) on standardized X )
+# Basic MLP (same model family as the paper):
+y_mlp <- MLP.fit(scaled X_train, y_train).predict(scaled X_test)
+acc, weighted_F1, macro_F1, per_class_PRF <- metrics(y_mlp, y_test)
 
-# Reference points:
-R_majority <- test_error( always predict argmax class prior )
-# Cover-Hart asymptotic 1-NN bracket: R* <= R_NN <= R*(2 - c/(c-1) R*)
+# Reference: paper Section V-A = {accuracy 95.00%, weighted-F1 95.36%}
+# Reference: majority baseline = always predict the most common class
 ```
 
-Interpretation: if `R_GB` and `R_kNN` sit just above `R*` and well below
-`R_majority`, the features are informative and the residual error is
-irreducible label noise — that `R*` is the target a well-trained MLP should
-approach. Compute `R*` on the **same split** used for the learned-classifier
-errors when comparing them directly.
+Interpretation: the paper's accuracy/F1 should sit between the strong learner
+and the Bayes-optimal ceiling for the data to track the paper's difficulty. F1
+(weighted + per-class) matters more than accuracy here because the defect
+classes are imbalanced — the minority classes (open / bridging) drive the F1.
+Compute everything on the **same test split** for a like-for-like comparison.
 
 ---
 

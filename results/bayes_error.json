@@ -20,21 +20,65 @@
   "bayes_error": {
     "exact_mc_bayes_error": 0.04500000000000001,
     "exact_mc_bayes_error_test_split": 0.047282720592994626,
-    "bayes_optimal_vs_sampled_labels": 0.04481,
-    "per_true_class_mean_irreducible": {
-      "no_defect": 0.0304023570802987,
-      "open_circuit": 0.15282704898689511,
-      "solder_bridging": 0.1455827204587256
-    }
+    "bayes_optimal_vs_sampled_labels": 0.04481
   },
-  "classifier_upper_bounds": {
+  "defect_head_metrics": {
     "majority_baseline_error": 0.13426666666666667,
     "majority_class": "no_defect",
-    "hist_gradient_boosting_test_error": 0.0519,
-    "knn15_test_error": 0.0714
-  },
-  "nn_asymptotic_bracket": {
-    "R_star": 0.047282720592994626,
-    "asymptotic_1nn_error_upper": 0.09121195768597645
+    "mlp_basic": {
+      "accuracy": 0.9524,
+      "weighted_f1": 0.951830299750975,
+      "macro_f1": 0.8654173123631219,
+      "per_class": {
+        "no_defect": {
+          "precision": 0.9684351145038168,
+          "recall": 0.9769367010626829,
+          "f1": 0.972667331135475,
+          "support": 25972
+        },
+        "open_circuit": {
+          "precision": 0.8071646341463414,
+          "recall": 0.7821270310192023,
+          "f1": 0.7944486121530383,
+          "support": 1354
+        },
+        "solder_bridging": {
+          "precision": 0.860128617363344,
+          "recall": 0.8002991772625281,
+          "f1": 0.8291359938008523,
+          "support": 2674
+        }
+      }
+    },
+    "mlp_basic_test_error": 0.047599999999999976,
+    "bayes_optimal": {
+      "accuracy": 0.9534333333333334,
+      "weighted_f1": 0.9524232592045151,
+      "macro_f1": 0.8657449639833269,
+      "per_class": {
+        "no_defect": {
+          "precision": 0.9662315981180756,
+          "recall": 0.9805174803634683,
+          "f1": 0.9733221219996943,
+          "support": 25972
+        },
+        "open_circuit": {
+          "precision": 0.8451290591174022,
+          "recall": 0.7496307237813885,
+          "f1": 0.7945205479452054,
+          "support": 1354
+        },
+        "solder_bridging": {
+          "precision": 0.8686041751944331,
+          "recall": 0.793567688855647,
+          "f1": 0.8293922220050811,
+          "support": 2674
+        }
+      }
+    },
+    "paper_reference": {
+      "accuracy": 0.95,
+      "weighted_f1": 0.9536
+    }
   }
 }

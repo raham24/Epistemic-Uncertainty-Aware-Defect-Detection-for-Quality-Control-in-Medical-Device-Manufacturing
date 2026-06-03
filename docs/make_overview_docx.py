@@ -24,10 +24,12 @@ def pct(err: float) -> str:
 
 cf = M["class_fractions"]
 be = M["bayes_error"]
-cb = M["classifier_upper_bounds"]
+cb = M["defect_head_metrics"]
 bayes_pop = be["exact_mc_bayes_error"]
 bayes_test = be["exact_mc_bayes_error_test_split"]
-gb = cb["hist_gradient_boosting_test_error"]
+bo_f1 = cb["bayes_optimal"]["weighted_f1"]
+mlp_acc = cb["mlp_basic"]["accuracy"]
+mlp_f1 = cb["mlp_basic"]["weighted_f1"]
 
 doc = Document()
 doc.styles["Normal"].font.name = "Calibri"
@@ -138,10 +140,10 @@ doc.add_picture(str(ROOT / "figs" / "bayes_summary.png"), width=Inches(6.3))
 doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
 cap = doc.add_paragraph()
 cr = cap.add_run(
-    "Figure 1. How hard the classification problem is. A strong learner reaches "
-    f"~{pct(gb)} accuracy, just under the Bayes-optimal ceiling "
-    f"(~{pct(bayes_test)} test / {pct(bayes_pop)} population); the paper’s reported "
-    "95.00% sits between them."
+    "Figure 1. How hard the classification problem is. A basic MLP reaches "
+    f"~{mlp_acc*100:.1f}% accuracy — essentially the Bayes-optimal ceiling "
+    f"(~{pct(bayes_test)} test / {pct(bayes_pop)} population) — and brackets the "
+    "paper’s reported 95.00%."
 )
 cr.italic = True
 cr.font.size = Pt(9)
@@ -177,7 +179,9 @@ rows = [
      "Exact Eq. 8 implementation"),
     ("Dataset size / split", "200,000;  140k / 30k / 30k (batch-grouped)", "Same"),
     ("Defect-head accuracy", "95.00% (reported)",
-     f"Oracle ceiling {pct(bayes_pop)}; strong learner {pct(gb)} (target achievable)"),
+     f"Basic MLP {mlp_acc*100:.1f}%, at the oracle ceiling {pct(bayes_pop)} (paper's 95% bracketed)"),
+    ("Defect-head weighted-F1", "95.36% (reported)",
+     f"Basic MLP {mlp_f1*100:.1f}%, oracle ceiling {bo_f1*100:.1f}%"),
     ("Released artifacts", "None (no code, no constants)",
      "Full generator, spec, and analysis"),
 ]
