@@ -329,7 +329,7 @@ def _clf_metrics(y_true: np.ndarray, y_pred: np.ndarray, names: list[str]) -> di
     return {"accuracy": acc, "weighted_f1": wf1, "macro_f1": mf1, "per_class": per_class}
 
 
-def defect_head_metrics(df: pd.DataFrame, spec: dict, seed: int = 0) -> dict:
+def defect_head_metrics(df: pd.DataFrame, spec: dict, model_seed: int = 0) -> dict:
     """Algorithm — Defect-head classification metrics (to compare with the paper).
 
     Input: dataset df, spec, seed.
@@ -354,7 +354,7 @@ def defect_head_metrics(df: pd.DataFrame, spec: dict, seed: int = 0) -> dict:
     sc = StandardScaler().fit(Xtr)
     mlp = MLPClassifier(hidden_layer_sizes=(64, 32), activation="relu",
                         max_iter=500, early_stopping=True, n_iter_no_change=12,
-                        random_state=seed)
+                        random_state=model_seed)
     mlp.fit(sc.transform(Xtr), ytr)
     mlp_metrics = _clf_metrics(yte, mlp.predict(sc.transform(Xte)), names)
 
@@ -401,7 +401,7 @@ def main() -> None:
 
     # difficulty + paper-comparison metrics
     exact = bayes_error_exact(df, spec)
-    metrics = defect_head_metrics(df, spec, seed=spec["generator"]["seed"])
+    metrics = defect_head_metrics(df, spec, model_seed=spec["generator"]["seed"])
     plot_bayes_summary(exact, metrics, figs / "bayes_summary.png")
     plot_defect_metrics(metrics, figs / "defect_metrics.png")
 

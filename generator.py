@@ -30,6 +30,42 @@ import pandas as pd
 import yaml
 
 # --------------------------------------------------------------------------- #
+# Global seeding (for downstream model code)
+# --------------------------------------------------------------------------- #
+
+
+def seed_everything(seed: int = 42) -> None:
+    """Pin every global RNG source we might touch (belt-and-suspenders).
+
+    NOTE: this generator's OUTPUT does not depend on this. Its determinism comes
+    from explicit local streams (np.random.SeedSequence(seed).spawn(...)), which
+    no library call can overwrite. This helper pins GLOBAL state for downstream
+    model training (sklearn falls back to the global RNG when random_state is
+    unset; torch is seeded here for the future MLP).
+    """
+    import os
+    import random
+
+    # python, hashing, and the global numpy RNG
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+
+    # torch is optional (not a dependency yet) — only seed it if installed
+    try:
+        import torch
+    except ImportError:
+        return
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    # deterministic kernels; benchmark MUST be False (autotune is nondeterministic)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+# --------------------------------------------------------------------------- #
 # Spec loading
 # --------------------------------------------------------------------------- #
 
