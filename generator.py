@@ -59,10 +59,15 @@ def seed_everything(seed: int = 42) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    # Apple-GPU RNG: cuda.manual_seed_all does not touch MPS; seed it explicitly
+    if hasattr(torch, "mps") and torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
 
     # deterministic kernels; benchmark MUST be False (autotune is nondeterministic)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    # best-effort deterministic ops; warn_only so it never raises on a missing kernel
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
 
 # --------------------------------------------------------------------------- #

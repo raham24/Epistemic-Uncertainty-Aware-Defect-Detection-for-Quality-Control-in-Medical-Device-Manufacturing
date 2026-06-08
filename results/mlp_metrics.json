@@ -1,0 +1,18 @@
+{
+  "model_version": "mlp-v0.1",
+  "defect_head": {
+    "accuracy": 0.9515,
+    "weighted_f1": 0.9500781214057973,
+    "macro_f1": 0.8579543378421035
+  },
+  "bayes_optimal_accuracy": 0.9534333333333334,
+  "paper_reference": {
+    "accuracy": 0.95,
+    "weighted_f1": 0.9536
+  },
+  "mechanism_accuracy": {
+    "stage_printing": 0.9514,
+    "stage_reflow": 0.9539666666666666
+  },
+  "risk_mae": 0.015113640576601028
+}
