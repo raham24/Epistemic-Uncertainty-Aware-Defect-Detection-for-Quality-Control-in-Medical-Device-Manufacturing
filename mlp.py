@@ -35,8 +35,12 @@ class MultiHeadMLP(nn.Module):
 
     def __init__(self, n_features: int, n_defects: int, mech_sizes: list[int],
                  n_params: int, hidden: tuple[int, ...] = HIDDEN,
-                 dropout: float = DROPOUT) -> None:
+                 dropout: float = DROPOUT, abstain: bool = False) -> None:
         super().__init__()
+
+        # remember the abstain setting and how many REAL defect classes there are
+        self.abstain = abstain
+        self.n_defects = n_defects
 
         # build the shared trunk: Linear -> ReLU -> Dropout, stacked
         layers: list[nn.Module] = []
@@ -46,8 +50,9 @@ class MultiHeadMLP(nn.Module):
             d = w
         self.trunk = nn.Sequential(*layers)
 
-        # one head per task; mechanism heads are one-per-stage
-        self.defect_head = nn.Linear(d, n_defects)
+        # one head per task; mechanism heads are one-per-stage.
+        # abstain adds ONE extra defect output (the "abstain" class) -> m+1 wide
+        self.defect_head = nn.Linear(d, n_defects + (1 if abstain else 0))
         self.mech_heads = nn.ModuleList(nn.Linear(d, k) for k in mech_sizes)
         self.risk_head = nn.Linear(d, n_params)
 
@@ -71,9 +76,26 @@ class MultiHeadMLP(nn.Module):
         # turn the raw logits into the probabilities the evidence layer needs
         self.eval()
         out = self.forward(x)
-        defect_prob = torch.softmax(out["defect"], dim=1)        # p(y | x)
         mech_prob = [torch.softmax(m, dim=1) for m in out["mech"]]  # p(m_s | x)
         risk_prob = torch.sigmoid(out["risk"])                   # independent sigmoid
+
+        # abstain: the defect head is m+1 wide; the last column is the abstain prob.
+        # pick the class over the m REAL columns only (never the abstain column)
+        if self.abstain:
+            full = torch.softmax(out["defect"], dim=1)           # (B, m+1)
+            m = self.n_defects
+            defect_prob = full[:, :m]                            # real-class probs
+            return {
+                "defect_prob": defect_prob,
+                "defect_argmax": defect_prob.argmax(1),         # over the m real classes
+                "abstain_prob": full[:, m],                     # P(abstain) = r(x)
+                "mech_prob": mech_prob,
+                "mech_argmax": [p.argmax(1) for p in mech_prob],
+                "risk_prob": risk_prob,
+            }
+
+        # default (no abstain) path -- unchanged
+        defect_prob = torch.softmax(out["defect"], dim=1)        # p(y | x)
         return {
             "defect_prob": defect_prob,
             "defect_argmax": defect_prob.argmax(1),             # selected defect (chain root)
@@ -89,6 +111,9 @@ class MultiHeadLoss(nn.Module):
     override just one (e.g. an abstention defect term) without rewriting the
     combine. train()'s optimizer already includes loss_fn.parameters(), so a
     subclass with nn.Parameter head weights trains with no plumbing change."""
+
+    # subclasses that need the m+1-wide abstain defect head flip this to True
+    ABSTAIN = False
 
     def __init__(self, class_weight: torch.Tensor | None = None,
                  lam_d: float = LAMBDA_D, lam_m: float = LAMBDA_M,
@@ -128,8 +153,39 @@ class MultiHeadLoss(nn.Module):
         return loss
 
 
+class AbstentionLoss(MultiHeadLoss):
+    """Selective-classification "gambler" loss (main.pdf) on the defect head:
+    defect term is -log(o*p_y + r), where p_y is the true-class prob and r is the
+    abstain prob from ONE softmax over m real classes + 1 abstain output. r=0
+    reduces it to cross-entropy + const. Larger o -> predict more, abstain less.
+    Mechanism and risk terms are inherited unchanged."""
+
+    # tells train() to build the model with the extra abstain defect output
+    ABSTAIN = True
+
+    def __init__(self, class_weight: torch.Tensor | None = None, o: float = 2.0,
+                 lam_d: float = LAMBDA_D, lam_m: float = LAMBDA_M,
+                 lam_r: float = LAMBDA_R) -> None:
+        # class_weight is accepted only so train()'s call signature still fits;
+        # the gambler term has no per-class weight (abstention, not reweighting,
+        # is how this loss copes with imbalance), so we pass None to the base
+        super().__init__(class_weight=None, lam_d=lam_d, lam_m=lam_m, lam_r=lam_r)
+        self.o = float(o)                                   # payoff (>0)
+
+    def defect_term(self, out: dict, y_defect: torch.Tensor) -> torch.Tensor:
+        # work in log-space so o*p_y + r is stable even when both are tiny.
+        # log(o*p_y + r) = logsumexp([log p_y + log o, log r]) -- no eps, no spike
+        log_probs = torch.log_softmax(out["defect"], dim=1)      # (B, m+1)
+        log_py = log_probs.gather(1, y_defect.unsqueeze(1)).squeeze(1)  # log p_y
+        log_r = log_probs[:, -1]                                 # log r (abstain)
+        log_o = torch.log(torch.tensor(self.o, device=log_probs.device,
+                                       dtype=log_probs.dtype))
+        log_z = torch.logsumexp(torch.stack([log_py + log_o, log_r], 0), 0)
+        return -log_z.mean()
+
+
 # loss registry: add a subclass here and pick it with --loss
-LOSSES = {"multihead": MultiHeadLoss}
+LOSSES = {"multihead": MultiHeadLoss, "abstention": AbstentionLoss}
 
 
 # Data
@@ -216,12 +272,14 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
           class_weight_mode: str = CLASS_WEIGHT_MODE,
           loss_cls: type[MultiHeadLoss] = MultiHeadLoss,
           hidden: tuple[int, ...] = HIDDEN, dropout: float = DROPOUT,
-          seed: int = 0) -> tuple[MultiHeadMLP, dict]:
+          seed: int = 0, o: float = 2.0, lr: float = LR,
+          batch: int = BATCH) -> tuple[MultiHeadMLP, dict]:
     """Algorithm — Train the multi-head MLP with early stopping on val loss.
 
     Input: spec, the generated dataframe, device, epoch budget, weighting mode,
-           loss class, trunk hidden/dropout, and a seed for the shuffle.
-    Return: the best model and the encoded-data bundle (with the train stats).
+           loss class, trunk hidden/dropout, a seed for the shuffle, the
+           abstention payoff o, the learning rate lr, and the batch size.
+    Return: the best model and the encoded-data bundle (with stats + val history).
     """
 
     enc = _encode(df, spec)
@@ -235,30 +293,38 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
     stdz, enc["mu"], enc["sd"] = _standardize(enc["X"][tr], enc["X"][va])
     enc["X"][tr], enc["X"][va] = stdz
 
+    # an abstention loss needs the m+1-wide defect head
+    abstain = getattr(loss_cls, "ABSTAIN", False)
+
     # build the model with sizes taken from the spec
     model = MultiHeadMLP(
         n_features=enc["X"].shape[1], n_defects=len(enc["names"]),
         mech_sizes=[len(spec["mechanisms"][s]) for s in enc["stages"]],
-        n_params=enc["y_risk"].shape[1], hidden=hidden, dropout=dropout).to(device)
+        n_params=enc["y_risk"].shape[1], hidden=hidden, dropout=dropout,
+        abstain=abstain).to(device)
 
     # optional class weighting + Adam (the paper-default optimizer)
     cw = _class_weights(enc["y_def"][tr], len(enc["names"]), class_weight_mode)
-    loss_fn = loss_cls(class_weight=cw.to(device) if cw is not None else None)
+    # pass o only to an abstention loss (the base loss has no o argument)
+    loss_kwargs = {"o": o} if abstain else {}
+    loss_fn = loss_cls(class_weight=cw.to(device) if cw is not None else None,
+                       **loss_kwargs)
     loss_fn = loss_fn.to(device)
     # loss_fn.parameters() is included on purpose: a learnable-weight loss
     # subclass (nn.Parameter head weights) then trains with no change to train()
     opt = torch.optim.Adam(
-        list(model.parameters()) + list(loss_fn.parameters()), lr=LR)
+        list(model.parameters()) + list(loss_fn.parameters()), lr=lr)
 
     # seed the shuffle explicitly so a run is reproducible by its own seed,
     # not by the global-RNG ordering of everything that ran before it
     g = torch.Generator()
     g.manual_seed(seed)
-    tr_dl = _loader(enc, tr, BATCH, shuffle=True, generator=g)
-    va_dl = _loader(enc, va, BATCH, shuffle=False)
+    tr_dl = _loader(enc, tr, batch, shuffle=True, generator=g)
+    va_dl = _loader(enc, va, batch, shuffle=False)
 
-    # early stopping: keep the weights with the lowest validation loss
-    best_val, best_state, waited = float("inf"), None, 0
+    # early stopping: keep the weights with the lowest validation loss.
+    # val_hist records the per-epoch val loss for the training-curve plot
+    best_val, best_state, waited, val_hist = float("inf"), None, 0, []
     for ep in range(epochs):
         model.train()
         for xb, yd, ym, yr in tr_dl:
@@ -266,11 +332,17 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
             opt.zero_grad()                 # clear last step's gradients
             out = model(xb)                 # forward pass
             loss = loss_fn(out, yd, ym, yr) # composite loss
+            # stop loudly on a NaN/Inf loss instead of training on garbage
+            if not torch.isfinite(loss):
+                raise FloatingPointError(
+                    f"non-finite loss at epoch {ep} "
+                    f"(loss={loss_cls.__name__}, o={o})")
             loss.backward()                 # autograd fills every gradient
             opt.step()                      # update weights
 
         # validation loss (no gradients) drives early stopping
         val = _epoch_loss(model, loss_fn, va_dl, device)
+        val_hist.append(val)            # keep the per-epoch curve
         print(f"  epoch {ep:2d}  val_loss {val:.4f}")
         if val < best_val - 1e-4:
             best_val, best_state, waited = val, _clone(model), 0
@@ -283,6 +355,10 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
     # restore the best weights before returning
     if best_state is not None:
         model.load_state_dict(best_state)
+
+    # stash the val curve + best epoch for the training-curve plot
+    enc["val_loss_history"] = val_hist
+    enc["best_epoch"] = int(np.argmin(val_hist)) if val_hist else 0
     return model, enc
 
 
@@ -306,19 +382,25 @@ def _clone(model: nn.Module) -> dict:
 
 
 def evaluate(model: MultiHeadMLP, enc: dict, df: pd.DataFrame,
-             spec: dict, device: str = "cpu") -> dict:
-    """Algorithm — Test-split metrics, comparable to the paper and Bayes ceiling.
+             spec: dict, device: str = "cpu", split: str = "test") -> dict:
+    """Algorithm — Per-split metrics, comparable to the paper and Bayes ceiling.
 
-    Input: trained model, encoded data, dataframe, spec, device.
+    Input: trained model, encoded data, dataframe, spec, device, split name
+           (default 'test'; use 'val' for hyperparameter tuning -- never tune
+           on 'test').
     Return: defect accuracy/F1, per-stage mechanism accuracy, risk MAE.
     """
 
     names, stages = enc["names"], enc["stages"]
-    te = np.where(df["split"].to_numpy() == "test")[0]
+    ids = param_ids(spec)
+    te = np.where(df["split"].to_numpy() == split)[0]
 
-    # standardize the still-raw test rows with the STORED train stats
-    # (no leakage, no recompute -- enc["X"][te] was never touched in train())
-    Xte = ((enc["X"][te] - enc["mu"]) / enc["sd"]).astype(np.float32)
+    # pull RAW features for these rows straight from df and standardize with the
+    # STORED train stats. We do NOT reuse enc["X"][te]: train() standardized the
+    # train/val rows IN PLACE, so only test stays raw there -- recomputing raw
+    # from df is correct for ANY split (and byte-identical to before for test).
+    Xraw = df.iloc[te][ids].to_numpy(np.float32)
+    Xte = ((Xraw - enc["mu"]) / enc["sd"]).astype(np.float32)
 
     # one predict pass -> calibrated per-head evidence (the symbolic payload)
     pred = model.predict(torch.from_numpy(Xte).to(device))
@@ -346,7 +428,7 @@ def evaluate(model: MultiHeadMLP, enc: dict, df: pd.DataFrame,
     risk_pred = pred["risk_prob"].cpu().numpy()
     risk_mae = float(np.abs(risk_pred - enc["y_risk"][te]).mean())
 
-    return {
+    result = {
         "model_version": MODEL_VERSION,
         "defect_head": defect,
         "bayes_optimal_accuracy": bayes_acc,
@@ -354,6 +436,22 @@ def evaluate(model: MultiHeadMLP, enc: dict, df: pd.DataFrame,
         "mechanism_accuracy": mech,
         "risk_mae": risk_mae,
     }
+
+    # abstention metrics: only when the model has an abstain output
+    if getattr(model, "abstain", False):
+        r = pred["abstain_prob"].cpu().numpy()      # P(abstain) per test board
+        correct = d_pred == y_def                   # right on the m real classes
+        by_h = {}
+        for h in (0.3, 0.5, 0.7):
+            keep = r < h                            # accept (predict) when r < h
+            cov = float(keep.mean())                # fraction we predict on
+            # accuracy on the accepted set; None if we abstained on everything
+            sel = float(correct[keep].mean()) if keep.any() else None
+            by_h[str(h)] = {"coverage": cov, "abstention_rate": 1.0 - cov,
+                            "selective_accuracy": sel}
+        result["abstention"] = {"mean_abstain_prob": float(r.mean()),
+                                "by_threshold": by_h}
+    return result
 
 
 def main() -> None:
@@ -370,6 +468,8 @@ def main() -> None:
     ap.add_argument("--hidden", default=",".join(map(str, HIDDEN)),
                     help="comma-separated trunk widths, e.g. 256,256")
     ap.add_argument("--dropout", type=float, default=DROPOUT)
+    ap.add_argument("--o", type=float, default=2.0,
+                    help="abstention payoff (only used by --loss abstention)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="results/mlp_metrics.json")
     args = ap.parse_args()
@@ -385,7 +485,7 @@ def main() -> None:
     model, enc = train(spec, df, device=args.device, epochs=args.epochs,
                        class_weight_mode=args.class_weight,
                        loss_cls=LOSSES[args.loss], hidden=hidden,
-                       dropout=args.dropout, seed=args.seed)
+                       dropout=args.dropout, seed=args.seed, o=args.o)
     metrics = evaluate(model, enc, df, spec, device=args.device)
 
     # write metrics for the record
@@ -403,6 +503,17 @@ def main() -> None:
     for stage, acc in metrics["mechanism_accuracy"].items():
         print(f"  {stage:22s} {acc:.4f}")
     print(f"\nRisk head MAE: {metrics['risk_mae']:.4f}")
+
+    # abstention summary (only present when --loss is an abstention loss)
+    if "abstention" in metrics:
+        ab = metrics["abstention"]
+        print(f"\n=== Abstention (o={args.o}) ===")
+        print(f"  mean abstain prob: {ab['mean_abstain_prob']:.4f}")
+        for h, v in ab["by_threshold"].items():
+            sel = v["selective_accuracy"]
+            sel_s = f"{sel:.4f}" if sel is not None else "n/a"
+            print(f"  h={h}: coverage {v['coverage']:.4f}  selective_acc {sel_s}")
+
     print(f"Wrote {args.out}")
 
 
