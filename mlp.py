@@ -248,6 +248,39 @@ def _loader(enc: dict, idx: np.ndarray, batch: int, shuffle: bool,
                       generator=generator)
 
 
+def split_summary(df: pd.DataFrame, spec: dict) -> dict:
+    """Per-split record counts and per-defect-class counts within each split.
+
+    Return: {split: {"n": total, "classes": {defect_name: count}}}, with splits
+    in train/val/test order and classes in spec order (zeros included).
+    """
+
+    names = defect_names(spec)
+    out: dict = {}
+    for split in ("train", "val", "test"):
+        sub = df[df["split"] == split]
+        counts = sub["defect_label"].value_counts()
+        out[split] = {"n": int(len(sub)),
+                      "classes": {n: int(counts.get(n, 0)) for n in names}}
+    return out
+
+
+def _print_split_summary(summary: dict) -> None:
+    """Console table: one row per defect class, one column per split."""
+
+    splits = list(summary)
+    classes = list(next(iter(summary.values()))["classes"])
+    width = max(len(c) for c in classes + ["class"]) + 2
+    header = f"  {'class':{width}s}" + "".join(f"{s:>10s}" for s in splits)
+    print("\n=== Dataset split ===")
+    print(header)
+    for c in classes:
+        row = "".join(f"{summary[s]['classes'][c]:>10,d}" for s in splits)
+        print(f"  {c:{width}s}{row}")
+    totals = "".join(f"{summary[s]['n']:>10,d}" for s in splits)
+    print(f"  {'total':{width}s}{totals}")
+
+
 def _class_weights(y: np.ndarray, n: int, mode: str) -> torch.Tensor | None:
     """Defect-head class weights, normalized to mean 1 (None if mode == 'none')."""
 
@@ -381,6 +414,27 @@ def _clone(model: nn.Module) -> dict:
     return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
 
+def load_model(path: str, device: str = "cpu") -> tuple[MultiHeadMLP, dict]:
+    """Rebuild a trained model from a checkpoint written by main().
+
+    Return: (model in eval mode, the full checkpoint dict -- including the
+    train-time standardization stats under "standardize").
+    """
+
+    # weights_only=False: the checkpoint carries numpy mu/sd + config dicts,
+    # not just tensors (it's our own file, so this is safe)
+    ckpt = torch.load(path, map_location=device, weights_only=False)
+    cfg = ckpt["config"]
+    model = MultiHeadMLP(
+        n_features=cfg["n_features"], n_defects=cfg["n_defects"],
+        mech_sizes=cfg["mech_sizes"], n_params=cfg["n_params"],
+        hidden=tuple(cfg["hidden"]), dropout=cfg["dropout"],
+        abstain=cfg["abstain"]).to(device)
+    model.load_state_dict(ckpt["state_dict"])
+    model.eval()
+    return model, ckpt
+
+
 def evaluate(model: MultiHeadMLP, enc: dict, df: pd.DataFrame,
              spec: dict, device: str = "cpu", split: str = "test") -> dict:
     """Algorithm — Per-split metrics, comparable to the paper and Bayes ceiling.
@@ -441,6 +495,8 @@ def evaluate(model: MultiHeadMLP, enc: dict, df: pd.DataFrame,
     if getattr(model, "abstain", False):
         r = pred["abstain_prob"].cpu().numpy()      # P(abstain) per test board
         correct = d_pred == y_def                   # right on the m real classes
+        # how often abstain outright wins the m+1-way argmax
+        n_argmax = int((r > pred["defect_prob"].cpu().numpy().max(1)).sum())
         by_h = {}
         for h in (0.3, 0.5, 0.7):
             keep = r < h                            # accept (predict) when r < h
@@ -448,8 +504,11 @@ def evaluate(model: MultiHeadMLP, enc: dict, df: pd.DataFrame,
             # accuracy on the accepted set; None if we abstained on everything
             sel = float(correct[keep].mean()) if keep.any() else None
             by_h[str(h)] = {"coverage": cov, "abstention_rate": 1.0 - cov,
+                            "n_abstained": int((~keep).sum()),
                             "selective_accuracy": sel}
         result["abstention"] = {"mean_abstain_prob": float(r.mean()),
+                                "n_records": int(len(te)),
+                                "argmax_abstentions": n_argmax,
                                 "by_threshold": by_h}
     return result
 
@@ -472,6 +531,10 @@ def main() -> None:
                     help="abstention payoff (only used by --loss abstention)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="results/mlp_metrics.json")
+    ap.add_argument("--model-out", default="results/mlp_model.pt",
+                    help="checkpoint path (state_dict + config + train stats)")
+    ap.add_argument("--load", default=None,
+                    help="evaluate a saved checkpoint instead of training")
     args = ap.parse_args()
 
     # pin every RNG source so a run is reproducible
@@ -480,13 +543,48 @@ def main() -> None:
     spec = load_spec(args.spec)
     df = pd.read_csv(args.data)
 
-    print(f"Training {MODEL_VERSION} on {len(df):,} records (device={args.device})")
-    hidden = tuple(int(w) for w in args.hidden.split(","))
-    model, enc = train(spec, df, device=args.device, epochs=args.epochs,
-                       class_weight_mode=args.class_weight,
-                       loss_cls=LOSSES[args.loss], hidden=hidden,
-                       dropout=args.dropout, seed=args.seed, o=args.o)
+    summary = split_summary(df, spec)
+    _print_split_summary(summary)
+
+    if args.load:
+        # skip training: rebuild the model and the train-time standardization
+        # stats from the checkpoint, then evaluate on the test split as usual
+        print(f"Loading checkpoint {args.load} (device={args.device})")
+        model, ckpt = load_model(args.load, device=args.device)
+        enc = _encode(df, spec)
+        enc["mu"], enc["sd"] = ckpt["standardize"]["mu"], ckpt["standardize"]["sd"]
+    else:
+        print(f"Training {MODEL_VERSION} on {len(df):,} records (device={args.device})")
+        hidden = tuple(int(w) for w in args.hidden.split(","))
+        model, enc = train(spec, df, device=args.device, epochs=args.epochs,
+                           class_weight_mode=args.class_weight,
+                           loss_cls=LOSSES[args.loss], hidden=hidden,
+                           dropout=args.dropout, seed=args.seed, o=args.o)
     metrics = evaluate(model, enc, df, spec, device=args.device)
+    metrics["data_summary"] = summary
+
+    if not args.load:
+        # save the checkpoint: weights + everything needed to rebuild the model
+        # and standardize new inputs exactly as at train time
+        Path(args.model_out).parent.mkdir(parents=True, exist_ok=True)
+        torch.save({
+            "model_version": MODEL_VERSION,
+            "state_dict": model.state_dict(),
+            "config": {
+                "n_features": enc["X"].shape[1],
+                "n_defects": len(enc["names"]),
+                "mech_sizes": [len(spec["mechanisms"][s]) for s in enc["stages"]],
+                "n_params": enc["y_risk"].shape[1],
+                "hidden": hidden,
+                "dropout": args.dropout,
+                "abstain": getattr(model, "abstain", False),
+            },
+            "standardize": {"mu": enc["mu"], "sd": enc["sd"]},
+            "train_args": {"spec": args.spec, "data": args.data, "loss": args.loss,
+                           "o": args.o, "seed": args.seed,
+                           "class_weight": args.class_weight},
+        }, args.model_out)
+        print(f"Saved model checkpoint to {args.model_out}")
 
     # write metrics for the record
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -507,12 +605,15 @@ def main() -> None:
     # abstention summary (only present when --loss is an abstention loss)
     if "abstention" in metrics:
         ab = metrics["abstention"]
-        print(f"\n=== Abstention (o={args.o}) ===")
+        o = ckpt["train_args"]["o"] if args.load else args.o
+        print(f"\n=== Abstention (o={o}) ===")
         print(f"  mean abstain prob: {ab['mean_abstain_prob']:.4f}")
+        print(f"  abstain wins argmax: {ab['argmax_abstentions']:,}/{ab['n_records']:,} test records")
         for h, v in ab["by_threshold"].items():
             sel = v["selective_accuracy"]
             sel_s = f"{sel:.4f}" if sel is not None else "n/a"
-            print(f"  h={h}: coverage {v['coverage']:.4f}  selective_acc {sel_s}")
+            print(f"  h={h}: coverage {v['coverage']:.4f}  "
+                  f"abstained {v['n_abstained']:,}  selective_acc {sel_s}")
 
     print(f"Wrote {args.out}")
 
