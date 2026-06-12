@@ -236,7 +236,15 @@ def _encode(df: pd.DataFrame, spec: dict) -> dict:
     y_mech = np.empty((len(df), len(stages)), np.int64)
     for s, stage in enumerate(stages):
         m_idx = {m: i for i, m in enumerate(spec["mechanisms"][stage])}
-        y_mech[:, s] = df[f"{stage}_mechanism_label"].map(m_idx).to_numpy()
+        col = f"{stage}_mechanism_label"
+        mapped = df[col].map(m_idx)
+        # a label not in the spec vocab maps to NaN -> fail loudly instead of
+        # silently casting NaN to a garbage int index (caught a typo'd label)
+        if mapped.isna().any():
+            bad = sorted(df.loc[mapped.isna(), col].unique())
+            raise ValueError(f"{col} has values outside the spec mechanism "
+                             f"vocab {list(m_idx)}: {bad}")
+        y_mech[:, s] = mapped.to_numpy()
 
     # risk targets: the graded risk columns, already in (0,1)
     y_risk = df[[f"risk_{p}" for p in ids]].to_numpy(np.float32)
@@ -621,6 +629,10 @@ def run_cli(model_version: str, losses: dict, default_loss: str,
                 "abstain": getattr(model, "abstain", False),
             },
             "standardize": {"mu": enc["mu"], "sd": enc["sd"]},
+            # the per-epoch val curve + best epoch, so the training-curve plot
+            # can be drawn straight from the checkpoint (no retraining)
+            "val_loss_history": enc.get("val_loss_history", []),
+            "best_epoch": enc.get("best_epoch", 0),
             "train_args": {"spec": args.spec, "data": args.data, "loss": args.loss,
                            "o": args.o, "seed": args.seed,
                            "class_weight": args.class_weight},
