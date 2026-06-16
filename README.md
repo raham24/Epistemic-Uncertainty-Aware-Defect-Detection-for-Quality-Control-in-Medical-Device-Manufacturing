@@ -33,6 +33,7 @@ conda env create -f environment.yml      # or: conda activate paper (if it exist
 conda activate paper
 
 python generator.py        # -> data/smt_synthetic.csv   (200k records, deterministic)
+python generator_v2.py     # -> data/smt_synthetic_v2.csv (our format; see "Generator v2" below)
 python analysis.py         # -> figs/*.png, results/bayes_error.json
 
 python mlp_paper.py        # train the paper baseline    -> ~0.95 defect accuracy
@@ -48,7 +49,8 @@ and reproducible.
 
 ```
 domain/smt_paper.yaml   THE domain spec (single source of truth; the generator reads it)
-generator.py            spec-driven, deterministic SMT synthetic generator
+generator.py            spec-driven, deterministic SMT synthetic generator (paper format)
+generator_v2.py         our format: joint mechanism + per-mechanism risk, CLI-tunable balance/variance
 analysis.py             class/label histograms + Bayes-error estimation
 
 mlp_common.py           shared MLP engine: trunk, encoding, train loop, evaluate, CLI
@@ -100,6 +102,69 @@ Deep Gamblers (Liu et al., 2019); see `main.pdf`.
 `mlp_common.MultiHeadMLP(abstain=...)` is the single switch: when `False` every
 path is byte-identical to the plain model (so `mlp_paper.py` and
 `mlp.py --loss multihead` both reproduce the baseline).
+
+## Generator v2 (new version)
+
+`generator_v2.py` reuses **all** of v1's maths (imports the sampling, drift,
+deviations, defect scores, calibration, posterior, per-stage mechanism
+assignment, and the Eq. 8 `graded_risk` straight from `generator.py`) and only
+changes the output schema to a mechanism-centric, chained-prediction format:
+`head1 defect → head2 mechanism → head3 parameter → head4 risk`.
+
+| Head | Column(s) | What it is |
+|---|---|---|
+| head1 defect | `defect_label` | 3 classes (unchanged) |
+| head2 mechanism | `mechanism_joint` | **Cartesian product** of the two stages, `"<printing>__<reflow>"` — 3×3 = 9 possible classes, **7 live** |
+| (also kept) | `stage_printing_mechanism_label`, `stage_reflow_mechanism_label` | the per-stage labels, so an independent-head design stays available |
+| head3 parameter | `risk_<param>` ×6 | per-parameter graded risk (Eq. 8) — the parameter-violation signal, identical to v1 |
+| head4 risk | `risk_mech_<mechanism>` ×5 | per-mechanism risk incl. `no_mechanism`, from the same Eq. 8 aggregated through the causal map |
+
+Steps 1–5 are byte-identical to v1, so features, posteriors, and `defect_label`
+match `smt_synthetic.csv` row-for-row at the same seed; only the mechanism
+representation and the added per-mechanism risk differ.
+
+**Why the joint (Cartesian) mechanism head.** A defective board is usually
+implicated at *both* stages (≈94% of mechanism-bearing boards have a printing
+*and* a reflow mechanism — e.g. bridging = `aperture_overfill` + `reflow_spreading`).
+Two independent per-stage softmax heads (the paper's structure, kept in `mlp_paper.py`)
+assume the stages are conditionally independent given the features; a single
+softmax over the 9 joint classes models both stages failing at once directly
+(per Prof. Romanelli's suggestion). Only 7 of the 9 occur — the two cross-defect
+combos (`aperture_overfill__non_coalescence`, `poor_paste_transfer__reflow_spreading`)
+are structurally impossible because a board has one defect, so a 9-way head never
+predicts them.
+
+**Per-mechanism risk.** For each real mechanism, every causal edge that fires it
+contributes `graded_risk()` of its parameter's bad-direction deviation; the
+mechanism keeps the **max** over its edges. `no_mechanism` risk = `1 - max(real
+mechanism risks)`.
+
+### Tuning the dataset (CLI overrides)
+
+The class balance and process variance are spec-driven, so they are overridable
+without editing the YAML (each is validated; the original spec is never mutated):
+
+| flag | effect | example |
+|---|---|---|
+| `--priors` | defect class balance (the "split"); `no_defect` auto-filled if omitted, must sum to 1 | `--priors "open_circuit=0.25,solder_bridging=0.25"` → 0.5/0.25/0.25 |
+| `--sigma` | per-parameter process spread | `--sigma "paste_viscosity=8"` |
+| `--sigma-scale` | multiply **every** parameter's spread | `--sigma-scale 1.5` |
+| `--bayes-error` | target difficulty, in (0, 0.5) | `--bayes-error 0.08` |
+
+```bash
+# rebalance away from the ~88% no_defect default
+python generator_v2.py --priors "no_defect=0.5,open_circuit=0.25,solder_bridging=0.25" --out data/smt_balanced.csv
+
+# wider spread AND harder labels
+python generator_v2.py --sigma-scale 1.5 --bayes-error 0.08 --out data/smt_hard.csv
+```
+
+Note: `--sigma` alone does **not** change difficulty — the logit gain is
+re-calibrated to `target_bayes_error`, so the Bayes floor is held fixed
+regardless of spread. `--sigma` changes the raw feature distributions,
+out-of-spec rates, and risk targets; `--bayes-error` is the knob that actually
+moves difficulty. Every run prints the effective priors, sigmas, and target
+Bayes error up front.
 
 ## Key results
 
