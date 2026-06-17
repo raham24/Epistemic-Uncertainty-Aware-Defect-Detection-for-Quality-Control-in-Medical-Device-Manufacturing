@@ -116,12 +116,12 @@ changes the output schema to a mechanism-centric, chained-prediction format:
 | head1 defect | `defect_label` | 3 classes (unchanged) |
 | head2 mechanism | `mechanism_joint` | **Cartesian product** of the two stages, `"<printing>__<reflow>"` — 3×3 = 9 possible classes, **7 live** |
 | (also kept) | `stage_printing_mechanism_label`, `stage_reflow_mechanism_label` | the per-stage labels, so an independent-head design stays available |
-| head3 parameter | `risk_<param>` ×6 | per-parameter graded risk (Eq. 8) — the parameter-violation signal, identical to v1 |
-| head4 risk | `risk_mech_<mechanism>` ×5 | per-mechanism risk incl. `no_mechanism`, from the same Eq. 8 aggregated through the causal map |
+| head3 parameter | `risk_<param>` ×6 | per-parameter graded risk (Eq. 8) — the **global** parameter-violation signal, identical to v1 |
+| head4 risk | `risk_mech_<mechanism>_<param>` ×30 | per-mechanism, per-parameter risk **gated by mechanism**: nonzero only on the parameters a mechanism drives, 0 elsewhere; `no_mechanism` 0 everywhere (5 mechanisms × 6 params; 18 structurally always 0) |
 
 Steps 1–5 are byte-identical to v1, so features, posteriors, and `defect_label`
 match `smt_synthetic.csv` row-for-row at the same seed; only the mechanism
-representation and the added per-mechanism risk differ.
+representation and the gated per-mechanism risk differ.
 
 **Why the joint (Cartesian) mechanism head.** A defective board is usually
 implicated at *both* stages (≈94% of mechanism-bearing boards have a printing
@@ -134,10 +134,16 @@ combos (`aperture_overfill__non_coalescence`, `poor_paste_transfer__reflow_sprea
 are structurally impossible because a board has one defect, so a 9-way head never
 predicts them.
 
-**Per-mechanism risk.** For each real mechanism, every causal edge that fires it
-contributes `graded_risk()` of its parameter's bad-direction deviation; the
-mechanism keeps the **max** over its edges. `no_mechanism` risk = `1 - max(real
-mechanism risks)`.
+**Per-mechanism risk (gated by mechanism).** head4 is the risk *conditioned on
+the mechanism* head2 predicts. For each real mechanism, every causal edge that
+fires it scores its parameter's bad-direction deviation with `graded_risk()` and
+writes it into that `(mechanism, parameter)` cell (**max** if a parameter recurs
+on the mechanism's edges); **every parameter the mechanism does not drive stays
+0**, and `no_mechanism` is 0 everywhere. So the chain reads off `risk_mech_<m>_*`
+for the predicted `m`: a `no_mechanism` prediction → 0 risk everywhere; a
+reflow-stage mechanism → risk only on its reflow parameters, 0 on the printing
+parameters. (The unmasked global per-parameter risk still lives in head3's
+`risk_<param>`.) This is verified end-to-end in `test_generator_v2_risk.py`.
 
 ### Tuning the dataset (CLI overrides)
 

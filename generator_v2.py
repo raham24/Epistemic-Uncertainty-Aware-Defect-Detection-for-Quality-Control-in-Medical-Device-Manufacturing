@@ -18,22 +18,30 @@ the professor asked for:
                          stage_reflow_mechanism_label) so an independent-head
                          design stays available for comparison.
   head3  parameter     : per-parameter graded risk risk_<param> (Eq. 8) --
-                         identical to v1, the parameter-violation signal.
-  head4  risk          : per-MECHANISM risk risk_mech_<mechanism>, all 5 incl.
-                         no_mechanism, from the SAME Eq. 8 formula aggregated
-                         through the causal map.
+                         identical to v1, the GLOBAL parameter-violation signal.
+  head4  risk          : per-MECHANISM, per-parameter risk risk_mech_<mech>_<param>
+                         -- the risk GATED by mechanism. For a given mechanism the
+                         risk is nonzero ONLY on the parameters that mechanism acts
+                         through (its causal edges); every other parameter is 0.
+                         no_mechanism is all-zero. 5 mechanisms x 6 parameters = 30
+                         columns, of which 18 are structurally always 0.
 
 Chain: head1 defect -> head2 joint mechanism -> head3 parameter -> head4 risk.
+At inference the chain reads off risk_mech_<m>_* for the mechanism m that head2
+predicts: a no_mechanism prediction -> 0 risk everywhere; a reflow-stage mechanism
+-> risk only on its reflow parameters, 0 on the printing parameters.
 
 Note on the 9 joint classes: only 7 actually occur. The two cross-defect combos
 (aperture_overfill__non_coalescence, poor_paste_transfer__reflow_spreading) are
 structurally impossible because a board has a single defect, so they never
 appear in training -- a 9-way head simply never predicts them.
 
-Per-mechanism risk: for each real mechanism, take every causal edge that fires
-it, score the parameter's deviation in that edge's bad direction with the
-unchanged graded_risk(), and keep the MAX over the mechanism's edges. The
-no_mechanism risk is the complement 1 - max(real mechanism risks).
+Per-mechanism risk (gated): for each real mechanism, every causal edge that fires
+it scores its parameter's bad-direction deviation with the unchanged graded_risk()
+and writes it into that (mechanism, parameter) cell (MAX if a parameter recurs on
+the mechanism's edges). Parameters the mechanism does not touch stay 0, and
+no_mechanism is 0 everywhere -- the risk a mechanism carries is confined to the
+features it actually drives.
 
 The class balance and the process variance are spec-driven, so they can be
 overridden from the CLI without editing the YAML:
@@ -93,43 +101,43 @@ def mechanism_vocab(spec: dict[str, Any]) -> list[str]:
     return seen + ["no_mechanism"]
 
 
-def mechanism_risk(dev: np.ndarray,
-                   spec: dict[str, Any]) -> tuple[dict[str, np.ndarray], list[str]]:
-    """Algorithm — Per-mechanism risk from the unchanged Eq. 8 formula.
+def mechanism_param_risk(
+        dev: np.ndarray,
+        spec: dict[str, Any]) -> tuple[dict[str, np.ndarray], list[str], list[str]]:
+    """Algorithm — Per-mechanism, per-parameter risk GATED by mechanism.
 
     Input: deviations dev, spec.
-    Return: ({mechanism: risk array}, the 5-value vocab order).
+    Return: ({mechanism: (n, n_params) risk}, the 5-value mechanism vocab, the
+            parameter id order).
 
-    For each real mechanism, every causal edge that fires it contributes
-    graded_risk() of its parameter's bad-direction deviation; the mechanism keeps
-    the MAX over its edges. no_mechanism gets 1 - max(real mechanism risks).
+    For each real mechanism, only the parameters on that mechanism's causal edges
+    carry risk: each such edge scores its parameter's bad-direction deviation with
+    the unchanged graded_risk() and writes it into that (mechanism, parameter)
+    cell (MAX if a parameter recurs on the mechanism's edges). Every parameter the
+    mechanism does not touch stays 0, and no_mechanism is 0 everywhere. So the
+    risk a mechanism carries is confined to the features it actually drives.
     """
 
     rf = spec["risk_function"]
-    idx = {pid: i for i, pid in enumerate(param_ids(spec))}
+    ids = param_ids(spec)
+    idx = {pid: i for i, pid in enumerate(ids)}
     vocab = mechanism_vocab(spec)
-    real = [m for m in vocab if m != "no_mechanism"]
     n = dev.shape[0]
 
-    # each real mechanism = max graded-risk over the parameters on its edges
-    risk: dict[str, np.ndarray] = {}
-    for m in real:
-        rm = np.zeros(n)
-        for e in spec["causal_edges"]:
-            if e["via"] != m:
-                continue
-            # deviation pointed in this edge's bad direction, clipped at 0
-            col = dev[:, idx[e["parameter"]]]
-            signed = col if e["direction"] == "high" else -col
-            bad = np.maximum(0.0, signed)
-            # SAME Eq. 8 risk function, just fed the bad-direction deviation
-            rm = np.maximum(rm, graded_risk(bad, rf))
-        risk[m] = rm
-
-    # no_mechanism risk: high when no real mechanism is in violation
-    stacked = np.column_stack([risk[m] for m in real])
-    risk["no_mechanism"] = 1.0 - stacked.max(axis=1)
-    return risk, vocab
+    # one (n, n_params) matrix per mechanism; no_mechanism stays all-zero
+    risk: dict[str, np.ndarray] = {m: np.zeros((n, len(ids))) for m in vocab}
+    for e in spec["causal_edges"]:
+        m = e["via"]
+        if m == "no_mechanism":      # defensive: no_mechanism never has edges
+            continue
+        j = idx[e["parameter"]]
+        # deviation pointed in this edge's bad direction, clipped at 0
+        col = dev[:, j]
+        signed = col if e["direction"] == "high" else -col
+        bad = np.maximum(0.0, signed)
+        # SAME Eq. 8 risk function; max if a parameter recurs on the mechanism
+        risk[m][:, j] = np.maximum(risk[m][:, j], graded_risk(bad, rf))
+    return risk, vocab, ids
 
 
 def generate_v2(spec: dict[str, Any], seed: int | None = None) -> pd.DataFrame:
@@ -181,10 +189,12 @@ def generate_v2(spec: dict[str, Any], seed: int | None = None) -> pd.DataFrame:
     for j, pid in enumerate(ids):
         df[f"risk_{pid}"] = pr[:, j]
 
-    # 8. head4: per-mechanism risk (all 5), same Eq. 8 via the causal map
-    mrisk, vocab = mechanism_risk(dev, spec)
+    # 8. head4: per-mechanism, per-parameter risk gated by mechanism -- nonzero
+    #    only on the parameters each mechanism drives; no_mechanism all 0.
+    mrisk, vocab, mids = mechanism_param_risk(dev, spec)
     for m in vocab:
-        df[f"risk_mech_{m}"] = mrisk[m]
+        for j, pid in enumerate(mids):
+            df[f"risk_mech_{m}_{pid}"] = mrisk[m][:, j]
 
     # 9. provenance (v2 version stamp so the format is auditable)
     df["board_id"] = [f"PCB_{i:06d}" for i in range(len(df))]
