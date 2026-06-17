@@ -13,3 +13,10 @@ __pycache__/
 *.swp
 
 figs/
+
+# Local-only: tests / scratch and superseded older scripts -- not for GitHub.
+# Only the current prof-facing code (generator*, mlp*) is tracked in root.
+misc/
+legacy/
+
+docs/

@@ -1,9 +1,9 @@
 {
   "model_version": "mlp-v0.1",
   "defect_head": {
-    "accuracy": 0.9516666666666667,
-    "weighted_f1": 0.9500387698633879,
-    "macro_f1": 0.8570135290255396
+    "accuracy": 0.8657333333333334,
+    "weighted_f1": 0.8034312203720908,
+    "macro_f1": 0.30934514876485864
   },
   "bayes_optimal_accuracy": 0.9534333333333334,
   "paper_reference": {
@@ -11,37 +11,37 @@
     "weighted_f1": 0.9536
   },
   "mechanism_accuracy": {
-    "stage_printing": 0.9517333333333333,
-    "stage_reflow": 0.9548333333333333
+    "stage_printing": 0.8658333333333333,
+    "stage_reflow": 0.8728
   },
-  "risk_mae": 0.011512293480336666,
+  "risk_mae": 0.010743269696831703,
   "abstention": {
-    "mean_abstain_prob": 0.09183628112077713,
+    "mean_abstain_prob": 0.19928154349327087,
     "n_records": 30000,
-    "argmax_abstentions": 2404,
+    "argmax_abstentions": 5663,
     "by_threshold": {
       "0.3": {
-        "coverage": 0.8775,
-        "abstention_rate": 0.12250000000000005,
-        "n_abstained": 3675,
-        "selective_accuracy": 0.9863247863247864
+        "coverage": 0.7869,
+        "abstention_rate": 0.21309999999999996,
+        "n_abstained": 6393,
+        "selective_accuracy": 0.991527936628966
       },
       "0.5": {
-        "coverage": 0.9229,
-        "abstention_rate": 0.07709999999999995,
-        "n_abstained": 2313,
-        "selective_accuracy": 0.9767399862751471
+        "coverage": 0.8112333333333334,
+        "abstention_rate": 0.18876666666666664,
+        "n_abstained": 5663,
+        "selective_accuracy": 0.9877141800550602
       },
       "0.7": {
-        "coverage": 0.9745333333333334,
-        "abstention_rate": 0.025466666666666637,
-        "n_abstained": 764,
-        "selective_accuracy": 0.9606991380489807
+        "coverage": 0.8308,
+        "abstention_rate": 0.16920000000000002,
+        "n_abstained": 5076,
+        "selective_accuracy": 0.9839110897127267
       }
     },
     "mech_mean_abstain_prob": {
-      "stage_printing": 0.09089267253875732,
-      "stage_reflow": 0.08349928259849548
+      "stage_printing": 0.1994810402393341,
+      "stage_reflow": 0.184416726231575
     }
   },
   "data_summary": {
