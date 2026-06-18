@@ -16,15 +16,22 @@ Fig. 2 causal map, the Table I class balance, and the Eq. (8) graded risk. Value
 the paper does not release are reconstructed and calibrated to its reported
 anchors (see `docs/algorithm.md` reproducibility gaps).
 
-The model ships in **two flavours that share one engine** (`mlp_common.py`):
+The project now has **two model generations**:
 
-- **`mlp_paper.py`** — the paper's exact model. Two softmax/cross-entropy
+**v1 — the paper replication** (in `v1/`, sharing one engine `v1/mlp_common.py`):
+
+- **`v1/mlp_paper.py`** — the paper's exact model. Two softmax/cross-entropy
   classification heads (defect, per-stage mechanism) plus a sigmoid/BCE risk
   head. The safety-net baseline that should hit the paper's Table II numbers.
-- **`mlp.py`** — our version. The selective-classification ("gambler")
-  abstention loss on **both** classification heads, the sigmoid/BCE risk head
+- **`v1/mlp.py`** — our abstention variant. The selective-classification
+  ("gambler") loss on **both** classification heads, the sigmoid/BCE risk head
   unchanged. Each classification head gains an extra "abstain" output so the
   model can flag an ambiguous board/stage instead of guessing.
+
+**v2 — our cascaded extension** (repo root): `generator_v2.py` + `mlp_v2.py`. A
+3-head **true cascade** (defect → joint 9-class mechanism → per-parameter risk),
+each head conditioned on the upstream heads' predictions. See
+[v2 cascade model](#v2-cascade-model-mlp_v2py).
 
 ## Quickstart
 
@@ -32,49 +39,52 @@ The model ships in **two flavours that share one engine** (`mlp_common.py`):
 conda env create -f environment.yml      # or: conda activate paper (if it exists)
 conda activate paper
 
-python generator.py        # -> data/smt_synthetic.csv   (200k records, deterministic)
-python generator_v2.py     # -> data/smt_synthetic_v2.csv (our format; see "Generator v2" below)
-python analysis.py         # -> figs/*.png, results/bayes_error.json
+# --- v2: our cascaded model (repo root) ---
+python generator_v2.py     # -> data/smt_synthetic_v2.csv  (joint mechanism + per-mechanism risk)
+python mlp_v2.py           # train the 3-head cascade -> defect/mechanism ~0.95, risk MAE ~0.01
+#                            then open plots_v2.ipynb to analyse the saved checkpoint
 
-python mlp_paper.py        # train the paper baseline    -> ~0.95 defect accuracy
-python mlp.py              # train our abstention model   (gambler loss on both heads)
-python mlp.py --o 4.0      # raise the payoff o -> abstain less, predict more
-python mlp.py --loss multihead   # plain-CE baseline inside the same file, for comparison
+# --- v1: the paper replication (in v1/) ---
+python v1/generator.py     # -> data/smt_synthetic.csv   (200k records, deterministic)
+python v1/mlp_paper.py     # train the paper baseline    -> ~0.95 defect accuracy
+python v1/mlp.py           # train our abstention model  (gambler loss on both heads)
+python v1/mlp.py --o 4.0   # raise the payoff o -> abstain less, predict more
 ```
 
-Everything runs on CPU (and Apple `mps`); no GPU required. All runs are seeded
-and reproducible.
+Run v1 scripts **from the repo root** (`python v1/mlp.py`), not from inside `v1/`:
+they read/write `data/`, `domain/`, and `results/` relative to the working
+directory. Everything runs on CPU (and Apple `mps`); no GPU required. All runs are
+seeded and reproducible.
 
 ## Layout
 
 ```
-domain/smt_paper.yaml   THE domain spec (single source of truth; the generator reads it)
-generator.py            spec-driven, deterministic SMT synthetic generator (paper format)
-generator_v2.py         our format: joint mechanism + per-mechanism risk, CLI-tunable balance/variance
-analysis.py             class/label histograms + Bayes-error estimation
+domain/smt_paper.yaml   THE domain spec (single source of truth; both generators read it)
 
-mlp_common.py           shared MLP engine: trunk, encoding, train loop, evaluate, CLI
-mlp_paper.py            paper baseline   (CE defect + CE mechanism + BCE risk)
-mlp.py                  our model        (gambler loss on both classification heads)
+generator_v2.py         v2: joint-mechanism + per-mechanism-risk generator, CLI-tunable balance/variance
+mlp_v2.py               v2: cascaded 3-head MLP (defect -> joint mechanism -> risk)
+plots_v2.ipynb          v2 analysis: loads results/mlp_v2_model.pt, one plot per cell
 
-experiments.py          two-loss matrix: trains both losses, checks numerical stability
-tune.py                 Optuna search (validation-only objective; leak-safe)
-make_figs.py            comparison figures (risk-coverage, calibration, confusion, curves)
-learning_curve.py       test performance vs training-set size (sample complexity)
-feature_separability.py per-feature class histograms + overlap (separability sanity check)
-overlap_check.py        marginal-overlap bin-stability + single-feature vs joint Bayes
-prof_questions.py       abstention analysis: reject rate, train/test gap, who gets flagged
+v1/                     the paper replication baseline (self-contained, run from the repo root):
+  generator.py            spec-driven, deterministic SMT generator (paper format)
+  mlp_common.py           shared MLP engine: trunk, encoding, train loop, evaluate, CLI
+  mlp_paper.py            paper baseline    (CE defect + CE per-stage mechanism + BCE risk)
+  mlp.py                  our abstention model (gambler loss on both classification heads)
+  plots.ipynb             v1 analysis notebook (paper baseline vs abstention)
 
 docs/algorithm.md       pseudocode, improvements over the original, reproducibility gaps
 docs/results.md         team-facing results summary
 docs/Generator_Overview.docx   high-level overview + paper comparison (generated)
-docs/make_overview_docx.py     builder for the .docx (pulls live metrics)
-figs/                   class_balance, mechanism_balance, parameter_hists,
-                        class_conditional, bayes_summary, + model/abstention plots
-results/                bayes_error.json, mlp_metrics.json, mlp_model.pt (checkpoint)
-data/                   generated dataset (gitignored)
+figs/                   class/mechanism/parameter distributions + model plots (v1 + v2_*)
+results/                metrics JSON + checkpoints (mlp_v2_model.pt, mlp_*_model.pt, *.json)
+data/                   generated datasets (gitignored)
 archive/                superseded original scratch generator (truncated stub)
 ```
+
+Local-only and **gitignored** (not pushed): `misc/` (tests + the `plots_v2.ipynb`
+builder) and `legacy/` (superseded analysis scripts — `analysis.py`, `tune.py`,
+`make_figs.py`, `experiments.py`, `learning_curve.py`, `feature_separability.py`,
+`overlap_check.py`, `prof_questions.py`).
 
 ## Model
 
@@ -172,8 +182,55 @@ out-of-spec rates, and risk targets; `--bayes-error` is the knob that actually
 moves difficulty. Every run prints the effective priors, sigmas, and target
 Bayes error up front.
 
+## v2 cascade model (`mlp_v2.py`)
+
+Our chained model for the v2 dataset, distinct from the paper baseline in `v1/`.
+A shared trunk feeds a 3-head **true cascade** — each downstream head reads the
+trunk latent concatenated with the upstream heads' **softmax** distributions (soft,
+so it stays differentiable and downstream losses also sharpen the upstream heads),
+trained end-to-end on the model's own predictions (no teacher forcing):
+
+```
+x → trunk → h
+   head1 defect : Linear(h)                       → 3-way softmax (CE)
+   head2 mech   : Linear(h ⊕ p_defect)            → 9-way softmax (CE)   [joint mechanism_joint]
+   head3 risk   : Linear(h ⊕ p_defect ⊕ p_mech)   → 6 sigmoids (BCE)     [global risk_<param>]
+```
+
+Differences from the paper baseline:
+
+- **head2** is ONE 9-way softmax over the joint mechanism label (Cartesian product
+  of the two stages), not two independent per-stage heads. Only 7 of the 9 occur.
+- **head3** is the GLOBAL, two-sided per-parameter risk (`risk_<param>`) — a
+  function of how far each parameter drifted, NOT of the mechanism label. So it
+  always reports a per-parameter risk, even when head2 predicts `no_mechanism`: a
+  clean board sits at the ~`p_L` floor, a sub-threshold-drifting board shows
+  elevated risk. The cascade feeds head2's call to head3 as a *hint*, but the
+  target never suppresses, so head3 never gates itself to zero (see the last cell
+  of `plots_v2.ipynb`).
+- **head4** (the per-mechanism gated risk, the 30 `risk_mech_<m>_<param>` columns)
+  is dropped for now; those columns stay in the CSV, unused here.
+- **No abstention** in this first build (paper-style CE/CE/BCE); the gambler loss
+  can be layered on later exactly as in `v1/mlp.py`.
+
+Loss: `L = λ_d·CE(defect) + λ_m·CE(mech_9) + λ_r·BCE(risk_6)`.
+
+Result (test split, seed 0):
+
+| Head | Metric | Value | Reference |
+|---|---|---|---|
+| defect (head1) | accuracy / wF1 / macroF1 | 0.9516 / 0.9503 / 0.8589 | Bayes ceiling 0.9534; paper 0.95 |
+| mechanism (head2, joint 9-class) | accuracy | 0.9511 | printing 0.9516 / reflow 0.9551 (decomposed) |
+| risk (head3) | MAE | 0.0105 | — |
+
+`python mlp_v2.py` writes `results/mlp_v2_model.pt` + `results/mlp_v2_metrics.json`;
+then open `plots_v2.ipynb` (rebuild it with `python misc/_build_plots_v2.py`). The
+wiring is covered by `misc/test_mlp_v2_smoke.py`.
+
 ## Key results
 
+- v2 cascade (test): defect 0.9516 (Bayes ceiling 0.9534), joint mechanism 0.9511,
+  risk MAE 0.0105 — paper-level numbers with the chained structure.
 - Class balance matches paper Table I: 0.877 / 0.060 / 0.063.
 - Bayes floor (oracle ceiling) ~95.5% (population) / ~95.3% (test); the trained
   MLP reaches ~95.1% defect accuracy, matching the paper's reported 95.00%.

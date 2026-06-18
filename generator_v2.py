@@ -67,11 +67,18 @@ from __future__ import annotations
 
 import argparse
 import copy
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+
+# v1's generator (the shared maths this builds on) now lives in v1/. Put that
+# folder on the path so `from generator import ...` resolves to v1/generator.py
+# regardless of the current working directory.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "v1"))
 
 # reuse ALL of v1's maths -- nothing here recomputes sampling, scores, or risk
 from generator import (_assign_mechanisms, _assign_split, _calibrate_gain,
