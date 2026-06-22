@@ -5,7 +5,7 @@
 #
 # One-time setup (do this once on a login node before the first submit):
 #   module load miniconda3/24.7.1-gcc-8.5.0-bxh7x2v
-#   source "$(dirname "$(which conda)")/../etc/profile.d/conda.sh"
+#   source "$(conda info --base)/etc/profile.d/conda.sh"
 #   conda env create -f environment.yml      # creates the `paper` env
 #
 # If a module version changes on the cluster, update the names below.
@@ -15,10 +15,14 @@ module load gcc                                   2>/dev/null || true
 module load slurm                                 2>/dev/null || true
 module load git                                   2>/dev/null || true
 
-# miniconda + make `conda` usable in this non-interactive shell (the prof's condaenv)
+# miniconda + make `conda` usable in this (possibly non-interactive) shell.
 module load miniconda3/24.7.1-gcc-8.5.0-bxh7x2v
+# Source conda's shell hook so `conda activate` works in batch jobs. Resolve the
+# base prefix with `conda info --base` -- robust whether conda is a binary on PATH
+# or already a shell function. (Do NOT use `which conda`: when conda is a function
+# it returns a bare name and the path breaks.)
 # shellcheck disable=SC1091
-source "$(dirname "$(which conda)")/../etc/profile.d/conda.sh"
+source "$(conda info --base)/etc/profile.d/conda.sh" 2>/dev/null || true
 
 # --- activate the project env (create it once with environment.yml; see header) ---
 conda activate paper
