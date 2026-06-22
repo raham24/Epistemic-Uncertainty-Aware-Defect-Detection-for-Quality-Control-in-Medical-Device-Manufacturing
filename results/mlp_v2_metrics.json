@@ -1,9 +1,9 @@
 {
   "model_version": "mlp-v2-cascade-v0.1",
   "defect_head": {
-    "accuracy": 0.9515666666666667,
-    "weighted_f1": 0.9503350113580037,
-    "macro_f1": 0.85888335886193
+    "accuracy": 0.8657333333333334,
+    "weighted_f1": 0.8034312203720908,
+    "macro_f1": 0.30934514876485864
   },
   "bayes_optimal_accuracy": 0.9534333333333334,
   "paper_reference": {
@@ -11,11 +11,36 @@
     "weighted_f1": 0.9536
   },
   "mechanism_accuracy": {
-    "joint_accuracy": 0.9511,
-    "stage_printing": 0.9515666666666667,
-    "stage_reflow": 0.9550666666666666
+    "joint_accuracy": 0.8657333333333334,
+    "stage_printing": 0.8658333333333333,
+    "stage_reflow": 0.8728
   },
-  "risk_mae": 0.010503663681447506,
+  "risk_mae": 0.009317705407738686,
+  "abstention": {
+    "mean_abstain_prob": 0.18313242495059967,
+    "n_records": 30000,
+    "by_threshold": {
+      "0.3": {
+        "coverage": 0.8024,
+        "abstention_rate": 0.1976,
+        "n_abstained": 5928,
+        "selective_accuracy": 0.9891575274177468
+      },
+      "0.5": {
+        "coverage": 0.8263666666666667,
+        "abstention_rate": 0.1736333333333333,
+        "n_abstained": 5209,
+        "selective_accuracy": 0.985196240571175
+      },
+      "0.7": {
+        "coverage": 0.8464666666666667,
+        "abstention_rate": 0.1535333333333333,
+        "n_abstained": 4606,
+        "selective_accuracy": 0.9794439631408994
+      }
+    },
+    "mech_mean_abstain_prob": 0.18282292783260345
+  },
   "data_summary": {
     "train": {
       "n": 140000,

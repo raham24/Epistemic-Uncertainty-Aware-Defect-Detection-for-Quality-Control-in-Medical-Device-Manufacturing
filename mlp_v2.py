@@ -29,10 +29,16 @@ Differences from the paper baseline (mlp_common.MultiHeadMLP):
   * head4 (the per-mechanism gated risk risk_mech_<m>_<param>) is DROPPED for now.
     Those 30 columns stay in the CSV, simply unused here.
 
-No abstention in this first build (paper-style CE/CE/BCE); the gambler loss can be
-layered on later exactly as in mlp.py.
+The loss is swappable from the CLI via --loss, mirroring v1/mlp.py:
+  --loss cascade    (default) CE on defect + mechanism, BCE on risk -- paper-style.
+  --loss abstention the selective-classification ("gambler") term -log(o*p_y + r)
+                    on the defect AND 9-class mechanism heads (each widened by one
+                    abstain column); the sigmoid/BCE risk head is unchanged. --o
+                    sets the payoff. --loss cascade is byte-identical to the plain
+                    model, so `python mlp_v2.py` is unchanged.
 
-Run: python mlp_v2.py                         # train + eval on the v2 csv
+Run: python mlp_v2.py                         # train + eval on the v2 csv (cascade)
+     python mlp_v2.py --loss abstention --o 2.0
      python mlp_v2.py --epochs 60 --device mps
      python mlp_v2.py --load results/mlp_v2_model.pt   # eval a checkpoint
 """
@@ -60,10 +66,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "v1"
 
 from generator import defect_names, load_spec, param_ids, seed_everything
 from generator_v2 import JOINT_SEP
-# schema-agnostic helpers reused straight from the paper engine
+# schema-agnostic helpers + the gambler term reused straight from the paper engine
 from mlp_common import (BATCH, DROPOUT, EPOCHS, HIDDEN, LAMBDA_D, LAMBDA_M,
                         LAMBDA_R, LR, PATIENCE, PAPER_REF, _class_weights,
-                        _clone, _print_split_summary, _standardize,
+                        _clone, _print_split_summary, _standardize, gambler_term,
                         split_summary)
 
 MODEL_VERSION = "mlp-v2-cascade-v0.1"
@@ -148,9 +154,10 @@ class CascadeMLP(nn.Module):
 
     def __init__(self, n_features: int, n_defects: int, n_mech: int,
                  n_params: int, hidden: tuple[int, ...] = HIDDEN,
-                 dropout: float = DROPOUT) -> None:
+                 dropout: float = DROPOUT, abstain: bool = False) -> None:
         super().__init__()
 
+        self.abstain = abstain
         self.n_defects, self.n_mech, self.n_params = n_defects, n_mech, n_params
 
         # shared trunk: Linear -> ReLU -> Dropout, stacked
@@ -161,10 +168,18 @@ class CascadeMLP(nn.Module):
             d = w
         self.trunk = nn.Sequential(*layers)
 
+        # abstain widens BOTH classification heads by one "abstain" output (so the
+        # gambler loss has a column for reject mass). The widened distributions --
+        # reject mass included -- are what the downstream heads see; the risk head
+        # is never widened. abstain=False is byte-identical to the plain cascade.
+        extra = 1 if abstain else 0
+        self.defect_out = n_defects + extra
+        self.mech_out = n_mech + extra
+
         # cascade heads: each takes h plus the upstream soft predictions
-        self.defect_head = nn.Linear(d, n_defects)
-        self.mech_head = nn.Linear(d + n_defects, n_mech)
-        self.risk_head = nn.Linear(d + n_defects + n_mech, n_params)
+        self.defect_head = nn.Linear(d, self.defect_out)
+        self.mech_head = nn.Linear(d + self.defect_out, self.mech_out)
+        self.risk_head = nn.Linear(d + self.defect_out + self.mech_out, n_params)
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         # shared latent
@@ -190,12 +205,32 @@ class CascadeMLP(nn.Module):
 
         self.eval()
         out = self.forward(x)
+        risk_prob = torch.sigmoid(out["risk"])               # per-parameter risk
+
+        # abstain: each classification head is one column wider; the LAST column is
+        # the abstain prob. Pick the class over the REAL columns only (never the
+        # abstain column) and expose the abstain prob alongside it.
+        if self.abstain:
+            m, k = self.n_defects, self.n_mech
+            d_full, m_full = out["defect_prob"], out["mech_prob"]
+            d_real, m_real = d_full[:, :m], m_full[:, :k]
+            return {
+                "defect_prob": d_real,
+                "defect_argmax": d_real.argmax(1),           # over m real classes
+                "abstain_prob": d_full[:, m],                # P(abstain) = r(x)
+                "mech_prob": m_real,
+                "mech_argmax": m_real.argmax(1),             # over k real classes
+                "mech_abstain_prob": m_full[:, k],
+                "risk_prob": risk_prob,
+            }
+
+        # default (no abstain) path -- unchanged
         return {
             "defect_prob": out["defect_prob"],
             "defect_argmax": out["defect_prob"].argmax(1),  # chain root
             "mech_prob": out["mech_prob"],
             "mech_argmax": out["mech_prob"].argmax(1),       # joint mechanism
-            "risk_prob": torch.sigmoid(out["risk"]),         # per-parameter risk
+            "risk_prob": risk_prob,
         }
 
 
@@ -205,7 +240,14 @@ class CascadeLoss(nn.Module):
     CE on the two classification heads; BCE-with-logits (soft targets) on the
     per-parameter risk head, mean-reduced over batch and the P parameters so it
     sits on a per-head scale comparable to the CE terms.
+
+    Each per-head TERM is its own method so a subclass can override just the
+    classification terms (e.g. an abstention/gambler defect+mech term) without
+    rewriting the combine. Subclasses needing the +1-wide abstain heads flip
+    ABSTAIN to True (train() then builds the model with abstain=True).
     """
+
+    ABSTAIN = False
 
     def __init__(self, class_weight: torch.Tensor | None = None,
                  lam_d: float = LAMBDA_D, lam_m: float = LAMBDA_M,
@@ -214,14 +256,52 @@ class CascadeLoss(nn.Module):
         self.register_buffer("class_weight", class_weight)
         self.lam_d, self.lam_m, self.lam_r = lam_d, lam_m, lam_r
 
+    # per-head TERMS (override the classification ones in a subclass)
+    def defect_term(self, out: dict, y_def: torch.Tensor) -> torch.Tensor:
+        return F.cross_entropy(out["defect"], y_def, weight=self.class_weight)
+
+    def mech_term(self, out: dict, y_mech: torch.Tensor) -> torch.Tensor:
+        return F.cross_entropy(out["mech"], y_mech)
+
+    def risk_term(self, out: dict, y_risk: torch.Tensor) -> torch.Tensor:
+        return F.binary_cross_entropy_with_logits(out["risk"], y_risk)
+
+    # COMBINE (subclasses override the terms above, not this)
     def forward(self, out: dict, y_def: torch.Tensor, y_mech: torch.Tensor,
                 y_risk: torch.Tensor) -> torch.Tensor:
-        loss = self.lam_d * F.cross_entropy(out["defect"], y_def,
-                                            weight=self.class_weight)
-        loss = loss + self.lam_m * F.cross_entropy(out["mech"], y_mech)
-        loss = loss + self.lam_r * F.binary_cross_entropy_with_logits(
-            out["risk"], y_risk)
-        return loss
+        return (self.lam_d * self.defect_term(out, y_def)
+                + self.lam_m * self.mech_term(out, y_mech)
+                + self.lam_r * self.risk_term(out, y_risk))
+
+
+class CascadeAbstentionLoss(CascadeLoss):
+    """Our variant: the selective-classification ("gambler") term on BOTH the
+    defect and the 9-class mechanism heads, the sigmoid/BCE risk head unchanged.
+
+    Each classification head is one column wider (the abstain output); the term is
+    -log(o*p_y + r) where r is the abstain prob and o the payoff (the --o flag).
+    r=0 reduces it to cross-entropy + const, so larger o => predict more / abstain
+    less. class_weight is accepted for train()-API compatibility but IGNORED -- the
+    abstain mechanism, not reweighting, handles the imbalance.
+    """
+
+    ABSTAIN = True
+
+    def __init__(self, class_weight: torch.Tensor | None = None, o: float = 2.0,
+                 lam_d: float = LAMBDA_D, lam_m: float = LAMBDA_M,
+                 lam_r: float = LAMBDA_R) -> None:
+        super().__init__(class_weight=None, lam_d=lam_d, lam_m=lam_m, lam_r=lam_r)
+        self.o = o
+
+    def defect_term(self, out: dict, y_def: torch.Tensor) -> torch.Tensor:
+        return gambler_term(out["defect"], y_def, self.o)
+
+    def mech_term(self, out: dict, y_mech: torch.Tensor) -> torch.Tensor:
+        return gambler_term(out["mech"], y_mech, self.o)
+
+
+# loss registry exposed via --loss; cascade is the paper-style default
+LOSSES = {"cascade": CascadeLoss, "abstention": CascadeAbstentionLoss}
 
 
 # Train / evaluate
@@ -242,13 +322,15 @@ def _epoch_loss(model: CascadeMLP, loss_fn: CascadeLoss, dl: DataLoader,
 
 def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
           epochs: int = EPOCHS, class_weight_mode: str = "none",
+          loss_cls: type[CascadeLoss] = CascadeLoss,
           hidden: tuple[int, ...] = HIDDEN, dropout: float = DROPOUT,
-          seed: int = 0, lr: float = LR,
+          seed: int = 0, o: float = 2.0, lr: float = LR,
           batch: int = BATCH) -> tuple[CascadeMLP, dict]:
     """Algorithm — Train the cascade with early stopping on validation loss.
 
     Input: spec, the v2 dataframe, device, epoch budget, defect-head weighting
-           mode, trunk hidden/dropout, a seed for the shuffle, lr, batch size.
+           mode, the loss class, trunk hidden/dropout, a seed for the shuffle, the
+           abstention payoff o, lr, batch size.
     Return: the best model and the encoded-data bundle (with stats + val curve).
     """
 
@@ -262,16 +344,21 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
     stdz, enc["mu"], enc["sd"] = _standardize(enc["X"][tr], enc["X"][va])
     enc["X"][tr], enc["X"][va] = stdz
 
+    # an abstention loss needs the +1-wide classification heads
+    abstain = getattr(loss_cls, "ABSTAIN", False)
+
     # build the cascade with sizes from the spec
     model = CascadeMLP(
         n_features=enc["X"].shape[1], n_defects=len(enc["names"]),
         n_mech=len(enc["mech_vocab"]), n_params=enc["y_risk"].shape[1],
-        hidden=hidden, dropout=dropout).to(device)
+        hidden=hidden, dropout=dropout, abstain=abstain).to(device)
 
-    # optional defect-head class weighting (the ~88% no_defect imbalance) + Adam
+    # optional defect-head class weighting (the ~88% no_defect imbalance) + Adam.
+    # pass o only to an abstention loss (the base loss has no o argument)
     cw = _class_weights(enc["y_def"][tr], len(enc["names"]), class_weight_mode)
-    loss_fn = CascadeLoss(
-        class_weight=cw.to(device) if cw is not None else None).to(device)
+    loss_kwargs = {"o": o} if abstain else {}
+    loss_fn = loss_cls(class_weight=cw.to(device) if cw is not None else None,
+                       **loss_kwargs).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
     # seed the shuffle explicitly for run-by-its-own-seed reproducibility
@@ -360,7 +447,7 @@ def evaluate(model: CascadeMLP, enc: dict, df: pd.DataFrame, spec: dict,
     risk_pred = pred["risk_prob"].cpu().numpy()
     risk_mae = float(np.abs(risk_pred - enc["y_risk"][te]).mean())
 
-    return {
+    result = {
         "model_version": model_version,
         "defect_head": defect,
         "bayes_optimal_accuracy": bayes_acc,
@@ -368,6 +455,26 @@ def evaluate(model: CascadeMLP, enc: dict, df: pd.DataFrame, spec: dict,
         "mechanism_accuracy": mech,
         "risk_mae": risk_mae,
     }
+
+    # abstention metrics: only when the model has abstain outputs
+    if getattr(model, "abstain", False):
+        r = pred["abstain_prob"].cpu().numpy()      # P(abstain) on the defect head
+        correct = d_pred == y_def
+        by_h = {}
+        for h in (0.3, 0.5, 0.7):
+            keep = r < h                            # accept (predict) when r < h
+            cov = float(keep.mean())
+            sel = float(correct[keep].mean()) if keep.any() else None
+            by_h[str(h)] = {"coverage": cov, "abstention_rate": 1.0 - cov,
+                            "n_abstained": int((~keep).sum()),
+                            "selective_accuracy": sel}
+        result["abstention"] = {
+            "mean_abstain_prob": float(r.mean()),
+            "n_records": int(len(te)),
+            "by_threshold": by_h,
+            "mech_mean_abstain_prob": float(pred["mech_abstain_prob"].cpu().numpy().mean()),
+        }
+    return result
 
 
 # Checkpoint
@@ -380,7 +487,8 @@ def load_model(path: str, device: str = "cpu") -> tuple[CascadeMLP, dict]:
     model = CascadeMLP(
         n_features=cfg["n_features"], n_defects=cfg["n_defects"],
         n_mech=cfg["n_mech"], n_params=cfg["n_params"],
-        hidden=tuple(cfg["hidden"]), dropout=cfg["dropout"]).to(device)
+        hidden=tuple(cfg["hidden"]), dropout=cfg["dropout"],
+        abstain=cfg.get("abstain", False)).to(device)   # .get: pre-abstain ckpts
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
     return model, ckpt
@@ -400,6 +508,11 @@ def main() -> None:
     ap.add_argument("--class-weight", default="none",
                     choices=["none", "sqrt", "inverse"],
                     help="defect-head class weighting (accuracy vs minority recall)")
+    ap.add_argument("--loss", default="cascade", choices=list(LOSSES),
+                    help="cascade = CE/CE/BCE (default); abstention = gambler loss "
+                         "on the defect + mechanism heads")
+    ap.add_argument("--o", type=float, default=2.0,
+                    help="abstention payoff (only used by --loss abstention)")
     ap.add_argument("--hidden", default=",".join(map(str, HIDDEN)),
                     help="comma-separated trunk widths, e.g. 256,256")
     ap.add_argument("--dropout", type=float, default=DROPOUT)
@@ -424,11 +537,12 @@ def main() -> None:
         enc["mu"], enc["sd"] = ckpt["standardize"]["mu"], ckpt["standardize"]["sd"]
         hidden = tuple(ckpt["config"]["hidden"])
     else:
-        print(f"Training {MODEL_VERSION} on {len(df):,} records (device={args.device})")
+        print(f"Training {MODEL_VERSION} ({args.loss}) on {len(df):,} records (device={args.device})")
         hidden = tuple(int(w) for w in args.hidden.split(","))
         model, enc = train(spec, df, device=args.device, epochs=args.epochs,
-                           class_weight_mode=args.class_weight, hidden=hidden,
-                           dropout=args.dropout, seed=args.seed)
+                           class_weight_mode=args.class_weight,
+                           loss_cls=LOSSES[args.loss], hidden=hidden,
+                           dropout=args.dropout, seed=args.seed, o=args.o)
 
     metrics = evaluate(model, enc, df, spec, device=args.device,
                        model_version=MODEL_VERSION)
@@ -447,12 +561,14 @@ def main() -> None:
                 "hidden": hidden,
                 "dropout": args.dropout,
                 "mech_vocab": enc["mech_vocab"],
+                "abstain": getattr(model, "abstain", False),
             },
             "standardize": {"mu": enc["mu"], "sd": enc["sd"]},
             "val_loss_history": enc.get("val_loss_history", []),
             "best_epoch": enc.get("best_epoch", 0),
-            "train_args": {"spec": args.spec, "data": args.data,
-                           "seed": args.seed, "class_weight": args.class_weight},
+            "train_args": {"spec": args.spec, "data": args.data, "loss": args.loss,
+                           "o": args.o, "seed": args.seed,
+                           "class_weight": args.class_weight},
         }, args.model_out)
         print(f"Saved model checkpoint to {args.model_out}")
 
@@ -472,6 +588,19 @@ def main() -> None:
     for stage in list(spec["mechanisms"].keys()):
         print(f"  {stage:22s} {m[stage]:.4f}  (decomposed from the joint prediction)")
     print(f"\nRisk head MAE: {metrics['risk_mae']:.4f}")
+
+    # abstention summary (only present when --loss abstention)
+    if "abstention" in metrics:
+        ab = metrics["abstention"]
+        o = ckpt["train_args"].get("o") if args.load else args.o
+        print(f"\n=== Abstention (o={o}) ===")
+        print(f"  mean abstain prob: {ab['mean_abstain_prob']:.4f}  "
+              f"(mechanism head {ab['mech_mean_abstain_prob']:.4f})")
+        for h, v in ab["by_threshold"].items():
+            sel = v["selective_accuracy"]
+            sel_s = f"{sel:.4f}" if sel is not None else "n/a"
+            print(f"  h={h}: coverage {v['coverage']:.4f}  "
+                  f"abstained {v['n_abstained']:,}  selective_acc {sel_s}")
     print(f"Wrote {args.out}")
 
 

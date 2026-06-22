@@ -19,4 +19,12 @@ figs/
 misc/
 legacy/
 
+# Cluster sweep outputs + generated matrix files (large / regenerable). The
+# cluster/ scripts + cluster_analysis.ipynb ARE tracked; their outputs are not.
+results/cluster/
+cluster/logs/
+cluster/datasets.tsv
+cluster/runs.tsv
+cluster/manifest.json
+
 docs/
