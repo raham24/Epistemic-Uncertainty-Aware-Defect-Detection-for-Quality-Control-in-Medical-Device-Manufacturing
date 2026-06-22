@@ -12,7 +12,7 @@
 #   - the matching local ~/.ssh/config entries for `login2` and `hpcx`
 #SBATCH --job-name=tunnel
 #SBATCH --output=cluster/logs/tunnel.log
-#SBATCH --time=04:00:00
+#SBATCH --time=01:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -32,10 +32,11 @@ HOSTKEY="${HOME}/.ssh/id_ed25519"
 # A user-run (non-root) sshd cannot do password auth (no PAM), so force pubkey.
 # StrictModes=no is essential: default StrictModes SILENTLY rejects authorized_keys
 # if $HOME or ~/.ssh is group/other-writable (common on clusters) -> falls back to
-# the password prompt that can never succeed.
-exec /usr/sbin/sshd -D -p "${PORT}" -f /dev/null -h "${HOSTKEY}" \
-  -o StrictModes=no \
-  -o PubkeyAuthentication=yes \
-  -o PasswordAuthentication=no \
-  -o KbdInteractiveAuthentication=no \
-  -o "AuthorizedKeysFile=${HOME}/.ssh/authorized_keys"
+# the password prompt that can never succeed
+exec /usr/sbin/sshd -D -e -p "${PORT}" -f /dev/null -h "${HOSTKEY}" \
+    -o StrictModes=no \
+    -o PubkeyAuthentication=yes \
+    -o PasswordAuthentication=no \
+    -o KbdInteractiveAuthentication=no \
+    -o "AuthorizedKeysFile=${HOME}/.ssh/authorized_keys" \
+    -o LogLevel=DEBUG2
