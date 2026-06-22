@@ -7,7 +7,9 @@ channels:
 dependencies:
   - python=3.11
   - numpy
-  - torch
+  # conda package is named `pytorch` (the pip/PyPI name is `torch`); the Python
+  # import is `torch` either way. conda-forge resolves a CPU build on the cluster.
+  - pytorch
   - scipy
   - pandas
   - pyyaml
