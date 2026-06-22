@@ -29,4 +29,13 @@ scontrol update JobId="$SLURM_JOB_ID" Comment="$PORT"
 echo "tunnel up on node $(hostname) port $PORT"
 # host key for this throwaway sshd = your account key (per the Star HPC docs)
 HOSTKEY="${HOME}/.ssh/id_ed25519"
-exec /usr/sbin/sshd -D -p "${PORT}" -f /dev/null -h "${HOSTKEY}"
+# A user-run (non-root) sshd cannot do password auth (no PAM), so force pubkey.
+# StrictModes=no is essential: default StrictModes SILENTLY rejects authorized_keys
+# if $HOME or ~/.ssh is group/other-writable (common on clusters) -> falls back to
+# the password prompt that can never succeed.
+exec /usr/sbin/sshd -D -p "${PORT}" -f /dev/null -h "${HOSTKEY}" \
+  -o StrictModes=no \
+  -o PubkeyAuthentication=yes \
+  -o PasswordAuthentication=no \
+  -o KbdInteractiveAuthentication=no \
+  -o "AuthorizedKeysFile=${HOME}/.ssh/authorized_keys"
