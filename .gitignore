@@ -28,3 +28,79 @@ cluster/runs.tsv
 cluster/manifest.json
 
 docs/
+
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.idx
+*.ilg
+*.ind
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.toc
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.ist
+
+# Bibliography backups
+*.bib.bak
+
+# latexmk / SyncTeX
+*.synctex.gz
+*.synctex(busy)
+*.synctex.gz(busy)
+
+# Temporary files
+*.bak
+*.swp
+*.tmp
+*.sav
+
+# Editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+
+# Ignore all PDFs
+*.pdf
+
+# Except PDFs inside figures/images folders
+!figures/**/*.pdf
+!images/**/*.pdf
