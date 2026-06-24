@@ -33,7 +33,7 @@ In particular, we allow for the model to predict \(\card{\calY} + 1\) classes, w
     \sum_{j=1}^{C} p_{j}\log\left(t\cdot\phat_{j}+\phat_{C+1}\right),
 \end{align}
 
-where \(p_{i,C+1}\) is the reservation variable for the \(i\)-th sample, subject to the constraint \(\sum_{j=1}^{C} p_{i,j}+p_{i,C+1}=1\) for \(p_j\ge 0 \forall j\in\{1,\ldots,C+1\}\). The parameter \(t>0\) is a hyperparameter that controls the trade-off between making a prediction and abstaining. A higher value of \(t\) encourages the model to make predictions, while a lower value encourages abstention.
+where \(\phat_{i,C+1}\) is the reservation variable for the \(i\)-th sample, subject to the constraint \(\sum_{j=1}^{C} p_{i,j}+p_{i,C+1}=1\) for \(p_j\ge 0 \forall j\in\{1,\ldots,C+1\}\). The parameter \(t>0\) is a hyperparameter that controls the trade-off between making a prediction and abstaining. A higher value of \(t\) encourages the model to make predictions, while a lower value encourages abstention.
 
 In particular, with respect to \cite{liu2019deep}, we propose a new analysis based on \gls*{cmp} (cf. \cite{boyd2004convex})\footnote{While this approach provides a closed-form solution to the optimization problem, we retain the neural network framework of state-of-the-art approaches \cite{shenoy2026uncertainty}}, which allows for a principled analysis and reveals a previously unidentified degenerate boundary case.
 
