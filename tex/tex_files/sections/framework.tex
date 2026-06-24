@@ -1,7 +1,7 @@
 We focus on the classification problem related to the head \(\h{1}\). Indeed, a classification error in this head will contribute either a wrong defect alarm or a missed defect alarm, leading to higher production cost/risk. It goes without saying that this can be extended to the other heads performing similar classification tasks.
 Thus, we formalize the classification problem for \(\h{1}\) as a multi-class classification problem.
 
-Let \(\calX\subseteq\R^d\) be the (possibly continuous) feature space and let  \(\calY=\{1,\dots,C\}\) denote the concept of the label space related to some task of interest. Moreover, let \(\pXY\) be the underlying (unknown) \gls*{pdf} over \(\calX\times\calY\).
+Let \(\calX\subseteq\R^d\) be the (possibly continuous) feature space and let  \(\calY=\{1,\dots,C\}\) denote the concept of the label space related to some task of interest. It is understood that \(\card{\calY}=C\). Moreover, let \(\pXY\) be the underlying (unknown) \gls*{pdf} over \(\calX\times\calY\).
 Let \(\calD_{n} = \!\left\{( \x_1, y_1),\dots,( \x_n, y_n)\right\}\sim \pXY\) be a random realization of $n$ i.i.d. samples according to \(\pXY\)  denoting the \textit{training set}, where \(\x_i \in \calX\) is the input (feature), \(y_i \in \calY\) is the output class among $C$ possible classes and $n$ denotes the size of the training set. A predictor \({f}_{\calD_{n}}: \calX\rightarrow\calY\) uses the inferred model \(\PYXhat\equiv \PYXhat(y|\x;\calD_{n})\) based on the training set,
 \[
     f_{\calD_{n}}(\x) \equiv  f_{{n}}(\x;\calD_{n}) \triangleq \argmax_{y\in\calY}~\PYXhat(y|\x;\calD_{n}),
@@ -21,7 +21,7 @@ For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\su
 
 \begin{align}
     \label{eq:cross_entropy_internal}
-    \sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right).
+    \W=\sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right).
 \end{align}
 
 Due to the importance of detecting defects in medical devices, and trying to lower the costs of false positives and false negatives, inspired by \cite{markowitz1952portfolio,liu2019deep} we embed uncertainty into our model, modifying the training objective to learn how to abstain.
@@ -30,17 +30,49 @@ In particular, we allow for the model to predict \(\card{\calY} + 1\) classes, w
 
 \begin{align}
     \label{eq:reject_cross_entropy_internal}
-    \sum_{j=1}^{C} p_{j}\log\left(t\cdot\phat_{j}+\phat_{C+1}\right),
+    \W{r}=\sum_{j=1}^{C} p_{j}\log\left(t\cdot\phat_{j}+\phat_{C+1}\right),
 \end{align}
 
 where \(\phat_{i,C+1}\) is the reservation variable for the \(i\)-th sample, subject to the constraints
 \[
-    \sum_{j=1}^{C} p_{i,j}+p_{i,C+1}=1,\ \text{and}\ 
+    \sum_{j=1}^{C} p_{i,j}+p_{i,C+1}=1,\ \text{and}\
     p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\}.
 \]
 The parameter \(t>0\) is a hyperparameter that controls the trade-off between making a prediction and abstaining. A higher value of \(t\) encourages the model to make predictions, while a lower value encourages abstention.
 
 In particular, with respect to \cite{liu2019deep}, we propose a new analysis based on \gls*{cmp} (cf. \cite{boyd2004convex})\footnote{While this approach provides a closed-form solution to the optimization problem, we retain the neural network framework of state-of-the-art approaches \cite{shenoy2026uncertainty}}, which allows for a principled analysis and reveals a previously unidentified degenerate boundary case.
+
+\subsection{Optimization problem with the reservation variable}
+We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
+\[
+    \Delta^{C}
+    =
+    \left\{
+    b \in \mathbb{R}^{C+1}
+    :\;
+    b_i \ge 0 \;\forall i,
+    \quad
+    \sum_{i=1}^{C+1} b_i = 1
+    \right\}.
+\]
+
+\begin{restatable}{proposition}{propSimplex}
+    \label{prop:simplex_properties}
+    The probability simplex
+    \[
+        \Delta^{C}
+        =
+        \left\{
+        b \in \mathbb{R}^{C+1}
+        :\;
+        b_i \ge 0 \;\forall i,
+        \quad
+        \sum_{i=1}^{C+1} b_i = 1
+        \right\}
+    \]
+    is convex, closed, and bounded.
+\end{restatable}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

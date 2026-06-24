@@ -1,0 +1,74 @@
+\section{Proofs}
+
+\subsection{Proof of \cref{prop:simplex_properties}}
+\label{sec:proof_simplex_properties}
+\propSimplex*
+\begin{proof}
+    Let $b,b^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
+    \[
+        b^{\prime\prime} = \gamma b + (1-\gamma)b^{\prime}.
+    \]
+    For every coordinate $i$,
+    \[
+        b^{\prime\prime}_i = \gamma b_i + (1-\gamma)b^{\prime}_i \ge 0,
+    \]
+    since $b_i,b^{\prime}_i\ge 0$ and $\gamma,1-\gamma\ge 0$. Moreover,
+    \begin{align*}
+        \sum_{i=1}^{C+1} b^{\prime\prime}_i = & \sum_{i=1}^{C+1}\bigl(\gamma b_i+(1-\gamma)b^{\prime}_i\bigr)        \\
+        =                                     & \gamma\sum_{i=1}^{C+1} b_i + (1-\gamma)\sum_{i=1}^{C+1} b^{\prime}_i \\
+        =                                     & \gamma+(1-\gamma)                                                    \\
+        =                                     & 1.
+    \end{align*}
+    Hence $b^{\prime\prime}\in\Delta^C$, proving that $\Delta^C$ is convex.
+
+    Next, observe that
+    \begin{align*}
+        \Delta^C = & \left(\bigcap_{i=1}^{C+1}\{b\in\mathbb R^{C+1}: b_i\ge 0\}\right) \\
+                   & \cap
+        \left\{b\in\mathbb R^{C+1}:\sum_{i=1}^{C+1} b_i = 1\right\}.
+    \end{align*}
+    Each set
+    \[
+        \{b\in\mathbb R^{C+1}: b_i\ge 0\}
+    \]
+    is closed, as it is the preimage of the closed interval
+    $[0,\infty)$ under the continuous projection map
+    $b\mapsto b_i$. Likewise,
+    \[
+        \left\{
+        b\in\mathbb R^{C+1}:
+        \sum_{i=1}^{C+1} b_i = 1
+        \right\}
+    \]
+    is closed, being the preimage of the closed set $\{1\}$
+    under the continuous map
+    $b\mapsto \sum_{i=1}^{C+1} b_i$.
+    Since an intersection of closed sets is closed,
+    $\Delta^C$ is closed.
+
+    Finally, let $b\in\Delta^C$. Since $b_i\ge 0$ and
+    \[
+        \sum_{i=1}^{C+1} b_i = 1,
+    \]
+    it follows that
+    \[
+        0 \le b_i \le 1,
+        \qquad i=1,\dots,C+1.
+    \]
+    Therefore,
+    \[
+        \|b\|_2^2
+        =
+        \sum_{i=1}^{C+1} b_i^2
+        \le
+        \sum_{i=1}^{C+1} b_i
+        =
+        1,
+    \]
+    where the inequality follows from $0\le b_i\le 1$ implying
+    $b_i^2\le b_i$. Consequently,
+    \[
+        \|b\|_2 \le 1,
+    \]
+    and thus $\Delta^C$ is bounded.
+\end{proof}

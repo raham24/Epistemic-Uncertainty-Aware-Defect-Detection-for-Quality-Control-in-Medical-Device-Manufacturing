@@ -1,11 +1,13 @@
 %%%%%%%%%%% Mathematical Statements %%%%%%%%%%%
 
 \newtheorem{theorem}{Theorem}
-\newtheorem{proposition}{Proposition}
+% \newtheorem{proposition}{Proposition}
 \newtheorem{corollary}{Corollary}
 \newtheorem{lemma}{Lemma}
 \theoremstyle{remark}
 \newtheorem{remark}{Remark}
+
+\declaretheorem[name=Proposition, numberwithin=section]{proposition}
 
 %%%%%%%%%%% Notation %%%%%%%%%%%
 \newcommand{\R}{\mathbb{R}}
@@ -24,6 +26,11 @@
 \newcommand{\PYX}{P_{Y|X}}
 \newcommand{\fun}[1]{\text{#1}}
 \newcommand{\argmax}{\operatornamewithlimits{argmax}}
+\NewDocumentCommand{\W}{g}{%
+    \IfNoValueTF{#1}
+        {W\left(p,\phat\right)}
+        {W_{#1}\left(\,\phat\right)}%
+}
 
 %%%%%%%%%%% Glossary %%%%%%%%%%%
 \newacronym{pdf}{pdf}{probability density function}
