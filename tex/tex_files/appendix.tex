@@ -72,3 +72,73 @@
     \]
     and thus $\Delta^C$ is bounded.
 \end{proof}
+
+\subsection{Proof of \cref{prop:concavity}}
+\label{sec:proof_concavity}
+\propConcavity*
+\begin{proof}
+    Consider the negative of $f$,
+    \[
+        g(b)
+        =
+        -f(b)
+        =
+        \sum_{i=1}^{C}
+        p_i
+        \left[
+            -\log\!\left(
+            t\cdot b_i+b_{C+1}
+            \right)
+            \right].
+    \]
+
+    For each $i$, define
+    \[
+        g_i(b)
+        =
+        -\log\!\left(
+        t\cdot b_i+b_{C+1}
+        \right).
+    \]
+
+    % The map
+    % \[
+    %     b
+    %     \mapsto
+    %     b_i+\frac{1}{o}b_{C+1}
+    % \]
+    % is affine. Moreover, the function
+    % \[
+    %     x\mapsto -\log x
+    % \]
+    % is convex on $\mathbb R_{>0}$ since
+    % \[
+    %     \frac{d^2}{dx^2}(-\log x)
+    %     =
+    %     \frac{1}{x^2}
+    %     >
+    %     0.
+    % \]
+
+    % Therefore, $g_i$ is convex as the composition of a convex
+    % function with an affine map. Since $p_i\ge 0$ for all $i$,
+    % the weighted sum
+    % \[
+    %     g(b)
+    %     =
+    %     \sum_{i=1}^{C} p_i g_i(b)
+    % \]
+    % is convex.
+
+    % Hence $g=-f$ is convex, and therefore
+    % \[
+    %     f
+    %     =
+    %     -g
+    % \]
+    % is concave.
+\end{proof}
+
+then KKT to show the uncertainty as something subtracted from class confidence
+
+finally, the regimes t<=1, 1<t<C, t=C, t>C.
