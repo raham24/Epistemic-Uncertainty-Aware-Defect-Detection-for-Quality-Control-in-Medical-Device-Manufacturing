@@ -4,140 +4,252 @@
 \label{sec:proof_simplex_properties}
 \propSimplex*
 \begin{proof}
-    Let $b,b^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
-    \[
-        b^{\prime\prime} = \gamma b + (1-\gamma)b^{\prime}.
-    \]
-    For every coordinate $i$,
-    \[
-        b^{\prime\prime}_i = \gamma b_i + (1-\gamma)b^{\prime}_i \ge 0,
-    \]
-    since $b_i,b^{\prime}_i\ge 0$ and $\gamma,1-\gamma\ge 0$. Moreover,
+    Let $\placeholderdist,\placeholderdist^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
     \begin{align*}
-        \sum_{i=1}^{C+1} b^{\prime\prime}_i = & \sum_{i=1}^{C+1}\bigl(\gamma b_i+(1-\gamma)b^{\prime}_i\bigr)        \\
-        =                                     & \gamma\sum_{i=1}^{C+1} b_i + (1-\gamma)\sum_{i=1}^{C+1} b^{\prime}_i \\
-        =                                     & \gamma+(1-\gamma)                                                    \\
-        =                                     & 1.
+        \placeholderdist^{\prime\prime} = \gamma \placeholderdist + (1-\gamma)\placeholderdist^{\prime}.
     \end{align*}
-    Hence $b^{\prime\prime}\in\Delta^C$, proving that $\Delta^C$ is convex.
+    For every coordinate $i$,
+    \begin{align*}
+        \placeholderdist^{\prime\prime}_i = \gamma \placeholderdist_i + (1-\gamma)\placeholderdist^{\prime}_i \ge 0,
+    \end{align*}
+    since $\placeholderdist_i,\placeholderdist^{\prime}_i\ge 0$ and $\gamma,1-\gamma\ge 0$. Moreover,
+    \begin{align*}
+        \sum_{i=1}^{C+1} \placeholderdist^{\prime\prime}_i = & \sum_{i=1}^{C+1}\bigl(\gamma \placeholderdist_i+(1-\gamma)\placeholderdist^{\prime}_i\bigr)        \\
+        =                                                    & \gamma\sum_{i=1}^{C+1} \placeholderdist_i + (1-\gamma)\sum_{i=1}^{C+1} \placeholderdist^{\prime}_i \\
+        =                                                    & \gamma+(1-\gamma)                                                                                  \\
+        =                                                    & 1.
+    \end{align*}
+    Hence $\placeholderdist^{\prime\prime}\in\Delta^C$, proving that $\Delta^C$ is convex.
 
     Next, observe that
     \begin{align*}
-        \Delta^C = & \left(\bigcap_{i=1}^{C+1}\{b\in\mathbb R^{C+1}: b_i\ge 0\}\right) \\
+        \Delta^C = & \left(\bigcap_{i=1}^{C+1}\{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}\right) \\
                    & \cap
-        \left\{b\in\mathbb R^{C+1}:\sum_{i=1}^{C+1} b_i = 1\right\}.
+        \left\{\placeholderdist\in\mathbb R^{C+1}:\sum_{i=1}^{C+1} \placeholderdist_i = 1\right\}.
     \end{align*}
     Each set
-    \[
-        \{b\in\mathbb R^{C+1}: b_i\ge 0\}
-    \]
+    \begin{align*}
+        \{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}
+    \end{align*}
     is closed, as it is the preimage of the closed interval
     $[0,\infty)$ under the continuous projection map
-    $b\mapsto b_i$. Likewise,
-    \[
+    $\placeholderdist\mapsto \placeholderdist_i$. Likewise,
+    \begin{align*}
         \left\{
-        b\in\mathbb R^{C+1}:
-        \sum_{i=1}^{C+1} b_i = 1
+        \placeholderdist\in\mathbb R^{C+1}:
+        \sum_{i=1}^{C+1} \placeholderdist_i = 1
         \right\}
-    \]
+    \end{align*}
     is closed, being the preimage of the closed set $\{1\}$
     under the continuous map
-    $b\mapsto \sum_{i=1}^{C+1} b_i$.
+    $\placeholderdist\mapsto \sum_{i=1}^{C+1} \placeholderdist_i$.
     Since an intersection of closed sets is closed,
     $\Delta^C$ is closed.
 
-    Finally, let $b\in\Delta^C$. Since $b_i\ge 0$ and
-    \[
-        \sum_{i=1}^{C+1} b_i = 1,
-    \]
+    Finally, let $\placeholderdist\in\Delta^C$. Since $\placeholderdist_i\ge 0$ and
+    \begin{align*}
+        \sum_{i=1}^{C+1} \placeholderdist_i = 1,
+    \end{align*}
     it follows that
-    \[
-        0 \le b_i \le 1,
+    \begin{align*}
+        0 \le \placeholderdist_i \le 1,
         \qquad i=1,\dots,C+1.
-    \]
+    \end{align*}
     Therefore,
-    \[
-        \|b\|_2^2
+    \begin{align*}
+        \|\placeholderdist\|_2^2
         =
-        \sum_{i=1}^{C+1} b_i^2
+        \sum_{i=1}^{C+1} \placeholderdist_i^2
         \le
-        \sum_{i=1}^{C+1} b_i
+        \sum_{i=1}^{C+1} \placeholderdist_i
         =
         1,
-    \]
-    where the inequality follows from $0\le b_i\le 1$ implying
-    $b_i^2\le b_i$. Consequently,
-    \[
-        \|b\|_2 \le 1,
-    \]
+    \end{align*}
+    where the inequality follows from $0\le \placeholderdist_i\le 1$ implying
+    $\placeholderdist_i^2\le \placeholderdist_i$. Consequently,
+    \begin{align*}
+        \|\placeholderdist\|_2 \le 1,
+    \end{align*}
     and thus $\Delta^C$ is bounded.
 \end{proof}
 
 \subsection{Proof of \cref{prop:concavity}}
 \label{sec:proof_concavity}
 \propConcavity*
-\begin{proof}
-    Consider the negative of $f$,
-    \[
-        g(b)
-        =
-        -f(b)
-        =
-        \sum_{i=1}^{C}
-        p_i
-        \left[
-            -\log\!\left(
-            t\cdot b_i+b_{C+1}
-            \right)
-            \right].
-    \]
-
-    For each $i$, define
-    \[
-        g_i(b)
-        =
+To show that $\W{r}$ is concave, it suffices to show that $-\W{r}$ is convex. Observe that
+\begin{align*}
+    -\W{r}
+    =
+    \sum_{j=1}^{C}
+    p_j
+    \left[
         -\log\!\left(
-        t\cdot b_i+b_{C+1}
-        \right).
-    \]
+        \costmult\cdot\phat_j+\phat_{C+1}
+        \right)
+        \right].
+\end{align*}
+For each $j$, define
+\begin{align*}
+    g_j(\phat)
+    =
+    -\log\!\left(
+    \costmult\cdot\phat_j+\phat_{C+1}
+    \right).
+\end{align*}
+Since $\costmult>0$ and $\phat\in\Delta^C$, we have
+\begin{align*}
+    \costmult\cdot\phat_j+\phat_{C+1}>0,
+\end{align*}
+so the logarithm is well defined. The function
+\begin{align*}
+    x\mapsto-\log x
+\end{align*}
+is convex on $(0,\infty)$ since
+\begin{align*}
+    \frac{d^2}{dx^2}(-\log x)
+    =
+    \frac{1}{x^2}
+    >
+    0,
+    \qquad x>0.
+\end{align*}
 
-    % The map
-    % \[
-    %     b
-    %     \mapsto
-    %     b_i+\frac{1}{o}b_{C+1}
-    % \]
-    % is affine. Moreover, the function
-    % \[
-    %     x\mapsto -\log x
-    % \]
-    % is convex on $\mathbb R_{>0}$ since
-    % \[
-    %     \frac{d^2}{dx^2}(-\log x)
-    %     =
-    %     \frac{1}{x^2}
-    %     >
-    %     0.
-    % \]
+Hence each $g_j$ is convex. Since $p_j\ge0$ for all $j$, the weighted sum
+\begin{align*}
+    -\W{r}
+    =
+    \sum_{j=1}^{C}p_j g_j
+\end{align*}
+is convex. Therefore, $\W{r}$ is concave on $\Delta^C$.
 
-    % Therefore, $g_i$ is convex as the composition of a convex
-    % function with an affine map. Since $p_i\ge 0$ for all $i$,
-    % the weighted sum
-    % \[
-    %     g(b)
-    %     =
-    %     \sum_{i=1}^{C} p_i g_i(b)
-    % \]
-    % is convex.
+\subsection{Proof of \cref{prop:equivalence}}
+\label{sec:proof_equivalence}
+\propEquivalence*
 
-    % Hence $g=-f$ is convex, and therefore
-    % \[
-    %     f
-    %     =
-    %     -g
-    % \]
-    % is concave.
-\end{proof}
+Let $\phat\in\Delta^C$ with $\phat_{C+1}=0$. Then
+\begin{align*}
+    \W{r}
+     & =
+    \sum_{j=1}^{C}p_j\log\!\left(\costmult\cdot\phat_j+\phat_{C+1}\right)             \\
+     & =
+    \sum_{j=1}^{C}p_j\log\!\left(\costmult\cdot\phat_j\cdot\frac{p_j}{\phat_j}\right) \\
+     & =
+    \log\!\left(\costmult\right)
+    -
+    H(p)
+    -
+    D_{\text{KL}}(p\| \phat),
+\end{align*}
+where $H(p)$ is the Shannon entropy of $p$ and $D_{\text{KL}}(p\| \phat)$ is the Kullback-Leibler divergence between $p$ and $\phat$. Since $\log\!\left(\costmult\right)$ and $H(p)$ are constants with respect to $\phat$, maximizing $\W{r}$ is equivalent to minimizing $D_{\text{KL}}(p\| \phat)$, which is equivalent to minimizing the cross-entropy loss.
+
+\subsection{}
+
+The optimization problem in Eq.~\eqref{eq:cmp_problem} can be analyzed using the \gls*{kkt} conditions. The corresponding Lagrangian is given by
+\begin{align*}
+    \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu})
+     & =
+    \W{r}                                            \\
+     &
+    +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\
+     &
+    +\sum_{i=1}^{C+1}\mu_i\phat_i,
+\end{align*}
+where $\lambda\in\mathbb{R}$ is the Lagrange multiplier associated with the equality constraint and $\mu_i\ge0$ are the multipliers corresponding to the non-negativity constraints.
+
+The KKT conditions are
+\begin{align*}
+    \left\{
+    \begin{aligned}
+         & \frac{\partial \mathcal{L}}{\partial \phat_i}
+        = \frac{\partial \mathcal{W}_r}{\partial \phat_i}
+        - \lambda + \mu_i = 0,
+         &                                                 & i=1,\ldots,C+1, \\
+         & \sum_{i=1}^{C+1} \phat_i = 1,                                   \\
+         & \phat_i                   \ge 0,
+         &                                                 & i=1,\ldots,C+1, \\
+         & \mu_i                       \ge 0,
+         &                                                 & i=1,\ldots,C+1, \\
+         & \mu_i \phat_i             = 0,
+         &                                                 & i=1,\ldots,C+1.
+    \end{aligned}
+    \right.
+\end{align*}
+
+For the gambler's objective in \cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
+\begin{align*}
+    \frac{\partial\mathcal{L}}{\partial\phat_i}
+     & =
+    \frac{p_i}
+    {\costmult\cdot\phat_i+\phat_{C+1}}
+    -\lambda+\mu_i
+    =0,
+\end{align*}
+for \(i = 1, \ldots, C\), and,
+\begin{align*}
+    \frac{\partial\mathcal{L}}{\partial\phat_{C+1}}
+     & =
+    \sum_{i=1}^{C}
+    \frac{p_i}
+    {\costmult\cdot\phat_i+\phat_{C+1}}
+    -\lambda+\mu_{C+1}
+    =0.
+\end{align*}
+
+The complementary slackness condition naturally leads to two cases for each class output.
+
+\paragraph{Case 1: $\phat_i>0$.}
+In this case, complementary slackness implies $\mu_i=0$, yielding
+\begin{align}
+    \frac{\costmult\cdot p_i}
+    {\costmult\cdot\phat_i+\phat_{C+1}}
+    =
+    \lambda,
+\end{align}
+or equivalently,
+\begin{align}
+    \phat_i
+    =
+    \frac{p_i}{\lambda}-\frac{\phat_{C+1}}{\costmult}.
+\end{align}
+Notice how the requirement $\phat_i>0$ implies that $p_i>\lambda\phat_{C+1}$, which means that a class becomes inactive whenever its probability falls below the threshold \(\lambda\frac{\phat_{C+1}}{\costmult}\) where \(\frac{\phat_{C+1}}{\costmult}\) is the ratio of the reserve output to the cost multiplier associated with betting on the class prediction. Conversely, if $p_i\le\lambda\frac{\phat_{C+1}}{\costmult}$, then $\phat_i=0$ and the class becomes inactive. 
+
+\paragraph{Case 2: $\phat_i=0$.}
+Here, $\mu_i\ge0$, and therefore
+% \begin{align}
+%     \frac{p_i}
+%     {\phat_{C+1}/o}
+%     \le
+%     \lambda,
+% \end{align}
+% provided that $\phat_{C+1}>0$. Equivalently,
+% \begin{align}
+%     p_i
+%     \le
+%     \lambda\frac{\phat_{C+1}}{o}.
+% \end{align}
+% Hence, a class becomes inactive whenever its probability falls below the threshold
+% $\lambda\phat_{C+1}/o$.
+
+% Similarly, the reserve output admits two cases.
+
+% \paragraph{Case 3: $\phat_{C+1}>0$.}
+% Then $\mu_{C+1}=0$, and
+% \begin{align}
+%     \sum_{i=1}^{C}
+%     \frac{p_i}
+%     {o\phat_i+\phat_{C+1}}
+%     =
+%     \lambda.
+% \end{align}
+
+% \paragraph{Case 4: $\phat_{C+1}=0$.}
+% The reserve output lies on the boundary and $\mu_{C+1}\ge0$. If, additionally, $p_i>0$ for every class, any solution with $\phat_i=0$ yields
+% \[
+%     \mathcal{W}_r=-\infty,
+% \]
+% since $\log(0)$ appears in the objective. Consequently, all class probabilities remain strictly positive and the solution reduces to the no-reservation optimum.
+
+\vspace{5\baselineskip}
 
 then KKT to show the uncertainty as something subtracted from class confidence
 

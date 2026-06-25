@@ -13,9 +13,10 @@ and tries to approximate the optimal (Bayes) decision rule
 Notice that $\PYXhat$ can be interpreted as the prediction of the class (label) posterior probability given a sample (e.g., \(\PYXhat(y~|\x)\equiv \fun{softmax}(\mathbf{\x})_y\)), while \(\PYX\) is the true (unknown)  probability.
 
 In general, during training, the cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a neural network. The cross-entropy loss is defined as
-\[
+\begin{align}
+    \label{eq:cross_entropy}
     \mathcal{L}_{\text{CE}}(\calD_n) = -\frac{1}{n}\sum_{i=1}^{n}\sum_{j=1}^{C} p_{i,j}\log\left(\PYXhat(y_j|\x_i;\calD_n)\right),
-\]
+\end{align}
 where \(p_{i,j}\) is the element of the one-hot encoded label vector for the \(i\)-th sample and the \(j\)-th class. If \(p_{i,j} = 1\), then \(p_{i,k} = 0\) for \(k \neq j\). The cross-entropy loss can be interpreted as the negative log-likelihood of the true labels given the predicted probabilities. Minimizing this loss encourages the model to assign high probabilities to the correct classes.
 For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\sum_{j=1}^{C} p_{i,j}\log \PYXhat(y_j|\x_i;\calD_n)\) as
 
@@ -30,15 +31,15 @@ In particular, we allow for the model to predict \(\card{\calY} + 1\) classes, w
 
 \begin{align}
     \label{eq:reject_cross_entropy_internal}
-    \W{r}=\sum_{j=1}^{C} p_{j}\log\left(t\cdot\phat_{j}+\phat_{C+1}\right),
+    \W{r}=\sum_{j=1}^{C} p_{j}\log\left(\costmult\cdot\phat_{j}+\phat_{C+1}\right),
 \end{align}
 
 where \(\phat_{i,C+1}\) is the reservation variable for the \(i\)-th sample, subject to the constraints
 \[
     \sum_{j=1}^{C} p_{i,j}+p_{i,C+1}=1,\ \text{and}\
-    p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\}.
+    p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
 \]
-The parameter \(t>0\) is a hyperparameter that controls the trade-off between making a prediction and abstaining. A higher value of \(t\) encourages the model to make predictions, while a lower value encourages abstention.
+and parameter \(\costmult>0\) is a hyperparameter that controls the trade-off between making a prediction and abstaining. A higher value of \(\costmult\) encourages the model to make predictions, while a lower value encourages abstention.
 
 In particular, with respect to \cite{liu2019deep}, we propose a new analysis based on \gls*{cmp} (cf. \cite{boyd2004convex})\footnote{While this approach provides a closed-form solution to the optimization problem, we retain the neural network framework of state-of-the-art approaches \cite{shenoy2026uncertainty}}, which allows for a principled analysis and reveals a previously unidentified degenerate boundary case.
 
@@ -48,11 +49,11 @@ We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal
     \Delta^{C}
     =
     \left\{
-    b \in \mathbb{R}^{C+1}
+    \placeholderdist \in \mathbb{R}^{C+1}
     :\;
-    b_i \ge 0 \;\forall i,
+    \placeholderdist_i \ge 0 \;\forall i,
     \quad
-    \sum_{i=1}^{C+1} b_i = 1
+    \sum_{i=1}^{C+1} \placeholderdist_i = 1
     \right\}.
 \]
 
@@ -63,21 +64,43 @@ We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal
         \Delta^{C}
         =
         \left\{
-        b \in \mathbb{R}^{C+1}
+        \placeholderdist \in \mathbb{R}^{C+1}
         :\;
-        b_i \ge 0 \;\forall i,
+        \placeholderdist_i \ge 0 \;\forall i,
         \quad
-        \sum_{i=1}^{C+1} b_i = 1
+        \sum_{i=1}^{C+1} \placeholderdist_i = 1
         \right\}
     \]
     is convex, closed, and bounded.
 \end{restatable}
-
-Moreover,
+Moreover, the following holds:
 \begin{restatable}{proposition}{propConcavity}
     \label{prop:concavity}
     The function \(\W{r}\) in \cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
 \end{restatable}
+Therefore, the following can be concluded:
+\begin{restatable}{remark}{remarkadmissible}
+    \label{remark:admissible}
+    The optimization problem of maximizing \(\W{r}\) over the probability simplex \(\Delta^{C}\) involves the maximization over a convex, closed, and bounded set of a concave function. Hence, the problem is a \gls*{cmp} problem, and for the continuity of \(\W{r}\) over the compact set \(\Delta^{C}\), it admits a global maximum.
+\end{restatable}
+
+\subsection{Optimization problem with the reservation variable}
+Due to the nature of the problem analyzed, we can build the following \gls*{cmp} problem, which is equivalent to the maximization of \(\W{r}\) over the probability simplex \(\Delta^{C}\):
+\begin{align}
+    \label{eq:cmp_problem}
+    \begin{aligned}
+        \text{maximize}\quad   & \W{r}                               \\
+        \text{subject to}\quad & \sum_{i=1}^{C+1} \phat_i = 1,       \\
+                               & \phat_i \ge 0, \quad i=1,\dots,C+1.
+    \end{aligned}
+\end{align}
+It is easy to see that the following holds:
+\begin{restatable}{proposition}{propEquivalence}
+    \label{prop:equivalence}
+    The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
+\end{restatable}
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
