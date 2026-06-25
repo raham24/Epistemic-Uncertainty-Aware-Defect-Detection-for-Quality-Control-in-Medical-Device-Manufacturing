@@ -18,7 +18,7 @@ cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
 source cluster/env.sh
 mkdir -p results/cluster cluster/logs
 
-# pick this task's line: run_id <TAB> dataset <TAB> mlp_v2 args
+# pick this task's line: run_id <TAB> dataset <TAB> mlp args
 line=$(sed -n "${SLURM_ARRAY_TASK_ID}p" cluster/runs.tsv)
 run_id=$(printf '%s' "$line" | cut -f1)
 dataset=$(printf '%s' "$line" | cut -f2)
@@ -32,7 +32,7 @@ fi
 
 echo "[train ${SLURM_ARRAY_TASK_ID}] $run_id   dataset=$dataset   args: $args"
 # shellcheck disable=SC2086
-python mlp_v2.py --data "$csv" $args --device "${RCA_DEVICE:-cpu}" \
+python mlp.py --data "$csv" $args --device "${RCA_DEVICE:-cpu}" \
   --model-out "results/cluster/${run_id}.pt" \
   --out "results/cluster/${run_id}.json"
 echo "[train ${SLURM_ARRAY_TASK_ID}] saved results/cluster/${run_id}.{pt,json}"

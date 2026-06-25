@@ -1,29 +1,23 @@
 # =============================================================================
-# SMT replication baseline — domain spec (the contract).
+# SMT domain spec — the single source of truth for the synthetic generator.
 #
-# This file is the single source of truth for the surface-mount-assembly (SMT)
-# reproduction of Shenoy & Ameri (2026). The generator READS this file; nothing
-# domain-specific is hard-coded in Python. The medical-device port later swaps
-# this file for domain/insulin_pump.yaml with no generator code changes.
+# generator.py reads THIS file; nothing domain-specific is hard-coded in Python.
+# Every field below is consumed by the code (no dead/cosmetic fields). The
+# medical-device port later swaps this file for domain/insulin_pump.yaml with no
+# generator code changes.
 #
-# Conventions:
-#   - Every parameter has a two-sided spec [lsl, usl] and a process sigma.
-#   - "deviation" = (value - nominal) / half_width, so |deviation| = 1.0 is the
-#     nearer spec limit. Risk and labels are computed from these normalized devs.
+# Convention: deviation = (value - nominal) / half_width, so |deviation| = 1.0
+# sits exactly at the nearer spec limit. Risk and labels are computed from these
+# normalized deviations.
 # =============================================================================
 
 device_class: smt_assembly
-standards:
-  - IPC-A-610     # acceptability of electronic assemblies
-  - J-STD-001     # soldering requirements
 
 # ---------------------------------------------------------------------------
-# Defect classes. Priors are CALIBRATION TARGETS: the generator solves per-class
-# logit offsets so all three realized marginals match these. Priors are the
-# paper's exact Table I counts as fractions of 200,000:
-#   no_defect 175,420 -> 0.877100;  open_circuit 12,011 -> 0.060055;
-#   solder_bridging 12,569 -> 0.062845.
-# Labels are not sampled from the priors directly — they come from p(y|x).
+# Defect classes. `prior` is a CALIBRATION TARGET: the generator solves per-class
+# logit offsets so the realized marginals match these. Values are the paper's
+# Table I counts as fractions of 200,000 (no_defect 175,420; open_circuit 12,011;
+# solder_bridging 12,569). Labels are sampled from p(y|x), not from the priors.
 # ---------------------------------------------------------------------------
 defects:
   - name: no_defect
@@ -34,8 +28,8 @@ defects:
     prior: 0.062845
 
 # ---------------------------------------------------------------------------
-# Two process stages (faithful to the paper: paste printing, then reflow).
-# Each stage gets its own mechanism softmax head in the MLP.
+# Two process stages (paper: paste printing, then reflow). Each lists its
+# mechanism vocabulary, including an explicit no_mechanism.
 # ---------------------------------------------------------------------------
 mechanisms:
   stage_printing:
@@ -48,65 +42,57 @@ mechanisms:
     - non_coalescence
 
 # ---------------------------------------------------------------------------
-# Six monitored process parameters. sigma is the natural process spread; the
-# spec half-width divided by sigma sets how often a parameter drifts out of spec.
+# Six monitored process parameters. nominal/lsl/usl define the spec window;
+# sigma is the natural process standard deviation. half_width / sigma sets how
+# often a parameter drifts out of spec. (units in comments, not used by code)
 # ---------------------------------------------------------------------------
 parameters:
-  - id: ambient_relative_humidity
+  - id: ambient_relative_humidity   # %RH
     nominal: 50.0
     lsl: 30.0
     usl: 70.0
     sigma: 8.0
-    unit: "%RH"
     stage: stage_printing
-  - id: ambient_temperature
+  - id: ambient_temperature         # C
     nominal: 25.0
     lsl: 20.0
     usl: 30.0
     sigma: 2.5
-    unit: "C"
     stage: stage_printing
-    # Causal per the paper (Fig. 2): high -> solder_bridging via aperture_overfill,
-    # low -> open_circuit via poor_paste_transfer.
-  - id: paste_viscosity
+  - id: paste_viscosity             # Pa.s
     nominal: 100.0
     lsl: 90.0
     usl: 110.0
     sigma: 5.0
-    unit: "Pa.s"
     stage: stage_printing
-  - id: stencil_thickness
+  - id: stencil_thickness           # um
     nominal: 100.0
     lsl: 95.0
     usl: 105.0
     sigma: 2.0
-    unit: "um"
     stage: stage_printing
-  - id: time_above_liquidus
+  - id: time_above_liquidus         # s
     nominal: 60.0
     lsl: 45.0
     usl: 75.0
     sigma: 3.0
-    unit: "s"
     stage: stage_reflow
-  - id: peak_reflow_temperature
+  - id: peak_reflow_temperature     # C
     nominal: 255.0
     lsl: 250.0
     usl: 260.0
     sigma: 2.5
-    unit: "C"
     stage: stage_reflow
 
 # ---------------------------------------------------------------------------
 # Ishikawa-style causal map: defect <- via mechanism <- parameter (+ direction).
 # Used to (a) build defect logits, (b) assign ground-truth mechanism labels,
-# (c) build RCA chains downstream. 'direction' = which side of nominal drives
-# the defect; it is NOT used for risk magnitude (risk is two-sided).
+# (c) compute the per-mechanism gated risk. `direction` = which side of nominal
+# drives the defect (it gates the score's sign, not the two-sided risk magnitude).
+# Matches paper Fig. 2: solder bridging via aperture_overfill (printing) +
+# reflow_spreading (reflow); open circuit is the mirror image.
 # ---------------------------------------------------------------------------
 causal_edges:
-  # Matches paper Fig. 2: solder bridging via aperture_overfill (printing) and
-  # reflow_spreading (reflow); open circuit is the mirror image with the opposite
-  # non-compliance direction on every parameter (the paper's didactic point).
   # solder bridging: too much paste / too much heat
   - {defect: solder_bridging, via: aperture_overfill,   parameter: stencil_thickness,         direction: high, weight: 1.5}
   - {defect: solder_bridging, via: aperture_overfill,   parameter: ambient_temperature,       direction: high, weight: 0.7}
@@ -123,7 +109,7 @@ causal_edges:
   - {defect: open_circuit,    via: non_coalescence,     parameter: time_above_liquidus,       direction: low,  weight: 1.0}
 
 # ---------------------------------------------------------------------------
-# Gaussian copula correlation structure over the 6 parameters (symmetric;
+# Gaussian-copula correlation structure over the 6 parameters (symmetric;
 # unspecified pairs default to 0). Nearest-PD corrected at load time.
 # ---------------------------------------------------------------------------
 correlations:
@@ -153,14 +139,13 @@ drift:
     time_above_liquidus: {wear: 0.20}
 
 # ---------------------------------------------------------------------------
-# Graded risk target — the paper's Eq. (8) with (9)-(10), two-sided in |dev|:
-#   z = min(1, max(0, (|dev| - delta_1)/(delta_2 - delta_1)))   (Eq. 9)
-#   t = max(0, |dev| - delta_2)                                 (Eq. 10)
-#   P = p_L + (p_M - p_L) z^2 + (p_H - p_M)(1 - exp(-kappa t))   (Eq. 8)
-# Risk = p_L in the safe region, rises quadratically to p_M AT the spec limit
-# (delta_2 = 1.0), and asymptotes to p_H out of spec. p_L/p_M/p_H are the
-# paper's stated 0.05/0.70/0.99; delta_1, delta_2, kappa are reproducibility
-# gaps (the paper gives the form, not the constants).
+# Graded risk target — the paper's Eq. (8)/(9)/(10), two-sided in |deviation|:
+#   z = clip((|dev| - delta_1) / (delta_2 - delta_1), 0, 1)
+#   t = max(0, |dev| - delta_2)
+#   P = p_L + (p_M - p_L) z^2 + (p_H - p_M)(1 - exp(-kappa t))
+# Risk = p_L in spec, rises to p_M AT the limit (delta_2 = 1.0), asymptotes to
+# p_H out of spec. p_L/p_M/p_H are the paper's 0.05/0.70/0.99; delta_1/2, kappa
+# are reproducibility gaps (the paper gives the form, not the constants).
 # ---------------------------------------------------------------------------
 risk_function:
   p_L: 0.05
@@ -171,17 +156,14 @@ risk_function:
   kappa: 3.0
 
 # ---------------------------------------------------------------------------
-# Defect-logit model used ONLY to generate labels and the exact posterior
-# p(y|x). score(defect) = sum_edges weight * relu(directional deviation).
-#   logit(no_defect) = offset_no_defect (reference, 0)
-#   logit(defect)    = gain * score(defect) + offset(defect)
-# 'gain' is solved so the Bayes error E_x[1 - max_y p(y|x)] == target_bayes_error
-# (reproduces the paper's separability: defect head ~95% accuracy => Bayes <~ 0.05).
-# Per-class offsets are then solved so E[p(y)] matches the defect priors above.
+# Defect-label model. score(defect) = sum_edges weight * relu(directional dev).
+#   logit(no_defect) = 0 (reference);  logit(defect) = gain * score + offset
+# `gain` is solved so the Bayes error E_x[1 - max_y p(y|x)] == target_bayes_error
+# (reproduces ~95% defect-head accuracy). Offsets are solved so E[p(y)] matches
+# the defect priors above.
 # ---------------------------------------------------------------------------
 label_model:
   target_bayes_error: 0.045
-  calibrate_priors: true
 
 generator:
   n_records: 200000
@@ -190,7 +172,6 @@ generator:
   seed: 42
   train_frac: 0.70
   val_frac: 0.15
-  test_frac: 0.15
-  generator_version: "smt-gen-v2"
+  # test = the remaining batches (0.15)
   # Fixed ISO timestamp keeps output byte-reproducible (no wall clock in data).
   build_timestamp: "2026-06-02T00:00:00Z"

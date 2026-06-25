@@ -16,12 +16,12 @@ cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
 source cluster/env.sh
 mkdir -p data/cluster cluster/logs
 
-# pick this task's line: name <TAB> generator_v2 args
+# pick this task's line: name <TAB> generator args
 line=$(sed -n "${SLURM_ARRAY_TASK_ID}p" cluster/datasets.tsv)
 name=$(printf '%s' "$line" | cut -f1)
 args=$(printf '%s' "$line" | cut -f2-)
 
 echo "[gen ${SLURM_ARRAY_TASK_ID}] $name   args: ${args:-<defaults>}"
 # shellcheck disable=SC2086
-python generator_v2.py $args --out "data/cluster/${name}.csv"
+python generator.py $args --out "data/cluster/${name}.csv"
 echo "[gen ${SLURM_ARRAY_TASK_ID}] wrote data/cluster/${name}.csv"
