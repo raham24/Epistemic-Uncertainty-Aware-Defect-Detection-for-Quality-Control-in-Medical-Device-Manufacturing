@@ -221,7 +221,7 @@ topology, split protocol, and the risk-equation form all match the paper.
 | stage-wise mechanism vocab incl. explicit `no_mechanism` (Table I) | printing {aperture_overfill, poor_paste_transfer, no_mechanism}; reflow {reflow_spreading, non_coalescence, no_mechanism} |
 | graded risk Eq. 8–10; profile 0.05→0.70→0.99 (Section IV-B) | `graded_risk`; p_L/p_M/p_H = 0.05/0.70/0.99 |
 | batch/shift grouped split; normalize on train only (Section IV-C) | `_assign_split`; train-only standardization (`mu`/`sd` fit on train) |
-| N=200,000; 140k/30k/30k (Table I) | `n_records` 200000; train/val/test = 0.70/0.15/0.15 |
+| N=200,000; 140k/30k/30k (Table I) | `n_batches`×`records_per_batch` = 100×2000; train/val/test = 0.70/0.15/0.15 |
 | class counts 175,420 / 12,569 / 12,011 (Table I) | calibrated to those exact fractions (IPF on logit offsets) |
 | Fig. 2 causal topology (bridging via aperture_overfill + reflow_spreading; open = mirror) | all 12 `causal_edges`, mirror directions |
 | multi-head MLP: softmax defect + per-stage mechanism, sigmoid risk (Eq. 1–3) | `v1/mlp_common.MultiHeadMLP` (the paper-faithful baseline; the root `mlp.py` instead uses a single joint mechanism head in a cascade) |

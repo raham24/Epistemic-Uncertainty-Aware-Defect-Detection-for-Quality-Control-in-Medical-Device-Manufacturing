@@ -187,7 +187,7 @@ def _sample_process(spec: dict[str, Any], seed: int) -> pd.DataFrame:
 
     n_batches = gen["n_batches"]
     per_batch = gen["records_per_batch"]
-    n_total = gen["n_records"]
+    n_total = n_batches * per_batch          # run length = the wear-drift horizon
     period = spec.get("drift", {}).get("diurnal_period_hours", 24)
     drift_p = spec.get("drift", {}).get("parameters", {})
     wear = np.array([drift_p.get(pid, {}).get("wear", 0.0) for pid in ids])

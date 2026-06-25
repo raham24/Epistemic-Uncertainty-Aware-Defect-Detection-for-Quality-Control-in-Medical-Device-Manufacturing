@@ -11,8 +11,6 @@
 # normalized deviations.
 # =============================================================================
 
-device_class: smt_assembly
-
 # ---------------------------------------------------------------------------
 # Defect classes. `prior` is a CALIBRATION TARGET: the generator solves per-class
 # logit offsets so the realized marginals match these. Values are the paper's
@@ -166,7 +164,7 @@ label_model:
   target_bayes_error: 0.045
 
 generator:
-  n_records: 200000
+  # total rows = n_batches * records_per_batch = 200,000 (paper's N)
   n_batches: 100
   records_per_batch: 2000
   seed: 42
