@@ -31,7 +31,7 @@ conda activate paper
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
 
-# device for mlp_v2.py: cpu (default) or cuda on a GPU node (set RCA_DEVICE=cuda)
+# device for mlp.py: cpu (default) or cuda on a GPU node (set RCA_DEVICE=cuda)
 export RCA_DEVICE="${RCA_DEVICE:-cpu}"
 
 # --- optional SLURM placement (leave EMPTY to use the cluster default) ---

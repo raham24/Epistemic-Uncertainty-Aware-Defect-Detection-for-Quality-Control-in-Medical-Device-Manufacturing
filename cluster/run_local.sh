@@ -19,7 +19,7 @@ while IFS=$'\t' read -r name args; do
   [ -z "$name" ] && continue
   echo "[gen] $name"
   # shellcheck disable=SC2086
-  python generator_v2.py $args --out "data/cluster/${name}.csv"
+  python generator.py $args --out "data/cluster/${name}.csv"
 done < cluster/datasets.tsv
 
 echo "=== 2/2 training $(grep -c . cluster/runs.tsv) models, $N at a time ==="
@@ -31,7 +31,7 @@ train_one() {
   args=$(printf '%s' "$line" | cut -f3-)
   echo "[train] $run_id"
   # shellcheck disable=SC2086
-  python mlp_v2.py --data "data/cluster/${dataset}.csv" $args --device "$DEVICE" \
+  python mlp.py --data "data/cluster/${dataset}.csv" $args --device "$DEVICE" \
     --model-out "results/cluster/${run_id}.pt" \
     --out "results/cluster/${run_id}.json" \
     > "cluster/logs/${run_id}.log" 2>&1 \

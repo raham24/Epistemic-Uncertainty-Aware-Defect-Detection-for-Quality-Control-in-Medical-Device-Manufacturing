@@ -2,8 +2,8 @@
 
 Single source of truth for the sweep. Emits three files into cluster/:
 
-  datasets.tsv   one line per dataset variant:  name <TAB> generator_v2 args
-  runs.tsv       one line per training run:      run_id <TAB> dataset <TAB> mlp_v2 args
+  datasets.tsv   one line per dataset variant:  name <TAB> generator args
+  runs.tsv       one line per training run:      run_id <TAB> dataset <TAB> mlp args
   manifest.json  the full structured matrix (paths included) for the notebook
 
 The SLURM arrays (gen_data.slurm, train.slurm) and the local runner read the .tsv
@@ -24,7 +24,7 @@ CLUSTER = ROOT / "cluster"
 DATA_DIR = "data/cluster"
 OUT_DIR = "results/cluster"
 
-# --- dataset variants: name -> generator_v2 CLI args (no --out, no spaces in a
+# --- dataset variants: name -> generator CLI args (no --out, no spaces in a
 # single flag value). Vary the class balance ("split") and the difficulty. ---
 DATASETS = {
     "baseline":      "",                                                    # paper balance, bayes 0.045
