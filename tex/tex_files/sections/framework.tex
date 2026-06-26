@@ -100,279 +100,45 @@ It is easy to see that the following holds:
     The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
 \end{restatable}
 
+\begin{restatable}{theorem}{theoremKKT}
+    \label{theorem:kkt}
+    Let $\hat{\mathbf p}^\star$ be a KKT point of the optimization problem in
+    \eqref{eq:cmp_problem}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists
+    a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
+    \begin{align}
+        \hat p_i^\star
+        =
+        \max\left\{
+        \frac{p_i}{\lambda}
+        -
+        \frac{\hat p_{C+1}^\star}{\costmult},
+        \,0
+        \right\}.
+    \end{align}
+    Consequently, every active class satisfies
+    \begin{align}
+        p_i>\lambda\frac{\hat p_{C+1}^\star}{\costmult},
+    \end{align}
+    whereas every inactive class satisfies
+    \begin{align}
+        p_i\le
+        \lambda\frac{\hat p_{C+1}^\star}{\costmult}.
+    \end{align}
+    Hence, the quantity
+    \[
+        \frac{\hat p_{C+1}^\star}{\costmult}
+    \]
+    acts as an adaptive threshold that determines which class probabilities remain active in the optimal solution.
+\end{restatable}
+
+\cref{theorem:kkt} shows that the reserve output induces an adaptive confidence threshold. As the reserve output increases (or the cost multiplier decreases), the threshold rises, causing more classes to become inactive. This provides a principled optimization-based interpretation of the reserve output as a learned uncertainty score.
+
+\begin{restatable}{theorem}{theoremThreshold}
+    \label{theorem:threshold}
+    Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
+    \in \{1, \dots, C\}\). Then necessarily \[ 1<\costmult<C.\]
+\end{restatable}
+
+% [Threshold structure of mixed solutions] 
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Let
-% \[
-%     p=(p_1,\dots,p_m)\in\Delta_m
-%     \qquad\text{where}\qquad
-%     \Delta_m=\left\{p\in\mathbb{R}_+^m:\sum_{j=1}^m p_j=1\right\}.
-% \]
-% We study the reservation objective from Deep Gamblers,
-% \begin{equation}
-%     W(b,r)=\sum_{j=1}^{m} p_j \log(o b_j+r),
-%     \label{eq:objective}
-% \end{equation}
-% subject to
-% \begin{equation}
-%     b_j\ge 0,\qquad r\ge 0,\qquad \sum_{j=1}^{m} b_j+r=1.
-%     \label{eq:simplex}
-% \end{equation}
-% Here $r=b_{m+1}$ is the reservation mass and $o>0$ is the payoff parameter.
-
-% The feasible set in \eqref{eq:simplex} is compact and convex, and the objective \eqref{eq:objective} is concave in $(b,r)$ because it is a sum of concave logarithms of affine functions. Hence the KKT conditions are sufficient for global optimality.
-
-% \section{The no-reservation benchmark}
-
-% If $r=0$, then
-% \[
-%     W(b,0)=\sum_{j=1}^m p_j \log(o b_j)
-%     =
-%     \log o+\sum_{j=1}^m p_j \log b_j.
-% \]
-% Using
-% \[
-%     D(p\|b)=\sum_{j=1}^m p_j\log\frac{p_j}{b_j}
-%     \qquad\text{and}\qquad
-%     H(p)=-\sum_{j=1}^m p_j\log p_j,
-% \]
-% we get
-% \[
-%     \sum_{j=1}^m p_j\log b_j
-%     =
-%     -H(p)-D(p\|b).
-% \]
-% Therefore
-% \[
-%     W(b,0)=\log o-H(p)-D(p\|b),
-% \]
-% which is maximized at $b=p$. This is the classical proportional-betting solution and recovers the paper's no-reservation theorem.
-
-% \section{KKT system for the reservation problem}
-
-% Introduce the Lagrangian
-% \begin{equation}
-%     \mathcal L
-%     =
-%     \sum_{j=1}^{m} p_j \log(o b_j+r)
-%     +\lambda\left(1-r-\sum_{j=1}^{m} b_j\right)
-%     +\sum_{j=1}^{m}\mu_j b_j
-%     +\nu r,
-%     \label{eq:lagrangian}
-% \end{equation}
-% with multipliers $\mu_j\ge 0$ and $\nu\ge 0$.
-
-% For every active coordinate $j$ with $b_j>0$, complementary slackness gives $\mu_j=0$, and stationarity yields
-% \begin{equation}
-%     \frac{\partial \mathcal L}{\partial b_j}
-%     =
-%     \frac{o p_j}{o b_j+r}-\lambda
-%     =
-%     0.
-%     \label{eq:stationary_b}
-% \end{equation}
-% Hence, for every active class,
-% \begin{equation}
-%     o b_j+r=\frac{o p_j}{\lambda},
-%     \qquad\text{so}\qquad
-%     b_j=\frac{p_j}{\lambda}-\frac{r}{o}.
-%     \label{eq:active_form}
-% \end{equation}
-
-% Similarly,
-% \begin{equation}
-%     \frac{\partial \mathcal L}{\partial r}
-%     =
-%     \sum_{j=1}^{m}\frac{p_j}{o b_j+r}-\lambda+\nu
-%     =
-%     0.
-%     \label{eq:stationary_r}
-% \end{equation}
-% If $r>0$, then complementary slackness gives $\nu=0$.
-
-% \section{Mixed solutions: thresholding / water-filling}
-
-% Let
-% \[
-%     S=\{j:b_j>0\},
-%     \qquad
-%     a=|S|,
-%     \qquad
-%     P_S=\sum_{j\in S}p_j,
-%     \qquad
-%     q=\sum_{j\notin S}p_j=1-P_S.
-% \]
-
-% We first analyze the nontrivial mixed case, where $r>0$ and at least one class is inactive with positive posterior mass.
-
-% \begin{theorem}[Threshold structure of mixed solutions]
-%     Suppose an optimal solution satisfies $0<r^\star<1$ and at least one class with positive posterior mass is inactive, i.e.\ $q^\star>0$. Then necessarily
-%     \[
-%         1<o<m,
-%     \]
-%     and there exists a threshold $t^\star>0$ such that
-%     \begin{equation}
-%         b_j^\star=\max(p_j-t^\star,0),
-%         \qquad
-%         r^\star=o\,t^\star.
-%         \label{eq:threshold_solution}
-%     \end{equation}
-%     Moreover,
-%     \begin{equation}
-%         \sum_{j=1}^{m}\max(p_j-t^\star,0)+o\,t^\star=1.
-%         \label{eq:threshold_equation}
-%     \end{equation}
-% \end{theorem}
-
-% \begin{proof}
-%     For active coordinates $j\in S$, equation \eqref{eq:active_form} holds. Summing \eqref{eq:active_form} over $j\in S$ and using $\sum_{j\in S} b_j = 1-r$ gives
-%     \begin{equation}
-%         \frac{P_S}{\lambda}-\frac{a r}{o}=1-r.
-%         \label{eq:sum_active}
-%     \end{equation}
-%     From \eqref{eq:stationary_r} with $\nu=0$ and using \eqref{eq:active_form}, the active terms satisfy
-%     \[
-%         \frac{p_j}{o b_j+r}=\frac{\lambda}{o}
-%         \qquad (j\in S),
-%     \]
-%     so
-%     \begin{equation}
-%         \frac{a\lambda}{o}+\frac{q}{r}=\lambda.
-%         \label{eq:r_stationary}
-%     \end{equation}
-%     If $q>0$, then \eqref{eq:r_stationary} implies
-%     \[
-%         r=\frac{q\,o}{\lambda(o-a)}.
-%     \]
-%     Substituting this into \eqref{eq:sum_active} and using $P_S+q=1$ yields $\lambda=1$. Therefore
-%     \[
-%         b_j=p_j-\frac{r}{o}
-%         \qquad (j\in S),
-%     \]
-%     and inactive coordinates satisfy $p_j\le r/o$ by complementary slackness. Setting
-%     \[
-%         t^\star=\frac{r^\star}{o},
-%     \]
-%     we obtain \eqref{eq:threshold_solution}.
-
-%     Finally, because $q>0$ and there is at least one inactive class, we have
-%     \[
-%         q=\sum_{j\notin S} p_j
-%         \le (m-a)\,t^\star
-%         =
-%         (m-a)\frac{q}{o-a},
-%     \]
-%     so $o\le m$. Also, since $a\ge 1$ and $o>a$ is required for $r>0$ in the mixed case, we get $o>1$. Hence $1<o<m$.
-% \end{proof}
-
-% \begin{remark}[Water-filling interpretation]
-%     Equation \eqref{eq:threshold_solution} says that the reservation variable acts like a global price:
-%     subtract a threshold $t^\star$ from each class probability, clip at zero, and move the removed mass into reservation.
-%     This is a classical water-filling / soft-thresholding rule.
-% \end{remark}
-
-% \section{Pure regimes}
-
-% The mixed theorem shows that a genuinely mixed betting-and-reservation optimum can only occur in the intermediate regime $1<o<m$.
-
-% \begin{theorem}[Full reservation for low payoff]
-%     If $o<1$, then every optimal solution is full reservation:
-%     \[
-%         r^\star=1,
-%         \qquad
-%         b_1^\star=\cdots=b_m^\star=0.
-%     \]
-% \end{theorem}
-
-% \begin{proof}
-%     For any feasible $(b,r)$ and any $j$,
-%     \[
-%         o b_j+r\le b_j+r\le 1
-%         \qquad\text{because } o<1 \text{ and } \sum_{j=1}^m b_j+r=1.
-%     \]
-%     Therefore each logarithm in \eqref{eq:objective} is at most $0$, so
-%     \[
-%         W(b,r)\le 0.
-%     \]
-%     The full-reservation point $(b,r)=(0,\dots,0,1)$ attains $W=0$, hence it is optimal.
-% \end{proof}
-
-% \begin{theorem}[Full betting for high payoff]
-%     If $o>m$, then every optimal solution has
-%     \[
-%         r^\star=0
-%         \qquad\text{and}\qquad
-%         b_j^\star=p_j\ \text{ for all }j.
-%     \]
-% \end{theorem}
-
-% \begin{proof}
-%     Assume by contradiction that an optimum has $r^\star>0$.
-
-%     If some inactive class carries positive posterior mass, then the mixed-solution theorem applies and implies $o<m$, contradicting $o>m$.
-
-%     If every inactive class has zero posterior mass, then all positive posterior mass lies on the active set $S$. In that case $q=0$, and the stationarity equation \eqref{eq:r_stationary} reduces to
-%     \[
-%         \frac{a\lambda}{o}=\lambda,
-%     \]
-%     which forces $a=o$. But $a\le m<o$, impossible.
-
-%     Hence $r^\star=0$. Once $r^\star=0$, the objective reduces to the no-reservation problem, whose maximizer is $b^\star=p$.
-% \end{proof}
-
-% \begin{remark}[Boundary cases]
-%     The boundary values $o=1$ and $o=m$ can be degenerate.
-%     At $o=1$, full reservation remains optimal, and at $o=m$ there may be a continuum of optimal points lying between full betting and mixed solutions.
-%     The strict inequalities $o<1$ and $o>m$ are the clean regimes.
-% \end{remark}
-
-% \section{Consequences for selective classification}
-
-% The Deep Gamblers model uses the last softmax coordinate $r=b_{m+1}$ as a confidence or uncertainty score, and then thresholds it at test time to control coverage.
-% The analysis above explains why this score is meaningful:
-
-% \begin{itemize}[leftmargin=2em]
-%     \item when $o<1$, the objective pushes the model toward full reservation;
-%     \item when $o>m$, it pushes the model toward full betting;
-%     \item only in the intermediate regime $1<o<m$ does the objective support nontrivial mixed abstention.
-% \end{itemize}
-
-% Thus reservation is not merely an extra class label. It is a risk-control variable that performs global thresholding on the posterior distribution.
-
-% \section{Conclusion}
-
-% The reservation objective admits a complete KKT characterization.
-% The optimizer is either full reservation, full betting, or a mixed thresholded solution.
-% The mixed case is especially informative: the reserve variable subtracts a common threshold from all class probabilities and clips small probabilities to zero.
-% This is a sharper and more explicit description of the abstention mechanism than the entropy-only analysis of the no-reservation case.
