@@ -463,37 +463,250 @@ The mixed theorem shows that a genuinely mixed betting-and-reservation optimum c
     \]
     is the unique optimal solution.
 \end{proof}
-
 \begin{theorem}[Full betting for high payoff]
-    If \(\costmult>C\), then every optimal solution has
+    If \(\costmult>C\), then every optimal solution satisfies
     \[
-        \phat_{C+1}^\star=0
+        \phat_{C+1}^\star=0,
         \qquad\text{and}\qquad
-        \phat_j^\star=p_j \ \text{ for all } j=1,\ldots,C.
+        \phat_j^\star=p_j,
+        \quad
+        j=1,\ldots,C.
     \]
 \end{theorem}
-
 \begin{proof}
-    Assume by contradiction that an optimum satisfies \(\phat_{C+1}^\star>0\).
+    Assume, for contradiction, that an optimal solution satisfies
+    \[
+        \phat_{C+1}^\star>0.
+    \]
 
-    If some inactive class carries positive posterior mass, then the mixed-solution theorem applies and implies \(\costmult<C\), contradicting \(\costmult>C\).
+    Let
+    \[
+        S=\{j:\phat_j^\star>0\},
+        \qquad
+        a=|S|,
+        \qquad
+        q=\sum_{j\notin S}p_j.
+    \]
 
-    Otherwise, every inactive class has zero posterior mass, so \(q=0\). In that case the identity from the mixed-case KKT analysis reduces to
+    Since \(\phat_{C+1}^\star>0\), complementary slackness gives
+    \(\mu_{C+1}=0\), and the stationarity condition for the reserve
+    coordinate becomes
+    \begin{equation}
+        \frac{a\lambda}{\costmult}
+        +
+        \frac{q}{\phat_{C+1}^\star}
+        =
+        \lambda.
+        \label{eq:reserve_stationarity_high}
+    \end{equation}
+
+    If \(q>0\), then \eqref{eq:reserve_stationarity_high} implies
+    \[
+        q
+        =
+        \frac{\lambda(\costmult-a)}
+        {\costmult}
+        \phat_{C+1}^\star.
+    \]
+    Using the identity \(\lambda=1\), established in the mixed-case
+    analysis, yields
+    \[
+        q
+        =
+        (\costmult-a)
+        \frac{\phat_{C+1}^\star}{\costmult}.
+    \]
+    Setting
+    \[
+        t=\frac{\phat_{C+1}^\star}{\costmult},
+    \]
+    we obtain
+    \[
+        q=(\costmult-a)t.
+    \]
+    On the other hand, every inactive class satisfies
+    \(p_j\le t\), so
+    \[
+        q
+        =
+        \sum_{j\notin S}p_j
+        \le
+        (C-a)t.
+    \]
+    Therefore,
+    \[
+        \costmult-a
+        \le
+        C-a,
+    \]
+    or equivalently,
+    \[
+        \costmult\le C,
+    \]
+    contradicting the assumption \(\costmult>C\).
+
+    It remains to consider the case \(q=0\). Then
+    \eqref{eq:reserve_stationarity_high} reduces to
+    \[
+        \frac{a\lambda}{\costmult}
+        =
+        \lambda.
+    \]
+    Since \(\lambda>0\), this implies
     \[
         a=\costmult.
     \]
-    But \(a\le C\), while \(\costmult>C\), which is impossible. Hence \(\phat_{C+1}^\star=0\).
+    However,
+    \[
+        a\le C<\costmult,
+    \]
+    which is impossible.
 
-    Once \(\phat_{C+1}^\star=0\), the objective reduces to the no-reservation problem
+    Hence both cases lead to a contradiction, and therefore
+    \[
+        \phat_{C+1}^\star=0.
+    \]
+
+    With no reservation, the optimization problem reduces to
     \[
         \max_{\phat\in\Delta^{C-1}}
-        \sum_{j=1}^C p_j\log(\costmult\,\phat_j),
+        \sum_{j=1}^{C}
+        p_j\log(\costmult\phat_j).
     \]
-    whose maximizer is
+    Since \(\log(\costmult)\) is constant,
     \[
-        \phat_j^\star=p_j,\qquad j=1,\ldots,C.
+        \sum_{j=1}^{C}
+        p_j\log(\costmult\phat_j)
+        =
+        \log(\costmult)
+        +
+        \sum_{j=1}^{C}
+        p_j\log(\phat_j).
     \]
+    Thus the problem is equivalent to maximizing
+    \[
+        \sum_{j=1}^{C}
+        p_j\log(\phat_j),
+    \]
+    whose unique maximizer is
+    \[
+        \phat_j^\star=p_j,
+        \qquad
+        j=1,\ldots,C,
+    \]
+    by Gibbs' inequality (equivalently, by the non-negativity of the
+    Kullback--Leibler divergence).
 \end{proof}
+
+% \begin{proof}
+%     Assume, for contradiction, that an optimal solution satisfies
+%     \(\phat_{C+1}^\star>0\).
+
+%     There are two possibilities.
+
+%     \paragraph{Case 1: At least one inactive class has positive posterior mass.}
+%     Then the threshold theorem applies, implying
+%     \[
+%         1<\costmult<C,
+%     \]
+%     which contradicts the assumption \(\costmult>C\).
+%     Suppose there exists a class \(i\in\{1,\ldots,C\}\) such that
+%     \[
+%         \phat_i^\star=0,
+%         \qquad\text{but}\qquad
+%         p_i>0.
+%     \]
+%     In other words, the optimizer assigns zero probability to a class that still has positive posterior mass. This is precisely the mixed thresholding regime characterized by Theorem~\ref{theorem:threshold}, which requires
+%     \[
+%         1<\costmult<C.
+%     \]
+%     Since we assume \(\costmult>C\), this is impossible.
+%     \paragraph{Case 2: Every inactive class has zero posterior mass.}
+%     In this case,
+%     \[
+%         q=\sum_{j\notin S}p_j=0.
+%     \]
+%     The stationarity condition for the reserve coordinate becomes
+%     \[
+%         \frac{a\lambda}{\costmult}=\lambda,
+%     \]
+%     where \(a=|S|\). Since \(\lambda>0\), this implies
+%     \[
+%         a=\costmult.
+%     \]
+%     However,
+%     \[
+%         a\le C<\costmult,
+%     \]
+%     which is impossible.
+
+%     Both cases lead to a contradiction. Therefore,
+%     \[
+%         \phat_{C+1}^\star=0.
+%     \]
+
+%     With no reservation, the optimization problem reduces to
+%     \[
+%         \max_{\phat\in\Delta^{C-1}}
+%         \sum_{j=1}^{C}
+%         p_j
+%         \log(\costmult\,\phat_j).
+%     \]
+%     Since \(\log(\costmult)\) is constant,
+%     \[
+%         \sum_{j=1}^{C}
+%         p_j
+%         \log(\costmult\,\phat_j)
+%         =
+%         \log(\costmult)
+%         +
+%         \sum_{j=1}^{C}
+%         p_j\log(\phat_j).
+%     \]
+%     Thus the problem is equivalent to
+%     \[
+%         \max_{\phat\in\Delta^{C-1}}
+%         \sum_{j=1}^{C}
+%         p_j\log(\phat_j),
+%     \]
+%     whose unique maximizer is
+%     \[
+%         \phat_j^\star=p_j,
+%         \qquad
+%         j=1,\ldots,C,
+%     \]
+%     by Gibbs' inequality (equivalently, by the non-negativity of the Kullback--Leibler divergence).
+% \end{proof}
+% \begin{theorem}[Full betting for high payoff]
+%     If \(\costmult>C\), then every optimal solution has
+%     \[
+%         \phat_{C+1}^\star=0
+%         \qquad\text{and}\qquad
+%         \phat_j^\star=p_j \ \text{ for all } j=1,\ldots,C.
+%     \]
+% \end{theorem}
+
+% \begin{proof}
+%     Assume by contradiction that an optimum satisfies \(\phat_{C+1}^\star>0\).
+
+%     If some inactive class carries positive posterior mass, then the mixed-solution theorem applies and implies \(\costmult<C\), contradicting \(\costmult>C\).
+
+%     Otherwise, every inactive class has zero posterior mass, so \(q=0\). In that case the identity from the mixed-case KKT analysis reduces to
+%     \[
+%         a=\costmult.
+%     \]
+%     But \(a\le C\), while \(\costmult>C\), which is impossible. Hence \(\phat_{C+1}^\star=0\).
+
+%     Once \(\phat_{C+1}^\star=0\), the objective reduces to the no-reservation problem
+%     \[
+%         \max_{\phat\in\Delta^{C-1}}
+%         \sum_{j=1}^C p_j\log(\costmult\,\phat_j),
+%     \]
+%     whose maximizer is
+%     \[
+%         \phat_j^\star=p_j,\qquad j=1,\ldots,C.
+%     \]
+% \end{proof}
 
 \begin{remark}[Boundary cases]
     The boundary values \(\costmult=1\) and \(\costmult=C\) can be degenerate.
