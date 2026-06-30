@@ -9,7 +9,7 @@
 
 ## Medium Priority
 
-1. Prepare math intro do convex optimization (Marco)
+1. Prepare math intro do convex optimization [Mathematical Optimization](https://www.mit.edu/~gfarina/notes/)
 2. Go over proofs in the paper (Raham & Marco)
 3. Prepare Sec. 4.1 (Raham)
 4. Review Sec 4.1 (Marco)
