@@ -1,9 +1,9 @@
 {
-  "model_version": "mlp-v0.1",
+  "model_version": "mlp-cascade-1.0",
   "defect_head": {
-    "accuracy": 0.8657333333333334,
-    "weighted_f1": 0.8034312203720908,
-    "macro_f1": 0.30934514876485864
+    "accuracy": 0.9515666666666667,
+    "weighted_f1": 0.9503350113580037,
+    "macro_f1": 0.85888335886193
   },
   "bayes_optimal_accuracy": 0.9534333333333334,
   "paper_reference": {
@@ -11,39 +11,11 @@
     "weighted_f1": 0.9536
   },
   "mechanism_accuracy": {
-    "stage_printing": 0.8658333333333333,
-    "stage_reflow": 0.8728
+    "joint_accuracy": 0.9511,
+    "stage_printing": 0.9515666666666667,
+    "stage_reflow": 0.9550666666666666
   },
-  "risk_mae": 0.010743269696831703,
-  "abstention": {
-    "mean_abstain_prob": 0.19928154349327087,
-    "n_records": 30000,
-    "argmax_abstentions": 5663,
-    "by_threshold": {
-      "0.3": {
-        "coverage": 0.7869,
-        "abstention_rate": 0.21309999999999996,
-        "n_abstained": 6393,
-        "selective_accuracy": 0.991527936628966
-      },
-      "0.5": {
-        "coverage": 0.8112333333333334,
-        "abstention_rate": 0.18876666666666664,
-        "n_abstained": 5663,
-        "selective_accuracy": 0.9877141800550602
-      },
-      "0.7": {
-        "coverage": 0.8308,
-        "abstention_rate": 0.16920000000000002,
-        "n_abstained": 5076,
-        "selective_accuracy": 0.9839110897127267
-      }
-    },
-    "mech_mean_abstain_prob": {
-      "stage_printing": 0.1994810402393341,
-      "stage_reflow": 0.184416726231575
-    }
-  },
+  "risk_mae": 0.010503663681447506,
   "data_summary": {
     "train": {
       "n": 140000,

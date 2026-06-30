@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=cluster/logs/train_%A_%a.out
 # GPU is opt-in via cluster/env.sh: set RCA_GPUS=1 (submit.sh adds --gres=gpu:1)
 # and RCA_DEVICE=cuda. These models are tiny, so CPU is the sensible default.

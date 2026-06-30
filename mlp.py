@@ -568,6 +568,8 @@ def main() -> None:
     ap.add_argument("--hidden", default=",".join(map(str, HIDDEN)),
                     help="comma-separated trunk widths, e.g. 256,256")
     ap.add_argument("--dropout", type=float, default=DROPOUT)
+    ap.add_argument("--lr", type=float, default=LR, help="Adam learning rate")
+    ap.add_argument("--batch", type=int, default=BATCH, help="minibatch size")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="results/mlp_metrics.json")
     ap.add_argument("--model-out", default="results/mlp_model.pt")
@@ -594,7 +596,8 @@ def main() -> None:
         model, enc = train(spec, df, device=args.device, epochs=args.epochs,
                            class_weight_mode=args.class_weight,
                            loss_cls=LOSSES[args.loss], hidden=hidden,
-                           dropout=args.dropout, seed=args.seed, o=args.o)
+                           dropout=args.dropout, seed=args.seed, o=args.o,
+                           lr=args.lr, batch=args.batch)
 
     metrics = evaluate(model, enc, df, spec, device=args.device,
                        model_version=MODEL_VERSION)
@@ -619,8 +622,9 @@ def main() -> None:
             "val_loss_history": enc.get("val_loss_history", []),
             "best_epoch": enc.get("best_epoch", 0),
             "train_args": {"spec": args.spec, "data": args.data, "loss": args.loss,
-                           "o": args.o, "seed": args.seed,
-                           "class_weight": args.class_weight},
+                           "o": args.o, "seed": args.seed, "lr": args.lr,
+                           "batch": args.batch, "epochs": args.epochs,
+                           "dropout": args.dropout, "class_weight": args.class_weight},
         }, args.model_out)
         print(f"Saved model checkpoint to {args.model_out}")
 
