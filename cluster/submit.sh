@@ -37,20 +37,22 @@ echo "concurrency: up to ${RCA_MAX_PARALLEL:-16} tasks at once"
 extra=""
 [ -n "${RCA_PARTITION:-}" ] && extra="$extra --partition=$RCA_PARTITION"
 [ -n "${RCA_ACCOUNT:-}" ]   && extra="$extra --account=$RCA_ACCOUNT"
+[ -n "${RCA_QOS:-}" ]       && extra="$extra --qos=$RCA_QOS"
 gpu=""
 [ -n "${RCA_GPUS:-}" ] && gpu="--gres=gpu:$RCA_GPUS"
 [ -n "$extra" ] && echo "placement:$extra ${gpu:+(train $gpu)}"
 
 # 1) generate datasets (array over datasets.tsv)
 # shellcheck disable=SC2086
-gen_jid=$(sbatch --parsable $extra --array=1-"$n_ds$throttle" cluster/gen_data.slurm)
-echo "submitted dataset generation: array job $gen_jid (1-$n_ds$throttle)"
+gen_jid=$(sbatch --parsable $extra --time="${RCA_GEN_TIME:-00:10:00}" \
+  --array=1-"$n_ds$throttle" cluster/gen_data.slurm)
+echo "submitted dataset generation: array job $gen_jid (1-$n_ds$throttle), time ${RCA_GEN_TIME:-00:10:00}"
 
 # 2) train all models, but only after every dataset finishes OK
 # shellcheck disable=SC2086
-train_jid=$(sbatch --parsable $extra $gpu --dependency=afterok:"$gen_jid" \
-  --array=1-"$n_runs$throttle" cluster/train.slurm)
-echo "submitted training: array job $train_jid (1-$n_runs$throttle), after $gen_jid"
+train_jid=$(sbatch --parsable $extra $gpu --time="${RCA_TRAIN_TIME:-00:20:00}" \
+  --dependency=afterok:"$gen_jid" --array=1-"$n_runs$throttle" cluster/train.slurm)
+echo "submitted training: array job $train_jid (1-$n_runs$throttle), time ${RCA_TRAIN_TIME:-00:20:00}, after $gen_jid"
 
 echo
 echo "watch:   squeue -u \$USER"

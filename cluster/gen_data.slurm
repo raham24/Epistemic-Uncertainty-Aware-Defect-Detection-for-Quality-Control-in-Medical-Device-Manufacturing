@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
-#SBATCH --time=00:30:00
+#SBATCH --time=00:10:00
 #SBATCH --output=cluster/logs/gen_%A_%a.out
 set -euo pipefail
 

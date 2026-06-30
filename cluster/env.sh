@@ -37,15 +37,25 @@ cd "$ROOT"
 export RCA_DEVICE="${RCA_DEVICE:-cuda}"
 
 # --- SLURM placement (leave a value EMPTY to omit that flag) ---
-# Star HPC's example sbatch omits --partition, so jobs land on the DEFAULT partition
-# unless you set one. If GPUs live on a named partition, set it here. Discover names
-# + which is default with `sinfo -s`, and GPU types with `sinfo -o '%P %G'`.
-export RCA_PARTITION="${RCA_PARTITION:-}"     # e.g. the GPU partition name from `sinfo -s`
+# On Star HPC the DEFAULT partition `defq` already carries the GPUs (H100/A100/A30),
+# so leave RCA_PARTITION empty. Set it only to target a different partition.
+# Discover partitions + GPUs with: sinfo -o '%P %l %G'
+export RCA_PARTITION="${RCA_PARTITION:-}"     # empty -> default partition (defq, has GPUs)
 export RCA_ACCOUNT="${RCA_ACCOUNT:-}"         # only if your cluster requires --account
+export RCA_QOS="${RCA_QOS:-}"                 # empty -> default QOS (`normal`, 1h wall).
+                                              # Star HPC QOS walls: normal=1h burst=30m long=7d
 # GPUs PER training task. submit.sh turns this into --gres=gpu:$RCA_GPUS on the TRAIN
 # array only (dataset generation stays CPU). Use "1" for any GPU, or pin a type if the
 # cluster requires it: "A30:1" / "A100:1" / "H100:1". Set RCA_GPUS="" to train on CPU.
 export RCA_GPUS="${RCA_GPUS:-1}"
+
+# --- per-job walltime (submit.sh passes these as --time, overriding the scripts'
+# #SBATCH defaults). MUST stay UNDER your QOS MaxWall or sbatch rejects the job with
+# 'QOSMaxWallDurationPerJobLimit'. These tiny models finish in minutes, so the values
+# below sit well under the 1h `normal` QOS. Only bump them (and/or set RCA_QOS=long) if
+# you greatly enlarge the nets or fall back to CPU. ---
+export RCA_GEN_TIME="${RCA_GEN_TIME:-00:10:00}"
+export RCA_TRAIN_TIME="${RCA_TRAIN_TIME:-00:20:00}"
 
 # --- array throttle: cap how many array tasks run AT ONCE (submit.sh -> --array=1-N%K).
 # On GPUs, set this to how many GPUs you can use simultaneously (Slurm also gates on
