@@ -26,10 +26,12 @@ Two losses, selectable with --loss:
   cascade    (default) cross-entropy on defect + mechanism, BCE on risk. The
              paper's loss form.
   abstention the selective-classification ("abstention") term -log(o*p_y + r) on
-             the defect AND mechanism heads, BCE risk unchanged. Each
-             classification head gains one "abstain" output so the model can flag
-             an ambiguous board instead of guessing; --o sets the payoff. With
-             r=0 the term reduces to cross-entropy, so larger o -> abstain less.
+             the DEFECT head only (mechanism uses CE, risk uses BCE, as in cascade).
+             The defect head gains one "abstain" output so the model can flag an
+             ambiguous board instead of guessing; --o sets the payoff. With r=0 the
+             term reduces to cross-entropy, so larger o -> abstain less. (Mechanism-
+             head abstention is commented out in the model + loss, not removed --
+             flip it back on to restore two-head abstention.)
 
 Loss: L = lam_d*CE(defect) + lam_m*CE(mech) + lam_r*BCE(risk)  (or the abstention
 term in place of CE on the two classification heads).
@@ -147,10 +149,11 @@ class CascadeMLP(nn.Module):
     heads' softmax distributions. The risk head is P independent sigmoids (one
     per parameter), not a softmax.
 
-    abstain widens BOTH classification heads by one "abstain" output (so the
-    abstention loss has a column for reject mass); the widened distributions feed
-    the downstream heads. The risk head is never widened. abstain=False is
-    byte-identical to the plain cascade.
+    abstain widens the DEFECT head by one "abstain" output (so the abstention loss
+    has a column for reject mass); that widened distribution feeds the downstream
+    heads. The mechanism-head abstain path is commented out (mechanism stays a plain
+    softmax) and the risk head is never widened. abstain=False is byte-identical to
+    the plain cascade.
     """
 
     def __init__(self, n_features: int, n_defects: int, n_mech: int,
@@ -169,7 +172,9 @@ class CascadeMLP(nn.Module):
 
         extra = 1 if abstain else 0
         self.defect_out = n_defects + extra
-        self.mech_out = n_mech + extra
+        # Only the defect head abstains now; the mechanism head stays a plain softmax.
+        # self.mech_out = n_mech + extra
+        self.mech_out = n_mech
         self.defect_head = nn.Linear(d, self.defect_out)
         self.mech_head = nn.Linear(d + self.defect_out, self.mech_out)
         self.risk_head = nn.Linear(d + self.defect_out + self.mech_out, n_params)
@@ -194,16 +199,25 @@ class CascadeMLP(nn.Module):
         # abstain: each classification head is one column wider; the LAST column
         # is the abstain prob. Argmax over the REAL columns only (never abstain).
         if self.abstain:
-            m, k = self.n_defects, self.n_mech
-            d_full, m_full = out["defect_prob"], out["mech_prob"]
-            d_real, m_real = d_full[:, :m], m_full[:, :k]
+            # Only the defect head abstains: its LAST column is the abstain prob and
+            # the argmax is over the REAL defect classes only. The mechanism head no
+            # longer abstains, so it is a plain softmax (no abstain column to strip).
+            m = self.n_defects
+            d_full = out["defect_prob"]
+            d_real = d_full[:, :m]
+            # --- mechanism-head abstain handling (disabled) ---
+            # k = self.n_mech
+            # m_full = out["mech_prob"]
+            # m_real = m_full[:, :k]
             return {
                 "defect_prob": d_real,
                 "defect_argmax": d_real.argmax(1),
                 "abstain_prob": d_full[:, m],
-                "mech_prob": m_real,
-                "mech_argmax": m_real.argmax(1),
-                "mech_abstain_prob": m_full[:, k],
+                "mech_prob": out["mech_prob"],
+                "mech_argmax": out["mech_prob"].argmax(1),
+                # "mech_prob": m_real,
+                # "mech_argmax": m_real.argmax(1),
+                # "mech_abstain_prob": m_full[:, k],
                 "risk_prob": risk_prob,
             }
         return {
@@ -253,8 +267,9 @@ class CascadeLoss(nn.Module):
 
 
 class CascadeAbstentionLoss(CascadeLoss):
-    """The abstention variant: the selective-classification term on BOTH the
-    defect and the mechanism heads, the sigmoid/BCE risk head unchanged.
+    """The abstention variant: the selective-classification term on the DEFECT head
+    only; the mechanism head uses plain CE and the sigmoid/BCE risk head is unchanged.
+    (The mechanism-head abstention override below is commented out, not removed.)
 
     class_weight is accepted for train()-API compatibility but IGNORED -- the
     abstain mechanism, not reweighting, handles the class imbalance.
@@ -271,8 +286,10 @@ class CascadeAbstentionLoss(CascadeLoss):
     def defect_term(self, out: dict, y_def: torch.Tensor) -> torch.Tensor:
         return abstention_term(out["defect"], y_def, self.o)
 
-    def mech_term(self, out: dict, y_mech: torch.Tensor) -> torch.Tensor:
-        return abstention_term(out["mech"], y_mech, self.o)
+    # Mechanism head no longer abstains -> inherit the parent's plain CE on it
+    # (do NOT override with the abstention term).
+    # def mech_term(self, out: dict, y_mech: torch.Tensor) -> torch.Tensor:
+    #     return abstention_term(out["mech"], y_mech, self.o)
 
 
 # loss registry exposed via --loss; cascade is the paper-style default
@@ -525,7 +542,8 @@ def evaluate(model: CascadeMLP, enc: dict, df: pd.DataFrame, spec: dict,
             "mean_abstain_prob": float(r.mean()),
             "n_records": int(len(te)),
             "by_threshold": by_h,
-            "mech_mean_abstain_prob": float(pred["mech_abstain_prob"].cpu().numpy().mean()),
+            # mechanism head no longer abstains -> no mech abstain prob to report.
+            # "mech_mean_abstain_prob": float(pred["mech_abstain_prob"].cpu().numpy().mean()),
         }
     return result
 
@@ -648,8 +666,9 @@ def main() -> None:
         ab = metrics["abstention"]
         o = ckpt["train_args"].get("o") if args.load else args.o
         print(f"\n=== Abstention (o={o}) ===")
-        print(f"  mean abstain prob: {ab['mean_abstain_prob']:.4f}  "
-              f"(mechanism head {ab['mech_mean_abstain_prob']:.4f})")
+        print(f"  mean abstain prob: {ab['mean_abstain_prob']:.4f}")
+        # mechanism head no longer abstains; nothing to report for it:
+        #     print(f"  (mechanism head {ab['mech_mean_abstain_prob']:.4f})")
         for h, v in ab["by_threshold"].items():
             sel = v["selective_accuracy"]
             sel_s = f"{sel:.4f}" if sel is not None else "n/a"

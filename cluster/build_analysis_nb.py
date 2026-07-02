@@ -8,11 +8,11 @@ training produced, then analyses the sweep in two layers:
 
   * core grid   -- both losses x every dataset variant (the headline comparison),
                    each measured against its own Bayes ceiling.
-  * studies     -- one-factor-at-a-time sweeps (payoff o, trunk capacity, dropout,
-                   learning rate, class weighting), each isolating one axis.
+  * studies     -- one-factor-at-a-time sweeps (payoff o, capacity, dropout, lr,
+                   class weighting), each isolating one axis.
 
-Every run carries its study tags + full hyperparameters in the manifest, so the
-notebook can slice by study and report the optimal setting per axis.
+Figures use a shared paper-quality style and the key ones are saved to figs/ as
+PNG + PDF (fig_*.{png,pdf}) so they can drop straight into the paper.
 """
 
 import json
@@ -22,16 +22,17 @@ TITLE = """# Cluster sweep analysis
 
 Compares every model trained by the cluster sweep (`cluster/`). The sweep is a
 **core grid** (both losses x all dataset variants, each vs its Bayes ceiling) plus
-focused **studies** that vary one hyperparameter at a time:
+focused **studies** that vary one hyperparameter at a time.
 
-| study | axis | on |
-|---|---|---|
-| `core` | loss x dataset | all datasets |
-| `payoff` | abstention `o` | baseline / hard / imbalanced |
-| `capacity` | trunk width+depth | baseline / hard |
-| `dropout` | dropout | baseline / hard |
-| `lr` | Adam learning rate | baseline / hard |
-| `class_weight` | defect reweighting | imbalanced / baseline |
+Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
+
+| figure | what it shows |
+|---|---|
+| `fig_accuracy_vs_bayes` | defect accuracy vs the Bayes ceiling, per dataset (headline) |
+| `fig_gap_to_bayes` | how far each loss sits below optimal |
+| `fig_risk_coverage` | abstention's coverage/accuracy trade-off (the selective-classification figure) |
+| `fig_metrics_vs_o` | accuracy + macro-F1 across the payoff `o` sweep |
+| `fig_mechanism_risk`, `fig_capacity`, `fig_dropout_lr`, `fig_class_weight` | mechanism/risk + hyperparameter studies |
 
 Prereq: run the sweep first (`bash cluster/submit.sh` on SLURM, or
 `bash cluster/run_local.sh` locally), then run this notebook from the repo root.
@@ -56,8 +57,8 @@ print("runs in matrix:", len(manifest["runs"]))
 
 
 def load_rows():
-    """One flat row per run that actually produced a metrics file. Hyperparameters
-    + study tags come from the manifest; scores from the run's metrics JSON."""
+    """One flat row per run that produced a metrics file. Hyperparameters + study
+    tags come from the manifest; scores from the run's metrics JSON."""
     rows, missing = [], []
     for r in manifest["runs"]:
         p = root / r["metrics"]
@@ -76,8 +77,6 @@ def load_rows():
             "bayes": m["bayes_optimal_accuracy"],
             "gap_to_bayes": m["bayes_optimal_accuracy"] - d["accuracy"],
             "mech_joint": mech["joint_accuracy"],
-            "mech_printing": mech.get("stage_printing"),
-            "mech_reflow": mech.get("stage_reflow"),
             "risk_mae": m["risk_mae"],
         }
         ab = m.get("abstention")
@@ -114,13 +113,30 @@ def core_grid():
     """(core rows, dataset order, losses, bar x-positions, bar width)."""
     core = study("core")
     datasets = list(manifest["datasets"])
-    losses = sorted(core["loss"].unique()) if len(core) else []
+    losses = [l for l in ["cascade", "abstention"] if l in set(core["loss"])] if len(core) else []
     x = np.arange(len(datasets)); w = 0.8 / max(len(losses), 1)
     return core, datasets, losses, x, w
+'''
+
+STYLE = '''# Shared paper-quality plotting style + a figs/ saver. Consistent colors for the two
+# losses everywhere; horizontal layouts + zoomed axes so small differences are legible.
+plt.rcParams.update({
+    "figure.dpi": 120, "savefig.dpi": 220, "savefig.bbox": "tight",
+    "font.size": 12, "axes.titlesize": 13, "axes.titleweight": "bold",
+    "axes.labelsize": 12, "axes.spines.top": False, "axes.spines.right": False,
+    "axes.grid": True, "grid.alpha": 0.25, "legend.frameon": False,
+})
+COLORS = {"cascade": "#2c7fb8", "abstention": "#e6550d", "bayes": "#333333"}
+
+FIGDIR = root / "figs"
+FIGDIR.mkdir(exist_ok=True)
 
 
-print("studies present:", sorted({s for ss in df.get("studies", []) for s in ss})
-      if len(df) else [])
+def save_fig(fig, name):
+    """Write a paper copy (PNG + PDF) to figs/ and print the path."""
+    for ext in ("png", "pdf"):
+        fig.savefig(FIGDIR / f"{name}.{ext}")
+    print(f"saved figs/{name}.png (+ .pdf)")
 '''
 
 CORE_TABLE = '''# core grid: full per-run comparison table (rounded for reading).
@@ -142,139 +158,203 @@ metrics = ["defect_acc", "defect_macrof1", "gap_to_bayes", "mech_joint", "risk_m
      .agg(["mean", "std"]).round(4))
 '''
 
-DEFECT_PLOT = '''# core: defect accuracy by dataset, grouped by loss (mean +/- std over seeds),
-# with the Bayes ceiling per dataset for reference.
-core, datasets, losses, x, w = core_grid()
-fig, ax = plt.subplots(figsize=(11, 5))
-for i, loss in enumerate(losses):
-    means = [core[(core.dataset == ds) & (core.loss == loss)]["defect_acc"].mean() for ds in datasets]
-    stds  = [core[(core.dataset == ds) & (core.loss == loss)]["defect_acc"].std()  for ds in datasets]
-    ax.bar(x + i * w, means, w, yerr=stds, capsize=3, label=loss)
-bayes = [core[core.dataset == ds]["bayes"].mean() for ds in datasets]
-ax.plot(x + w * (len(losses) - 1) / 2, bayes, "kD", ms=7, label="Bayes ceiling")
-ax.set_xticks(x + w * (len(losses) - 1) / 2); ax.set_xticklabels(datasets, rotation=25, ha="right")
-ax.set_ylabel("defect accuracy"); ax.set_ylim(0.5, 1.0)
-ax.set_title("core: defect accuracy across dataset variants x loss")
-ax.legend(frameon=False); ax.grid(axis="y", alpha=0.25)
-fig.tight_layout(); plt.show()
+ACC_DUMBBELL = '''# HEADLINE: defect accuracy vs the Bayes ceiling, one row per dataset. A horizontal
+# dumbbell zoomed to the real range makes the ~1% gaps legible (a bar chart from zero
+# crushes them against the top). Cascade should sit essentially on the ceiling;
+# abstention is shown at FORCED accuracy here -- its fair view is the risk-coverage
+# curve below.
+core = study("core")
+datasets = list(manifest["datasets"])
+agg = seed_mean(core, ["dataset", "loss"], ["defect_acc"])
+ceil = {d: core[core.dataset == d]["bayes"].mean() for d in datasets}
+order = sorted(datasets, key=lambda d: ceil[d])          # highest ceiling on top
+
+
+def _acc(d, loss):
+    v = agg[(agg.dataset == d) & (agg.loss == loss)]["defect_acc"]
+    return float(v.iloc[0]) if len(v) else np.nan
+
+
+fig, ax = plt.subplots(figsize=(9, 6))
+for i, d in enumerate(order):
+    ca, ab, cl = _acc(d, "cascade"), _acc(d, "abstention"), ceil[d]
+    pts = [p for p in (ca, ab, cl) if not np.isnan(p)]
+    ax.plot([min(pts), max(pts)], [i, i], color="#d9d9d9", lw=2.5, zorder=1)
+    ax.scatter(cl, i, marker="D", s=70, color=COLORS["bayes"], zorder=3,
+               label="Bayes ceiling" if i == 0 else "")
+    ax.scatter(ca, i, s=95, color=COLORS["cascade"], zorder=3,
+               label="cascade" if i == 0 else "")
+    if not np.isnan(ab):
+        ax.scatter(ab, i, s=95, color=COLORS["abstention"], zorder=3,
+                   label="abstention (forced)" if i == 0 else "")
+ax.set_yticks(range(len(order))); ax.set_yticklabels(order)
+ax.set_xlabel("defect accuracy (test split)")
+ax.set_title("Defect accuracy vs the Bayes ceiling, by dataset")
+ax.margins(x=0.04, y=0.03); ax.grid(axis="y", alpha=0)
+ax.legend(loc="lower left", ncol=3)
+save_fig(fig, "fig_accuracy_vs_bayes"); plt.show()
 '''
 
-GAP_PLOT = '''# core: how far each loss sits below its Bayes ceiling per dataset (lower = better).
-core, datasets, losses, x, w = core_grid()
-fig, ax = plt.subplots(figsize=(11, 5))
-for i, loss in enumerate(losses):
-    means = [core[(core.dataset == ds) & (core.loss == loss)]["gap_to_bayes"].mean()
-             for ds in datasets]
-    ax.bar(x + i * w, means, w, label=loss)
-ax.set_xticks(x + w * (len(losses) - 1) / 2); ax.set_xticklabels(datasets, rotation=25, ha="right")
-ax.set_ylabel("Bayes ceiling - defect accuracy")
-ax.set_title("core: gap to the Bayes ceiling (lower is better)")
-ax.legend(frameon=False); ax.grid(axis="y", alpha=0.25)
-fig.tight_layout(); plt.show()
+GAP_PLOT = '''# Gap to the Bayes ceiling (ceiling - accuracy). Lower = closer to optimal. Cascade
+# should be a hair above zero everywhere (it tracks the ceiling); abstention's forced
+# gap is larger on the harder / imbalanced regimes.
+core = study("core")
+datasets = list(manifest["datasets"])
+agg = seed_mean(core, ["dataset", "loss"], ["gap_to_bayes"])
+
+
+def _gap(d, loss):
+    v = agg[(agg.dataset == d) & (agg.loss == loss)]["gap_to_bayes"]
+    return float(v.iloc[0]) if len(v) else np.nan
+
+
+order = sorted(datasets, key=lambda d: _gap(d, "cascade"))
+y = np.arange(len(order)); h = 0.38
+fig, ax = plt.subplots(figsize=(9, 6))
+for k, loss in enumerate(["cascade", "abstention"]):
+    vals = [_gap(d, loss) for d in order]
+    ax.barh(y + (0.5 - k) * h, vals, h, color=COLORS[loss], label=loss)
+ax.set_yticks(y); ax.set_yticklabels(order)
+ax.set_xlabel("Bayes ceiling  -  defect accuracy   (lower is better)")
+ax.set_title("Gap to the Bayes ceiling")
+ax.axvline(0, color="k", lw=0.8); ax.grid(axis="y", alpha=0)
+ax.legend(loc="lower right")
+save_fig(fig, "fig_gap_to_bayes"); plt.show()
 '''
 
-RISK_MECH_PLOT = '''# core: joint-mechanism accuracy and risk MAE side by side, by dataset x loss.
+RISK_MECH_PLOT = '''# Joint mechanism (9-class) accuracy and risk-head MAE, by dataset x loss.
 core, datasets, losses, x, w = core_grid()
-fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-for ax, metric, title, lo, hi in [
-        (axes[0], "mech_joint", "joint mechanism accuracy", 0.6, 1.0),
-        (axes[1], "risk_mae", "risk head MAE (lower better)", 0.0, None)]:
-    for i, loss in enumerate(losses):
-        means = [core[(core.dataset == ds) & (core.loss == loss)][metric].mean() for ds in datasets]
-        ax.bar(x + i * w, means, w, label=loss)
-    ax.set_xticks(x + w * (len(losses) - 1) / 2); ax.set_xticklabels(datasets, rotation=25, ha="right")
-    ax.set_title(title); ax.grid(axis="y", alpha=0.25)
-    if lo is not None:
-        ax.set_ylim(lo, hi)
-axes[0].set_ylabel("accuracy"); axes[1].set_ylabel("MAE"); axes[0].legend(frameon=False)
-fig.tight_layout(); plt.show()
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
+for ax, metric, title, ylim in [
+        (axes[0], "mech_joint", "Joint mechanism accuracy", (0.6, 1.0)),
+        (axes[1], "risk_mae", "Risk-head MAE (lower is better)", None)]:
+    for k, loss in enumerate(losses):
+        vals = [core[(core.dataset == d) & (core.loss == loss)][metric].mean() for d in datasets]
+        ax.bar(x + (k - (len(losses) - 1) / 2) * w, vals, w, color=COLORS.get(loss), label=loss)
+    ax.set_xticks(x); ax.set_xticklabels(datasets, rotation=30, ha="right")
+    ax.set_title(title); ax.grid(axis="x", alpha=0)
+    if ylim:
+        ax.set_ylim(*ylim)
+axes[0].set_ylabel("accuracy"); axes[1].set_ylabel("MAE"); axes[0].legend()
+save_fig(fig, "fig_mechanism_risk"); plt.show()
 '''
 
-PAYOFF_PLOT = '''# payoff study: how the abstention payoff o trades coverage for selective accuracy.
-pay = study("payoff")
+RISK_COVERAGE = '''# PAPER FIGURE: risk-coverage curve. Each abstention model (one per payoff o) gives
+# one (coverage, selective-accuracy) point at the h=0.5 accept threshold; sweeping
+# o = 1 -> 4 traces the frontier. The star marks cascade at full coverage (it never
+# abstains). Points up-and-left of a star => abstaining buys accuracy on the boards
+# the model chooses to answer.
+pay = study("payoff"); core = study("core")
 if len(pay):
-    sm = seed_mean(pay, ["dataset", "o"], ["selective_acc@0.5", "coverage@0.5"])
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    for ds in sorted(pay["dataset"].unique()):
-        s = sm[sm.dataset == ds].sort_values("o")
-        axes[0].plot(s["o"], s["selective_acc@0.5"], "o-", label=ds)
-        axes[1].plot(s["o"], s["coverage@0.5"], "o-", label=ds)
-    axes[0].set_title("selective accuracy @ r<0.5 vs payoff o")
-    axes[0].set_ylabel("selective accuracy")
-    axes[1].set_title("coverage @ r<0.5 vs payoff o (higher o -> predict more)")
-    axes[1].set_ylabel("coverage")
-    for a in axes:
-        a.set_xlabel("payoff o")
-        a.grid(alpha=0.25); a.legend(frameon=False)
-    fig.tight_layout(); plt.show()
+    sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
+    cmap = plt.get_cmap("tab10")
+    fig, ax = plt.subplots(figsize=(8.5, 6))
+    for j, d in enumerate(sorted(pay["dataset"].unique())):
+        s = sm[sm.dataset == d].sort_values("coverage@0.5")
+        ax.plot(s["coverage@0.5"], s["selective_acc@0.5"], "-o", ms=4,
+                color=cmap(j), label=d)
+        cba = core[(core.dataset == d) & (core.loss == "cascade")]["defect_acc"].mean()
+        ax.scatter(1.0, cba, marker="*", s=190, color=cmap(j),
+                   edgecolor="k", linewidth=0.6, zorder=5)
+    ax.set_xlabel("coverage  (fraction of boards the model answers)")
+    ax.set_ylabel("selective accuracy  (on the answered boards)")
+    ax.set_title("Risk-coverage: abstention trades coverage for accuracy\\n"
+                 "line = abstention swept over o;   star = cascade at full coverage")
+    ax.legend(title="dataset", loc="lower left")
+    save_fig(fig, "fig_risk_coverage"); plt.show()
 else:
     print("no payoff-study runs with metrics yet")
 '''
 
-CAPACITY_PLOT = '''# capacity study: defect accuracy and gap-to-Bayes vs trunk width/depth.
+PAYOFF_CLS_PLOT = '''# The o-sweep on classification quality: FORCED defect accuracy and macro-F1 as the
+# payoff o goes 1.0 -> 4.0. macro-F1 climbing toward o=4 (dashed line, where the
+# abstention term reduces to cross-entropy for the 3-class head) shows the low-o
+# "collapse" is an operating-point choice, not a broken loss.
+pay = study("payoff")
+if len(pay):
+    sm = seed_mean(pay, ["dataset", "o"], ["defect_acc", "defect_macrof1"])
+    cmap = plt.get_cmap("tab10")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
+    for j, d in enumerate(sorted(pay["dataset"].unique())):
+        s = sm[sm.dataset == d].sort_values("o")
+        axes[0].plot(s["o"], s["defect_acc"], "-o", ms=4, color=cmap(j), label=d)
+        axes[1].plot(s["o"], s["defect_macrof1"], "-o", ms=4, color=cmap(j), label=d)
+    axes[0].set_title("forced defect accuracy vs payoff o"); axes[0].set_ylabel("defect accuracy")
+    axes[1].set_title("macro-F1 (minority-sensitive) vs payoff o"); axes[1].set_ylabel("macro-F1")
+    for a in axes:
+        a.set_xlabel("payoff o"); a.axvline(4.0, ls="--", color="k", alpha=0.5)
+        a.legend(title="dataset")
+    save_fig(fig, "fig_metrics_vs_o"); plt.show()
+else:
+    print("no payoff-study runs with metrics yet")
+'''
+
+CAPACITY_PLOT = '''# Capacity study: defect accuracy and gap-to-Bayes vs trunk width/depth (cascade).
 cap = study("capacity")
 if len(cap):
     order = [h for h in ["128,128", "256,256", "512,512", "256,256,256", "512,512,256"]
              if h in set(cap["hidden"])]
     pos = {h: i for i, h in enumerate(order)}
     sm = seed_mean(cap, ["dataset", "hidden"], ["defect_acc", "gap_to_bayes"])
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    for ds in sorted(cap["dataset"].unique()):
-        s = sm[sm.dataset == ds].copy()
+    cmap = plt.get_cmap("tab10")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
+    for j, d in enumerate(sorted(cap["dataset"].unique())):
+        s = sm[sm.dataset == d].copy()
         s["xi"] = s["hidden"].map(pos); s = s.sort_values("xi")
-        axes[0].plot(s["xi"], s["defect_acc"], "o-", label=ds)
-        axes[1].plot(s["xi"], s["gap_to_bayes"], "o-", label=ds)
+        axes[0].plot(s["xi"], s["defect_acc"], "-o", color=cmap(j), label=d)
+        axes[1].plot(s["xi"], s["gap_to_bayes"], "-o", color=cmap(j), label=d)
     for a, ttl, yl in [(axes[0], "defect accuracy vs trunk size", "defect accuracy"),
                        (axes[1], "gap to Bayes vs trunk size (lower better)", "gap to Bayes")]:
         a.set_xticks(range(len(order))); a.set_xticklabels(order, rotation=20, ha="right")
-        a.set_title(ttl); a.set_ylabel(yl); a.grid(alpha=0.25); a.legend(frameon=False)
-    fig.tight_layout(); plt.show()
+        a.set_title(ttl); a.set_ylabel(yl); a.set_xlabel("trunk hidden layers")
+        a.legend(title="dataset")
+    save_fig(fig, "fig_capacity"); plt.show()
 else:
     print("no capacity-study runs with metrics yet")
 '''
 
-REG_OPT_PLOT = '''# dropout + learning-rate studies: gap-to-Bayes vs each axis (lower is better).
-fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+REG_OPT_PLOT = '''# Dropout and learning-rate studies: gap-to-Bayes vs each axis (lower is better).
+cmap = plt.get_cmap("tab10")
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
 dro = study("dropout")
 if len(dro):
     sm = seed_mean(dro, ["dataset", "dropout"], ["gap_to_bayes"])
-    for ds in sorted(dro["dataset"].unique()):
-        s = sm[sm.dataset == ds].sort_values("dropout")
-        axes[0].plot(s["dropout"], s["gap_to_bayes"], "o-", label=ds)
+    for j, d in enumerate(sorted(dro["dataset"].unique())):
+        s = sm[sm.dataset == d].sort_values("dropout")
+        axes[0].plot(s["dropout"], s["gap_to_bayes"], "-o", color=cmap(j), label=d)
     axes[0].set_xlabel("dropout"); axes[0].set_ylabel("gap to Bayes")
-    axes[0].set_title("dropout sweep")
+    axes[0].set_title("dropout sweep"); axes[0].legend(title="dataset")
 lr = study("lr")
 if len(lr):
     sm = seed_mean(lr, ["dataset", "lr"], ["gap_to_bayes"])
-    for ds in sorted(lr["dataset"].unique()):
-        s = sm[sm.dataset == ds].sort_values("lr")
-        axes[1].plot(s["lr"], s["gap_to_bayes"], "o-", label=ds)
+    for j, d in enumerate(sorted(lr["dataset"].unique())):
+        s = sm[sm.dataset == d].sort_values("lr")
+        axes[1].plot(s["lr"], s["gap_to_bayes"], "-o", color=cmap(j), label=d)
     axes[1].set_xscale("log"); axes[1].set_xlabel("learning rate")
     axes[1].set_ylabel("gap to Bayes"); axes[1].set_title("learning-rate sweep")
-for a in axes:
-    a.grid(alpha=0.25)
-    if a.get_legend_handles_labels()[0]:
-        a.legend(frameon=False)
-fig.tight_layout(); plt.show()
+    axes[1].legend(title="dataset")
+save_fig(fig, "fig_dropout_lr"); plt.show()
 '''
 
-CW_PLOT = '''# class_weight study: minority-sensitive macro-F1 and overall accuracy by mode.
+CW_PLOT = '''# Class-weight study: minority-sensitive macro-F1 and overall accuracy by mode.
 cw = study("class_weight")
 if len(cw):
     modes = [m for m in ["none", "sqrt", "inverse"] if m in set(cw["class_weight"])]
     dss = sorted(cw["dataset"].unique())
     sm = seed_mean(cw, ["dataset", "class_weight"], ["defect_acc", "defect_macrof1"])
     x = np.arange(len(modes)); w = 0.8 / max(len(dss), 1)
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    for j, metric, ttl in [(0, "defect_macrof1", "macro-F1 (minority-sensitive)"),
-                           (1, "defect_acc", "defect accuracy")]:
-        for i, ds in enumerate(dss):
-            vals = [sm[(sm.dataset == ds) & (sm.class_weight == mode)][metric].mean()
-                    for mode in modes]
-            axes[j].bar(x + i * w, vals, w, label=ds)
-        axes[j].set_xticks(x + w * (len(dss) - 1) / 2); axes[j].set_xticklabels(modes)
-        axes[j].set_title(ttl); axes[j].grid(axis="y", alpha=0.25); axes[j].legend(frameon=False)
-    fig.tight_layout(); plt.show()
+    cmap = plt.get_cmap("Set2")
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
+    for col, metric, ttl in [(0, "defect_macrof1", "macro-F1 (minority-sensitive)"),
+                             (1, "defect_acc", "defect accuracy")]:
+        for i, d in enumerate(dss):
+            vals = [sm[(sm.dataset == d) & (sm.class_weight == m)][metric].mean() for m in modes]
+            axes[col].bar(x + (i - (len(dss) - 1) / 2) * w, vals, w, color=cmap(i), label=d)
+        axes[col].set_xticks(x); axes[col].set_xticklabels(modes)
+        axes[col].set_xlabel("class weighting"); axes[col].set_title(ttl)
+        axes[col].grid(axis="x", alpha=0)
+    axes[0].set_ylabel("macro-F1"); axes[1].set_ylabel("accuracy"); axes[0].legend(title="dataset")
+    save_fig(fig, "fig_class_weight"); plt.show()
 else:
     print("no class_weight-study runs with metrics yet")
 '''
@@ -318,17 +398,22 @@ for name, axis, metric, maximize in [
 SECTIONS = [
     ("## Load every run\\n\\nLoads the manifest + each run's metrics into one dataframe, with helpers to "
      "slice by study and average over seeds.", LOAD),
-    ("## Core grid\\n\\nBoth losses across every dataset variant. First the full table, then averaged "
-     "over seeds.", CORE_TABLE),
+    ("## Plot style\\n\\nShared paper style + a `save_fig` helper that writes `figs/fig_*.{png,pdf}`.", STYLE),
+    ("## Core grid\\n\\nBoth losses across every dataset variant: full table, then averaged over seeds.",
+     CORE_TABLE),
     (None, CORE_AGG),
-    ("### Defect accuracy vs the Bayes ceiling", DEFECT_PLOT),
-    ("### Gap to the Bayes ceiling", GAP_PLOT),
-    ("### Mechanism accuracy and risk MAE", RISK_MECH_PLOT),
-    ("## Payoff study\\n\\nAbstention only: the payoff `o` trades coverage against selective accuracy.",
-     PAYOFF_PLOT),
-    ("## Capacity study\\n\\nTrunk width/depth (cascade) on the probe datasets.", CAPACITY_PLOT),
-    ("## Dropout and learning-rate studies", REG_OPT_PLOT),
-    ("## Class-weight study\\n\\nDefect-head reweighting, where minority recall matters most.", CW_PLOT),
+    ("### Defect accuracy vs the Bayes ceiling (headline)\\n\\nHorizontal dumbbell, zoomed to the real "
+     "accuracy range. **Saved: `fig_accuracy_vs_bayes`.**", ACC_DUMBBELL),
+    ("### Gap to the Bayes ceiling\\n\\n**Saved: `fig_gap_to_bayes`.**", GAP_PLOT),
+    ("### Mechanism accuracy and risk MAE\\n\\n**Saved: `fig_mechanism_risk`.**", RISK_MECH_PLOT),
+    ("## Payoff study (abstention)\\n\\n### Risk-coverage curve\\n\\nThe selective-classification figure: "
+     "coverage vs selective accuracy as `o` sweeps. **Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
+    ("### Classification quality across o\\n\\nForced accuracy + macro-F1 vs `o` (the o-sweep). "
+     "**Saved: `fig_metrics_vs_o`.**", PAYOFF_CLS_PLOT),
+    ("## Capacity study\\n\\nTrunk width/depth (cascade). **Saved: `fig_capacity`.**", CAPACITY_PLOT),
+    ("## Dropout and learning-rate studies\\n\\n**Saved: `fig_dropout_lr`.**", REG_OPT_PLOT),
+    ("## Class-weight study\\n\\nDefect-head reweighting, where minority recall matters most. "
+     "**Saved: `fig_class_weight`.**", CW_PLOT),
     ("## Optimal configurations", OPTIMAL),
 ]
 

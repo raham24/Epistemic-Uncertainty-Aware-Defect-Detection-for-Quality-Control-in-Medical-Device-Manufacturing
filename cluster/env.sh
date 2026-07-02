@@ -6,7 +6,13 @@
 # One-time setup (do this once on a login node before the first submit):
 #   module load miniconda3/24.7.1-gcc-8.5.0-bxh7x2v
 #   source "$(conda info --base)/etc/profile.d/conda.sh"
-#   conda env create -f environment.yml      # creates the `paper` env
+#   conda env create -f environment.yml      # creates the `paper` env (ships CPU-only torch!)
+#   conda activate paper
+#   # The conda torch is CPU-ONLY -> .to("cuda") raises "Torch not compiled with CUDA
+#   # enabled". For GPU training, replace it with the CUDA wheel:
+#   pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu121
+#   # verify ON A GPU NODE (login nodes have none):
+#   srun --gres=gpu:1 --time=00:05:00 python -c "import torch; print(torch.cuda.is_available())"
 #
 # If a module version changes on the cluster, update the names below.
 
@@ -30,6 +36,11 @@ conda activate paper
 # --- run from the repo root so data/, domain/, results/ resolve correctly ---
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
+
+# Make GPU training bit-reproducible: mlp.py's torch.use_deterministic_algorithms(True)
+# needs this so CuBLAS matmuls are deterministic under CUDA >= 10.2 (else they run
+# non-deterministically and torch warns). Harmless on CPU.
+export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
 
 # device for mlp.py: the sweep TRAINS ON GPU by default (RCA_DEVICE=cuda paired
 # with RCA_GPUS below). Force CPU with RCA_DEVICE=cpu. run_local.sh auto-falls back
