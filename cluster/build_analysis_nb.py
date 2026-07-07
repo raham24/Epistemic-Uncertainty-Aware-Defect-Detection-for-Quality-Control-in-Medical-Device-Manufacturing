@@ -30,8 +30,11 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 |---|---|
 | `fig_accuracy_vs_bayes` | defect accuracy vs the Bayes ceiling, per dataset (headline) |
 | `fig_gap_to_bayes` | how far each loss sits below optimal |
-| `fig_risk_coverage` | abstention's coverage/accuracy trade-off (the selective-classification figure) |
+| `fig_risk_coverage` | abstention's coverage/accuracy trade-off across `o` (one operating point per model) |
 | `fig_metrics_vs_o` | accuracy + macro-F1 across the payoff `o` sweep |
+| `fig_selective_risk` | selective-risk curves (reject threshold swept) vs confidence baseline + Bayes floor |
+| `fig_abstention_gain_vs_difficulty` | does abstaining help more as the data gets harder? |
+| `fig_margin_hist` | rejected boards are more ambiguous (smaller margin) |
 | `fig_mechanism_risk`, `fig_capacity`, `fig_dropout_lr`, `fig_class_weight` | mechanism/risk + hyperparameter studies |
 
 Prereq: run the sweep first (`bash cluster/submit.sh` on SLURM, or
@@ -289,6 +292,161 @@ else:
     print("no payoff-study runs with metrics yet")
 '''
 
+SEL_COMPUTE = '''# Selective-classification analysis (replicates the toy_example). Unlike the cells
+# above (which read only the JSON metrics), this loads the SAVED checkpoints and
+# sweeps the REJECTION THRESHOLD on each model -- the standard selective-risk view.
+# Needs results/cluster/*.pt + data/cluster/*.csv, so run it on the cluster (or after
+# rsync-ing them back). Edit SEL_O / SEL_SEED / SEL_COVERAGE to probe other settings.
+import sys
+sys.path.insert(0, str(root))            # so `import mlp` works regardless of cwd
+import torch
+import mlp
+
+SEL_O, SEL_SEED, SEL_COVERAGE = 2.0, 0, 0.80
+_spec = mlp.load_spec(str(root / "domain" / "smt_paper.yaml"))
+_names = mlp.defect_names(_spec)
+_ids = mlp.param_ids(_spec)
+_covs = np.linspace(0.05, 1.0, 40)
+
+
+def _find(dataset, loss, o, seed):
+    for r in manifest["runs"]:
+        if (r["dataset"] == dataset and r["loss"] == loss and r["seed"] == seed
+                and (r["o"] == o if loss == "abstention" else True)):
+            return r
+    return None
+
+
+def _infer(run, dfd):
+    """Test-split predictions for one checkpoint (standardized with its stored stats)."""
+    model, ckpt = mlp.load_model(str(root / run["model"]), device="cpu")
+    te = np.where(dfd["split"].to_numpy() == "test")[0]
+    mu, sd = ckpt["standardize"]["mu"], ckpt["standardize"]["sd"]
+    X = ((dfd.iloc[te][_ids].to_numpy(np.float32) - mu) / sd).astype(np.float32)
+    y = dfd.iloc[te]["defect_label"].map({n: i for i, n in enumerate(_names)}).to_numpy()
+    p = model.predict(torch.from_numpy(X))
+    d = {"y": y, "argmax": p["defect_argmax"].cpu().numpy(),
+         "real": p["defect_prob"].cpu().numpy(), "te": te,
+         "abstain": bool(getattr(model, "abstain", False))}
+    if d["abstain"]:
+        d["r"] = p["abstain_prob"].cpu().numpy()
+    return d
+
+
+def _risk_cov(score, correct, covs=_covs):
+    """Rank-based selective risk: accept the most-confident `cov` fraction (highest
+    score first) -> accepted error at each coverage."""
+    order = np.argsort(-score); n = len(score)
+    return np.array([1 - correct[order[:max(1, int(round(c * n)))]].mean() for c in covs])
+
+
+def _bayes_err(dfd, te):
+    post = dfd.iloc[te][[f"p_{n}" for n in _names]].to_numpy()
+    return float((1 - post.max(1)).mean())
+
+
+sel, _rows = {}, []
+for ds in manifest["datasets"]:
+    cas, abst = _find(ds, "cascade", None, SEL_SEED), _find(ds, "abstention", SEL_O, SEL_SEED)
+    csv = root / "data" / "cluster" / f"{ds}.csv"
+    if not (cas and abst and csv.exists()
+            and (root / cas["model"]).exists() and (root / abst["model"]).exists()):
+        continue
+    dfd = pd.read_csv(csv)
+    ic, ia = _infer(cas, dfd), _infer(abst, dfd)
+    ce_err = 1 - (ic["argmax"] == ic["y"]).mean()
+    abst_err = _risk_cov(-ia["r"], (ia["argmax"] == ia["y"]).astype(float))      # reject high r
+    conf_err = _risk_cov(ic["real"].max(1), (ic["argmax"] == ic["y"]).astype(float))  # reject low conf
+    bayes = _bayes_err(dfd, ia["te"])
+    sel[ds] = dict(bayes=bayes, ce_err=float(ce_err), abst_err=abst_err,
+                   conf_err=conf_err, ia=ia)
+    _at = lambda e: float(e[int(np.argmin(np.abs(_covs - SEL_COVERAGE)))])
+    _rows.append(dict(dataset=ds, bayes_err=bayes, ce_full_err=float(ce_err),
+                      abst_err_at=_at(abst_err), conf_err_at=_at(conf_err),
+                      gain_vs_ce=float(ce_err) - _at(abst_err),
+                      gain_vs_conf=_at(conf_err) - _at(abst_err)))
+
+if _rows:
+    sel_table = pd.DataFrame(_rows).sort_values("bayes_err").reset_index(drop=True)
+    print(f"selective analysis: {len(sel)} datasets  (abstention o={SEL_O:g}, seed {SEL_SEED}, "
+          f"reported @ coverage~{SEL_COVERAGE:.2f})")
+    print(sel_table.round(4).to_string(index=False))
+    print("\\ngain_vs_ce   = CE full error - abstention accepted error   (>0: abstaining beats never rejecting)")
+    print("gain_vs_conf = cascade confidence error - abstention error   (>0: LEARNED reject beats confidence thresholding)")
+else:
+    sel_table = pd.DataFrame()
+    print("No checkpoints found -- run this on the cluster (needs results/cluster/*.pt + data/cluster/*.csv).")
+'''
+
+SEL_RISK_PLOT = '''# Selective-risk curves (reject threshold swept) per dataset, ordered easy -> hard.
+# abstention (reject high reservation) vs cascade confidence thresholding vs the CE
+# full-coverage error and the Bayes floor. Abstention dipping below CE as coverage
+# drops = it is helping; below the blue line = it beats plain confidence.
+if len(sel):
+    order = list(sel_table["dataset"])
+    ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.4 * ncol, 3.0 * nrow), squeeze=False)
+    for k, ds in enumerate(order):
+        ax = axes[k // ncol][k % ncol]; d = sel[ds]
+        ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2, label="abstention")
+        ax.plot(_covs, d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="cascade confidence")
+        ax.axhline(d["ce_err"], color="#999", ls=":", lw=1.4, label="CE full coverage")
+        ax.axhline(d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes floor")
+        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f})", fontsize=10)
+        ax.set_xlabel("coverage"); ax.set_ylabel("accepted error"); ax.grid(alpha=0.25)
+    for k in range(len(order), nrow * ncol):
+        axes[k // ncol][k % ncol].axis("off")
+    axes[0][0].legend(fontsize=8)
+    fig.tight_layout(); save_fig(fig, "fig_selective_risk"); plt.show()
+else:
+    print("no checkpoints loaded (see the compute cell above)")
+'''
+
+SEL_GAIN_PLOT = '''# The advisor's key question: does abstaining help MORE as the problem gets harder?
+# Accuracy gained by abstaining (at fixed coverage) vs each dataset's Bayes error.
+# Orange rising with difficulty => abstention earns its keep on complex data; blue
+# above zero => the learned reject head beats plain confidence thresholding.
+if len(sel_table):
+    t = sel_table
+    fig, ax = plt.subplots(figsize=(7.5, 5.5))
+    ax.plot(t["bayes_err"], t["gain_vs_ce"], "o-", color=COLORS["abstention"], label="vs CE full coverage")
+    ax.plot(t["bayes_err"], t["gain_vs_conf"], "s--", color=COLORS["cascade"], label="vs cascade confidence")
+    for _, r in t.iterrows():
+        ax.annotate(r["dataset"], (r["bayes_err"], r["gain_vs_ce"]), fontsize=7,
+                    xytext=(3, 3), textcoords="offset points")
+    ax.axhline(0, color="k", lw=0.8)
+    ax.set_xlabel("Bayes error  (data complexity ->)")
+    ax.set_ylabel(f"accuracy gained by abstaining @ coverage~{SEL_COVERAGE:.2f}")
+    ax.set_title("Does abstaining help more as the problem gets harder?")
+    ax.grid(alpha=0.25); ax.legend()
+    save_fig(fig, "fig_abstention_gain_vs_difficulty"); plt.show()
+else:
+    print("no checkpoints loaded (see the compute cell above)")
+'''
+
+SEL_MARGIN_PLOT = '''# Rejected boards have a smaller top1-top2 softmax margin (more ambiguous) -- shown
+# for an easy / mid / hard dataset. This is the toy example's "smart deferral" check.
+if len(sel):
+    order = list(sel_table["dataset"])
+    probe = [order[0], order[len(order) // 2], order[-1]]
+    fig, axes = plt.subplots(1, len(probe), figsize=(5 * len(probe), 4.2), squeeze=False)
+    for j, ds in enumerate(probe):
+        ia = sel[ds]["ia"]; ax = axes[0][j]
+        top2 = np.sort(ia["real"], axis=1)[:, -2:]; marg = top2[:, -1] - top2[:, -2]
+        rej = ia["r"] >= 0.5; acc = ~rej
+        if acc.sum() and rej.sum():
+            bins = np.linspace(0, max(marg.max(), 1e-6), 26)
+            ax.hist(marg[acc], bins=bins, density=True, alpha=0.6, color=COLORS["cascade"], label="accepted")
+            ax.hist(marg[rej], bins=bins, density=True, alpha=0.6, color=COLORS["abstention"], label="rejected")
+            ax.legend(fontsize=9)
+        ax.set_title(ds, fontsize=11); ax.set_xlabel("top1 - top2 margin")
+        ax.set_ylabel("density"); ax.grid(alpha=0.25)
+    fig.suptitle("Rejected boards are more ambiguous (smaller margin)", fontweight="bold")
+    fig.tight_layout(); save_fig(fig, "fig_margin_hist"); plt.show()
+else:
+    print("no checkpoints loaded (see the compute cell above)")
+'''
+
 CAPACITY_PLOT = '''# Capacity study: defect accuracy and gap-to-Bayes vs trunk width/depth (cascade).
 cap = study("capacity")
 if len(cap):
@@ -410,6 +568,15 @@ SECTIONS = [
      "coverage vs selective accuracy as `o` sweeps. **Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
     ("### Classification quality across o\\n\\nForced accuracy + macro-F1 vs `o` (the o-sweep). "
      "**Saved: `fig_metrics_vs_o`.**", PAYOFF_CLS_PLOT),
+    ("## Selective-classification analysis (threshold-swept)\\n\\nReplicates the professor's "
+     "`toy_example`: loads the saved checkpoints and sweeps the **rejection threshold** on each "
+     "model (the standard selective-risk view), instead of fixing the threshold and sweeping `o`. "
+     "Runs on the cluster (needs `results/cluster/*.pt` + `data/cluster/*.csv`).", SEL_COMPUTE),
+    ("### Selective-risk curves\\n\\nAccepted error vs coverage, easy -> hard, vs the confidence "
+     "baseline / CE / Bayes floor. **Saved: `fig_selective_risk`.**", SEL_RISK_PLOT),
+    ("### Does abstaining help more as the problem gets harder?\\n\\n**Saved: "
+     "`fig_abstention_gain_vs_difficulty`.**", SEL_GAIN_PLOT),
+    ("### Rejected boards are more ambiguous\\n\\n**Saved: `fig_margin_hist`.**", SEL_MARGIN_PLOT),
     ("## Capacity study\\n\\nTrunk width/depth (cascade). **Saved: `fig_capacity`.**", CAPACITY_PLOT),
     ("## Dropout and learning-rate studies\\n\\n**Saved: `fig_dropout_lr`.**", REG_OPT_PLOT),
     ("## Class-weight study\\n\\nDefect-head reweighting, where minority recall matters most. "
