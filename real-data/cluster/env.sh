@@ -1,12 +1,14 @@
 # Sourced by every real-data cluster script (prep.slurm, train.slurm, run_local.sh).
 # Batch jobs start in a clean shell and do NOT source ~/.bashrc, so we load modules
-# and activate conda HERE. This mirrors cluster/env.sh but uses the professor's
-# MAUDE env (Topic_Topology_env), which ships requests + torch, instead of `paper`.
+# and activate conda HERE. Uses the project's `paper` env (same as the synthetic
+# cluster/env.sh) -- the MAUDE scraper's one extra dep (`requests`) is in
+# environment.yml, so `conda env update -f environment.yml` brings `paper` current.
 #
-# One-time setup on a login node (only if the env does not already exist):
+# One-time setup on a login node (upgrade the existing env with the new deps):
 #   module load miniconda3/24.7.1-gcc-8.5.0-bxh7x2v
 #   source "$(conda info --base)/etc/profile.d/conda.sh"
-#   conda activate Topic_Topology_env
+#   conda env update -f environment.yml     # adds requests to the `paper` env
+#   conda activate paper
 
 module load gcc                                   2>/dev/null || true
 module load slurm                                 2>/dev/null || true
@@ -14,7 +16,7 @@ module load git                                   2>/dev/null || true
 module load miniconda3/24.7.1-gcc-8.5.0-bxh7x2v
 # shellcheck disable=SC1091
 source "$(conda info --base)/etc/profile.d/conda.sh" 2>/dev/null || true
-conda activate "${RCA_CONDA_ENV:-Topic_Topology_env}"
+conda activate "${RCA_CONDA_ENV:-paper}"
 
 # run from the repo root so real-data/, data/, results/ resolve correctly
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"

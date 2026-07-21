@@ -17,8 +17,10 @@ echo "Time   : $(date)"
 echo "=========================================="
 
 module load miniconda3/24.7.1-gcc-8.5.0-bxh7x2v
-source "$(dirname "$(which conda)")/../etc/profile.d/conda.sh"
-conda activate Topic_Topology_env
+# resolve the base prefix robustly (works whether conda is a binary or a shell fn)
+source "$(conda info --base)/etc/profile.d/conda.sh"
+# the project `paper` env (upgrade it first: conda env update -f environment.yml)
+conda activate paper
 
 echo
 

@@ -43,7 +43,7 @@ Each seed-independent config is trained across every seed in `RCA_SEEDS`
 | File | Role |
 |---|---|
 | `build_matrix.py` | The matrix (single source of truth). Emits `runs.tsv`, `manifest.json`. |
-| `env.sh` | Module loads + `conda activate Topic_Topology_env` + scrape/placement knobs. |
+| `env.sh` | Module loads + `conda activate paper` + scrape/placement knobs. |
 | `prep.slurm` | Single job: scrape MAUDE + cache dataset/features. |
 | `train.slurm` | Array: one abstention MLP per task (depends on `prep`). |
 | `submit.sh` | Builds the matrix, submits prep + training array with the dependency. |
