@@ -38,7 +38,13 @@ export RCA_CACHE="${RCA_CACHE:-real-data/data/maude}"
 # --- SLURM placement (leave EMPTY to omit the flag; MAUDE download is CPU-only) ---
 export RCA_PARTITION="${RCA_PARTITION:-}"
 export RCA_ACCOUNT="${RCA_ACCOUNT:-}"
-export RCA_QOS="${RCA_QOS:-long}"                  # scrape can be slow; `long` is safe
+# QOS is set SEPARATELY for the two jobs. The scrape is a single long job (12h) ->
+# needs `long`. The training array is ~195 SHORT tasks, and `long` has a tiny
+# per-account submit cap (MaxSubmitJobsPerAccount) meant for a few 7-day jobs, so
+# submitting the whole array under it fails. Training therefore uses the DEFAULT
+# QOS (empty), which has far more submit headroom and a 1h wall (tasks are minutes).
+export RCA_PREP_QOS="${RCA_PREP_QOS:-long}"        # single 12h scrape job
+export RCA_TRAIN_QOS="${RCA_TRAIN_QOS:-}"          # empty -> default QOS (normal, 1h)
 
 # --- per-job walltime (submit.sh passes as --time). The scrape hits a rate-limited
 # API so give it hours; each train run is minutes. ---

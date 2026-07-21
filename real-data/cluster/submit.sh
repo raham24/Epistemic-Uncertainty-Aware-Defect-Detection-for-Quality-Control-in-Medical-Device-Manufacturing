@@ -27,11 +27,14 @@ fi
 throttle="%${RCA_MAX_PARALLEL:-16}"
 echo "concurrency: up to ${RCA_MAX_PARALLEL:-16} tasks at once"
 
-# optional placement flags (single tokens, no spaces -> word-split on purpose)
+# optional placement flags (single tokens, no spaces -> word-split on purpose).
+# `extra` is shared (partition/account); QOS is applied PER-JOB below because the
+# scrape and the training array need different QOS (see env.sh).
 extra=""
 [ -n "${RCA_PARTITION:-}" ] && extra="$extra --partition=$RCA_PARTITION"
 [ -n "${RCA_ACCOUNT:-}" ]   && extra="$extra --account=$RCA_ACCOUNT"
-[ -n "${RCA_QOS:-}" ]       && extra="$extra --qos=$RCA_QOS"
+prep_qos="";  [ -n "${RCA_PREP_QOS:-}" ]  && prep_qos="--qos=$RCA_PREP_QOS"
+train_qos=""; [ -n "${RCA_TRAIN_QOS:-}" ] && train_qos="--qos=$RCA_TRAIN_QOS"
 
 # 1) scrape + cache the dataset (single job), unless SKIP_PREP=1
 dep=""
@@ -43,15 +46,15 @@ if [ "${SKIP_PREP:-0}" = "1" ]; then
   echo "skipping prep (SKIP_PREP=1); using existing cache $RCA_CACHE"
 else
   # shellcheck disable=SC2086
-  prep_jid=$(sbatch --parsable $extra --time="${RCA_PREP_TIME:-12:00:00}" \
+  prep_jid=$(sbatch --parsable $extra $prep_qos --time="${RCA_PREP_TIME:-12:00:00}" \
     real-data/cluster/prep.slurm)
-  echo "submitted scrape: job $prep_jid, time ${RCA_PREP_TIME:-12:00:00}"
+  echo "submitted scrape: job $prep_jid, time ${RCA_PREP_TIME:-12:00:00} ${prep_qos:+($prep_qos)}"
   dep="--dependency=afterok:$prep_jid"
 fi
 
 # 2) train all models, after the scrape finishes OK (or immediately if SKIP_PREP)
 # shellcheck disable=SC2086
-train_jid=$(sbatch --parsable $extra --time="${RCA_TRAIN_TIME:-00:20:00}" \
+train_jid=$(sbatch --parsable $extra $train_qos --time="${RCA_TRAIN_TIME:-00:20:00}" \
   $dep --array=1-"$n_runs$throttle" real-data/cluster/train.slurm)
 echo "submitted training: array job $train_jid (1-$n_runs$throttle), time ${RCA_TRAIN_TIME:-00:20:00} ${dep:+after prep}"
 
