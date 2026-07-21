@@ -75,3 +75,8 @@ export RCA_MAX_PARALLEL="${RCA_MAX_PARALLEL:-16}"
 # Hard ceiling guard: refuse to submit if the matrix exceeds the cluster's
 # MaxArraySize (Slurm default 1001). Check yours with: scontrol show config | grep MaxArraySize
 export RCA_MAX_ARRAY="${RCA_MAX_ARRAY:-1000}"
+
+# --- sweep shape: the seeds EVERY configuration is trained at (build_matrix.py reads
+# this). Total runs = distinct configs x number of seeds. More seeds = tighter
+# mean/std per config but more jobs; keep the total under RCA_MAX_ARRAY. ---
+export RCA_SEEDS="${RCA_SEEDS:-0,1,2,3,4}"

@@ -9,13 +9,15 @@ comparison notebook that finds the optimal configs.
 
 A **core grid** plus focused one-factor-at-a-time **studies** around a single base
 config (`BASE` in `build_matrix.py`). Shared center points are de-duplicated, so a
-config that several studies want is trained once and tagged with each. Current
-matrix: **10 datasets, 284 unique training runs** (the bulk is the fine-grained
-payoff o-sweep below).
+config that several studies want is defined once and tagged with each. Current
+matrix: **10 datasets, 132 distinct configurations**, each trained across every seed
+in `RCA_SEEDS` (default `0,1,2,3,4`) → **132 × 5 = 660 runs**. Set `RCA_SEEDS` to
+change the seed count (e.g. `RCA_SEEDS=0,1,2` → 396 runs); keep the total under
+`RCA_MAX_ARRAY`. The bulk is the fine-grained payoff o-sweep below.
 
 | study | varies | on | answers |
 |---|---|---|---|
-| `core` | loss x dataset (3 seeds) | all 10 datasets | cascade vs abstention vs the Bayes ceiling, everywhere |
+| `core` | loss x dataset | all 10 datasets | cascade vs abstention vs the Bayes ceiling, everywhere |
 | `payoff` | abstention `o` = 1.0–4.0 step 0.1 (31 values) | baseline / hard / imbalanced | how the payoff trades coverage for selective accuracy |
 | `capacity` | trunk `--hidden` (5 sizes) | baseline / hard | does a bigger trunk close the gap to Bayes |
 | `dropout` | `--dropout` ∈ {0,.1,.2,.3} | baseline / hard | best regularization |

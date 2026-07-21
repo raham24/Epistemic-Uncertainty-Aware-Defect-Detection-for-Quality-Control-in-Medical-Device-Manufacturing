@@ -27,6 +27,15 @@ cluster/datasets.tsv
 cluster/runs.tsv
 cluster/manifest.json
 
+# Real-data (MAUDE) sweep: scraped dataset cache, per-run metrics, generated matrix
+# + logs. The real-data/ scripts ARE tracked; their outputs are not.
+real-data/data/
+real-data/results/
+real-data/cluster/logs/
+real-data/cluster/runs.tsv
+real-data/cluster/manifest.json
+real-data/out_*/
+
 docs/
 
 # LaTeX auxiliary files

@@ -80,6 +80,46 @@ Output of the end-to-end pipeline for each test instance:
 - Provenance pointers per hypothesis (observation values, spec bounds, timestamp, model version)
 - **Extension beyond the paper:** linked MAUDE adverse-event records from MAUDEKG matching each hypothesis's failure pattern
 
+## Implementation Status (As-Built — SMT baseline, Phases 2–4 done)
+
+The SMT replication (Commitment 2) is built and running at scale on GPU. This section is the ground truth for what exists; it extends/deviates from the aspirational Architecture above.
+
+### Code layout (actual — NOT the `src/…` target below)
+Two self-contained root files are the whole pipeline; no cross-imports, each reads `domain/smt_paper.yaml`:
+- `generator.py` — synthetic generator (copula + drift + calibrated labels + graded risk). `VERSION="smt-gen-2.0"`.
+- `mlp.py` — multi-head cascade model, both losses, train/evaluate/CLI. `MODEL_VERSION="mlp-cascade-1.0"`.
+- `domain/smt_paper.yaml` — THE spec (every field consumed; no dead fields).
+- `cluster/` — HPC sweep infra (tracked). `misc/` — pytest unit tests (gitignored). `v1/` — archived first cut (untouched). `docs/` — gitignored notes (`generator_pseudocode.md`, `project_brief.md`).
+- Env: conda env `paper`. Local dev on macOS (`mps`); training on the GPU cluster.
+
+### Generator — calibrated label model (resolves the paper's biggest gap)
+Defect labels are **sampled from an explicit posterior `p(y|x)`**, not thresholded:
+- Ishikawa causal scores → logits `ℓ_d = gain·score_d + offset_d` (no_defect = reference 0).
+- `gain` is **binary-searched so the realized Bayes error hits `label_model.target_bayes_error`** (default 0.045 → ~95.5% optimal-accuracy ceiling, reproducing the paper's ~95%).
+- `offset_d` fit by **IPF so class marginals match the priors**.
+- The exact posterior is emitted (`p_<defect>` columns), so the **Bayes-optimal accuracy is known in closed form** — the yardstick the model is measured against. This calibration is ours, not the paper's.
+- Separable knobs: difficulty = `--bayes-error` (gain); class balance = `--priors` (offsets); process spread = `--sigma`/`--sigma-scale` (physical — drives risk targets + spec-violation rate; the label calibration absorbs it, so sigma does NOT change defect difficulty). Batch-grouped leak-free train/val/test split.
+
+### Model — 3-head TRUE cascade (deviates from the "per-stage heads" sketch above)
+- Trunk → **head1 defect** (3-way) → **head2 mechanism** = ONE **joint 9-class** softmax over the `<printing>__<reflow>` Cartesian product (7 realizable) → **head3 risk** (6 independent sigmoids, graded-BCE targets).
+- True cascade: each downstream head reads the trunk latent ⊕ the upstream heads' **soft softmax distributions** (differentiable, end-to-end, no teacher forcing).
+- Defaults: hidden (256,256), dropout 0.1, Adam lr 1e-3, batch 128, 40 epochs + early stop.
+
+### Two losses (`--loss`)
+- `cascade` (default) — CE(defect)+CE(mech)+BCE(risk), the paper's form.
+- `abstention` — selective-classification term `−log(o·p_y + r)` (logsumexp form) on the **defect head ONLY**; the mechanism head reverts to plain CE. Two-head abstention is commented out (not deleted) in `mlp.py` — flip it back to restore. `--o` = payoff; only the defect head is widened by one "abstain" column. Do NOT use the word "gambler" anywhere.
+
+### Results / findings (SMT)
+- **Cascade tracks the Bayes ceiling:** ~0.95 defect accuracy, gap-to-ceiling ~0.002 across all regimes; joint-mechanism ~0.90–0.95; risk MAE ~0.011. Faithful Table-II replication.
+- **Abstention is a careful NEGATIVE result:** it loses to cascade on forced (full-coverage) accuracy, and at matched coverage it does **not** beat simply confidence-thresholding the cascade (`gain_vs_conf ≤ 0` almost everywhere). Because cascade recovers the true posterior, its softmax confidence is already a near-Bayes-optimal reject signal, leaving nothing for the learned reject head to add. This is a finding to report honestly, not a bug. Forced accuracy = argmax over real classes on ALL boards; selective accuracy = accuracy only on non-abstained boards (`r < h`, default h=0.5) and is meaningless without its coverage.
+
+### Cluster sweep (`cluster/`, Star HPC at Hofstra)
+- `build_matrix.py` is the single source of truth: **132 seed-independent configurations** (core loss×dataset grid + one-factor studies: payoff `o`=1.0–4.0 step 0.1, capacity, dropout, lr, class_weight), **× the seeds in `RCA_SEEDS`** (default `0,1,2,3,4` → 660 runs). Seeds are a top-level replication axis — per seed only weight init, batch-shuffle order, and dropout masks change; data/split are fixed. Emits `datasets.tsv` / `runs.tsv` / `manifest.json`.
+- `submit.sh`: gen-data array (CPU) → train array (GPU), dependency-chained. All knobs are `RCA_*` in `env.sh`: `RCA_DEVICE=cuda`, `RCA_GPUS=1`, `RCA_SEEDS`, `RCA_MAX_PARALLEL` (array `%K` throttle), `RCA_MAX_ARRAY` (MaxArraySize guard, default 1000), `RCA_GEN_TIME`/`RCA_TRAIN_TIME` (walltime), `RCA_PARTITION`/`RCA_QOS`.
+- Star HPC facts: GPUs (H100/A100/A30) are on the **default partition `defq`** (no `--partition` needed). QOS walls: `normal`=1h (default), `burst`=30m, `long`=7d — keep `--time` under 1h. The `paper` env ships **CPU-only torch**; GPU needs `pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu121` once, verified via `srun --gres=gpu:1`. `CUBLAS_WORKSPACE_CONFIG=:4096:8` (set in `env.sh`) makes CUDA runs reproducible.
+- `cluster_analysis.ipynb` (generated by `cluster/build_analysis_nb.py`) reads `manifest.json` + `results/cluster/*.json`, aggregates over seeds, and saves paper figures to `figs/` (accuracy-vs-Bayes dumbbell, gap, risk-coverage, selective-risk vs confidence baseline, gain-vs-difficulty, margin histogram). `cluster/selective_analysis.py` = standalone CLI of the selective analysis. The professor's reference is `toy_example/toy_example.ipynb`.
+- Operational: heavy commands (generation/training/pushes) are run by Raham himself — provide the command, do not run it. Do not push to git; he pushes.
+
 ## Phase Plan (10 weeks, June–August 2026)
 
 | Phase | Weeks | Focus | Deliverable |
@@ -190,6 +230,11 @@ When in doubt about generator behavior, the YAML is authoritative.
 
 ## Project Structure (target)
 
+> Target for the FULL system (incl. the symbolic layer). The SMT baseline that exists
+> today is NOT this `src/…` layout — it is two self-contained root files
+> (`generator.py`, `mlp.py`) plus `domain/`, `cluster/`, `v1/` (archived). See
+> Implementation Status (As-Built) above.
+
 ```
 medical-device-rca/
 ├── CLAUDE.md                       ← this file
@@ -263,5 +308,7 @@ The paper omits several implementation details that will need to be re-derived:
 3. **Synthetic generator code:** not released. The Gaussian copula approach is described but specific correlation matrix, spec bounds, drift parameters, and risk-function constants (`p_L`, `p_M`, `p_H`, `κ`, `Δ_1`, `Δ_2`) are not provided. Reasonable defaults documented in this file's risk_function section.
 4. **MLP architecture details:** trunk depth, width, dropout, learning rate, batch size, optimizer all unspecified. Start with conservative defaults (2 hidden layers of 256, Adam, lr=1e-3, batch=128, dropout=0.1).
 5. **Defect labeling rule:** how defect labels are assigned from parameter values is never described. Build a simple logit-based rule that produces the paper's ~87% no-defect class balance.
+
+**Status (SMT baseline):** gaps 1, 3, 4, 5 are RESOLVED — see Implementation Status (As-Built). Loss functions (both `cascade` and `abstention`), the generator, the MLP architecture + hyperparameters, and a calibrated label model (labels sampled from `p(y|x)`, not a threshold) are all implemented. Gap 2 (knowledge-graph technology) remains open, deferred to Phases 5–6.
 
 When implementing, document these decisions explicitly so they can be revised when more information becomes available.
