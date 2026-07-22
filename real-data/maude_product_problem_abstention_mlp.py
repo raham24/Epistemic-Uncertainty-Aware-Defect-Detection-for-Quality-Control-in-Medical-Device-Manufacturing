@@ -72,6 +72,7 @@ except Exception:  # pragma: no cover
 
 BASE_URL = "https://api.fda.gov"
 DEFAULT_SEED = 7
+OPENFDA_SKIP_CAP = 25000     # openFDA rejects skip beyond this (deep-paging limit)
 
 # ---- model defaults (match the original sklearn MLPClassifier as closely as possible)
 HIDDEN = (256, 128)          # hidden_layer_sizes
@@ -254,7 +255,11 @@ def iter_openfda_records(
     pbar = tqdm(total=max_records, desc=f"Downloading {endpoint} records", unit="rec")
     try:
         while fetched < max_records:
-            params = {"limit": min(page_size, max_records - fetched), "skip": skip}
+            # openFDA caps deep paging at skip+limit <= OPENFDA_SKIP_CAP; stop cleanly.
+            if skip >= OPENFDA_SKIP_CAP:
+                break
+            limit = min(page_size, max_records - fetched, OPENFDA_SKIP_CAP - skip)
+            params = {"limit": limit, "skip": skip}
             if query:
                 params["search"] = query
             payload = fda_get_json(session, endpoint, params=params, api_key=api_key)
@@ -271,6 +276,86 @@ def iter_openfda_records(
                 break
             skip += len(results)
             time.sleep(0.05)
+    finally:
+        pbar.close()
+
+
+def _record_id(rec: Dict[str, Any]) -> str:
+    """Stable MAUDE record key, for de-duplicating across date-window overlaps."""
+    return first_nonempty(rec.get("mdr_report_key"), rec.get("report_number"),
+                          rec.get("report_id"), rec.get("event_key"))
+
+
+def iter_openfda_records_windowed(
+    session: requests.Session,
+    endpoint: str,
+    base_query: str,
+    max_records: int,
+    page_size: int,
+    api_key: Optional[str],
+    date_field: str = "date_received",
+    start_date: str = "19910101",
+    end_date: str = "20261231",
+    pause_pages: float = 0.05,
+    pause_windows: float = 2.0,
+) -> Iterable[Dict[str, Any]]:
+    """Pull MANY records past openFDA's 25k deep-paging cap by walking a date cursor.
+
+    openFDA rejects skip > OPENFDA_SKIP_CAP (a 400), so no single query can page past
+    ~25k. Here we sort newest-first and page a window [start_date TO cursor]; when a
+    window fills the skip cap it means that window holds >25k records, so we drop the
+    cursor to the OLDEST date seen and continue -- sweeping the whole range in <=25k
+    slices, newest to oldest. `pause_windows` seconds are slept between slices (429
+    rate-limits are already retried with backoff by the session). Records are
+    de-duplicated by report key across the one-day boundary overlap.
+    """
+    fetched = 0
+    seen: set[str] = set()
+    cursor_hi = end_date
+    sort = f"{date_field}:desc"
+    pbar = tqdm(total=max_records, desc=f"Downloading {endpoint} records", unit="rec")
+    try:
+        while fetched < max_records:
+            skip = 0
+            earliest = None            # oldest date seen in this window
+            new_in_window = 0
+            window_exhausted = False
+            while fetched < max_records and skip < OPENFDA_SKIP_CAP:
+                limit = min(page_size, max_records - fetched, OPENFDA_SKIP_CAP - skip)
+                q = f"({base_query}) AND {date_field}:[{start_date} TO {cursor_hi}]"
+                payload = fda_get_json(session, endpoint, api_key=api_key,
+                                       params={"limit": limit, "skip": skip,
+                                               "search": q, "sort": sort})
+                results = payload.get("results", []) or []
+                if not results:
+                    window_exhausted = True
+                    break
+                for rec in results:
+                    d = first_nonempty(rec.get(date_field))
+                    if d:
+                        earliest = d   # desc order -> last seen is the oldest so far
+                    rid = _record_id(rec)
+                    if rid and rid in seen:
+                        continue       # boundary overlap with the previous window
+                    if rid:
+                        seen.add(rid)
+                    yield rec
+                    fetched += 1
+                    new_in_window += 1
+                    pbar.update(1)
+                    if fetched >= max_records:
+                        break
+                if len(results) < limit:
+                    window_exhausted = True   # reached start_date; whole range done
+                    break
+                skip += len(results)
+                time.sleep(pause_pages)
+
+            # reached the true start of data, or made no progress -> stop
+            if window_exhausted or earliest is None or new_in_window == 0:
+                break
+            cursor_hi = earliest         # re-include this date; dedup handles overlap
+            time.sleep(pause_windows)
     finally:
         pbar.close()
 
@@ -380,6 +465,10 @@ def build_dataset(
     api_key: Optional[str],
     max_records: int,
     page_size: int,
+    start_date: str = "19910101",
+    end_date: str = "20261231",
+    pause_windows: float = 2.0,
+    pause_pages: float = 0.05,
 ) -> pd.DataFrame:
     """Scrape a NATURAL-PROPORTION 4-class dataset from MAUDE.
 
@@ -387,16 +476,24 @@ def build_dataset(
     each via event_label (injuries split basic/serious on narrative severity), drops
     the unmappable ones, and KEEPS the real class skew -- no per-class balancing.
     Malfunction dominates and Death is rare; that imbalance is intentional (the MLP
-    will class-weight later). `max_records` is the total fetch budget.
+    will class-weight later).
+
+    `max_records` is the total fetch budget. It can exceed openFDA's 25k deep-paging
+    cap: the date-windowed pager sweeps [start_date, end_date] newest-first in <=25k
+    slices, pausing `pause_windows` seconds between slices.
     """
     records = list(
-        iter_openfda_records(
+        iter_openfda_records_windowed(
             session,
             "device/event",
-            query="event_type:(Death OR Injury OR Malfunction)",
+            base_query="event_type:(Death OR Injury OR Malfunction)",
             max_records=max_records,
             page_size=page_size,
             api_key=api_key,
+            start_date=start_date,
+            end_date=end_date,
+            pause_windows=pause_windows,
+            pause_pages=pause_pages,
         )
     )
     if not records:

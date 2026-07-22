@@ -30,11 +30,16 @@ export RCA_DEVICE="${RCA_DEVICE:-cpu}"
 # too (lower rate limit). Do NOT hardcode a key here (this file is tracked).
 
 # --- MAUDE scrape knobs (prep.slurm) ---
-# Total records to fetch. The dataset is now 4-class (Malfunction / Basic injury /
+# Total records to fetch. The dataset is 4-class (Malfunction / Basic injury /
 # Serious injury / Death) at NATURAL proportions -- Malfunction dominates and Death
-# is rare, so fetch a large budget to get enough deaths for a stratified split.
-export RCA_MAX_RECORDS="${RCA_MAX_RECORDS:-${RCA_MAX_PER_CLASS:-40000}}"
+# is rare, so fetch a large budget to get enough deaths for a stratified split. This
+# can exceed openFDA's 25k deep-paging cap: the scraper sweeps date-windows, pausing
+# RCA_SCRAPE_PAUSE seconds between 25k slices.
+export RCA_MAX_RECORDS="${RCA_MAX_RECORDS:-${RCA_MAX_PER_CLASS:-100000}}"
 export RCA_PAGE_SIZE="${RCA_PAGE_SIZE:-100}"
+export RCA_SCRAPE_PAUSE="${RCA_SCRAPE_PAUSE:-2.0}"    # sec between date-windows
+export RCA_START_DATE="${RCA_START_DATE:-19910101}"   # oldest date_received
+export RCA_END_DATE="${RCA_END_DATE:-20261231}"       # newest date_received
 export RCA_DATA_SEED="${RCA_DATA_SEED:-7}"          # split seed for the cached dataset
 export RCA_CACHE="${RCA_CACHE:-real-data/data/maude}"
 

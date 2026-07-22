@@ -39,9 +39,16 @@ def main() -> None:
     parser.add_argument("--cache", type=str, default="real-data/data/maude",
                         help="output cache directory")
     parser.add_argument("--max-records", "--max-per-class", dest="max_records",
-                        type=int, default=40000,
-                        help="total records to fetch (natural class proportions)")
+                        type=int, default=100000,
+                        help="total records to fetch (can exceed openFDA's 25k cap "
+                             "via date-windowed paging)")
     parser.add_argument("--page-size", type=int, default=100)
+    parser.add_argument("--start-date", type=str, default="19910101",
+                        help="oldest date_received to include (YYYYMMDD)")
+    parser.add_argument("--end-date", type=str, default="20261231",
+                        help="newest date_received to include (YYYYMMDD)")
+    parser.add_argument("--pause", type=float, default=2.0,
+                        help="seconds to wait between 25k date-windows")
     parser.add_argument("--api-key", type=str, default=os.getenv("OPENFDA_API_KEY", ""))
     parser.add_argument("--seed", type=int, default=pipe.DEFAULT_SEED)
     parser.add_argument("--tfidf-max-features", type=int, default=50000)
@@ -67,6 +74,9 @@ def main() -> None:
         api_key=args.api_key or None,
         max_records=args.max_records,
         page_size=args.page_size,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        pause_windows=args.pause,
     )
 
     label_map = pipe.LABEL_NAMES
