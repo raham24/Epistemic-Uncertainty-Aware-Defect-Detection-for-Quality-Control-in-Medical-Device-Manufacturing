@@ -131,6 +131,67 @@ BOILERPLATE_PATTERNS = [
     r"the product was not returned",
 ]
 
+# --------------------------------------------------------------------------- #
+# Label scheme (4-class, from MAUDE event_type + a narrative severity split).
+#
+# MAUDE `event_type` is one of {Death, Injury, Malfunction, Other, No answer}.
+# Deaths / Injuries / Malfunctions map to native classes; Other / No-answer /
+# blank are DROPPED. MAUDE has no native basic-vs-serious injury field (an
+# `Injury` MDR is already a regulatory "serious injury" under 21 CFR 803), so the
+# basic/serious split is a PROXY: an Injury whose RAW narrative (before redaction)
+# hits a serious-injury cue (FDA definition -- life-threatening, permanent
+# impairment, or medical/surgical intervention) is labeled serious, else basic.
+# Integers are severity-ordered.
+# --------------------------------------------------------------------------- #
+LABEL_NAMES = {0: "Malfunction", 1: "Basic injury", 2: "Serious injury", 3: "Death"}
+
+SEVERE_INJURY_PATTERNS = [
+    r"\blife[- ]threatening\b",
+    r"\bpermanent(ly)?\b",
+    r"\bdisab(led|ility|ling)\b",
+    r"\bsurg(ery|ical|eon|eries)\b",
+    r"\boperat(ion|ive|ing room)\b",
+    r"\breoperation\b",
+    r"\bhospitaliz(ed|ation)\b",
+    r"\badmitted (to (the )?(hospital|icu|emergency))\b",
+    r"\bintensive care\b",
+    r"\bicu\b",
+    r"\bintubat(ed|ion)\b",
+    r"\bventilat(or|ed|ion)\b",
+    r"\bresuscitat(ed|ion)\b",
+    r"\bcardiac arrest\b",
+    r"\bamputat(ed|ion)\b",
+    r"\bparaly(sis|zed|sed)\b",
+    r"\bcoma(tose)?\b",
+    r"\bunconscious\b",
+    r"\bhemorrhage\b",
+    r"\bhaemorrhage\b",
+    r"\btransfusion\b",
+    r"\bsepsis\b",
+    r"\bseptic\b",
+    r"\bemergency (surgery|room|department|intervention)\b",
+    r"\bintervention (was )?(required|needed|necessary)\b",
+]
+
+
+def is_serious_injury(raw_text: str) -> bool:
+    """True if the RAW (un-redacted) narrative hits a serious-injury cue."""
+    low = (raw_text or "").lower()
+    return any(re.search(p, low) for p in SEVERE_INJURY_PATTERNS)
+
+
+def event_label(event_type_raw: str, raw_text: str) -> Optional[int]:
+    """Map MAUDE event_type (+ narrative severity for injuries) to a class int.
+    Returns None for Other / No-answer / blank (those records are dropped)."""
+    et = (event_type_raw or "").strip().lower()
+    if "malfunction" in et:
+        return 0
+    if "death" in et:
+        return 3
+    if "injur" in et:                       # matches "Injury"/"injuries"
+        return 2 if is_serious_injury(raw_text) else 1
+    return None                             # Other / No answer provided / blank
+
 
 def set_seed(seed: int = DEFAULT_SEED) -> None:
     random.seed(seed)
@@ -303,10 +364,12 @@ def parse_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "report_id": first_nonempty(record.get("report_id"), record.get("mdr_report_key"), record.get("event_key")),
         "date_report": first_nonempty(record.get("date_report"), record.get("date_received"), record.get("date_of_event")),
         "manufacturer_name": first_nonempty(record.get("manufacturer_name"), record.get("manufacturer")),
-        "product_problem_flag": parse_flag(record.get("product_problem_flag")),
+        "product_problem_flag": parse_flag(record.get("product_problem_flag")),  # kept for provenance
         "event_type_raw": event_type,
         "text_raw": text,
         "text": clean_text(text),
+        # 4-class label from event_type + narrative severity (severity read on RAW text)
+        "label": event_label(event_type, text),
         "raw_json": json.dumps(record, ensure_ascii=False),
     }
     return row
@@ -315,17 +378,23 @@ def parse_record(record: Dict[str, Any]) -> Dict[str, Any]:
 def build_dataset(
     session: requests.Session,
     api_key: Optional[str],
-    max_per_class: int,
+    max_records: int,
     page_size: int,
 ) -> pd.DataFrame:
-    # We first collect more than enough records, then balance down to the two classes.
-    # The openFDA endpoint contains many more positives than negatives.
+    """Scrape a NATURAL-PROPORTION 4-class dataset from MAUDE.
+
+    Queries only the three native event types (Death/Injury/Malfunction), labels
+    each via event_label (injuries split basic/serious on narrative severity), drops
+    the unmappable ones, and KEEPS the real class skew -- no per-class balancing.
+    Malfunction dominates and Death is rare; that imbalance is intentional (the MLP
+    will class-weight later). `max_records` is the total fetch budget.
+    """
     records = list(
         iter_openfda_records(
             session,
             "device/event",
-            query="product_problem_flag:(Y OR N)",
-            max_records=max_per_class * 8,
+            query="event_type:(Death OR Injury OR Malfunction)",
+            max_records=max_records,
             page_size=page_size,
             api_key=api_key,
         )
@@ -336,7 +405,7 @@ def build_dataset(
     rows: List[Dict[str, Any]] = []
     for rec in tqdm(records, desc="Processing MAUDE records", unit="rec"):
         row = parse_record(rec)
-        if row["product_problem_flag"] is None:
+        if row["label"] is None:            # Other / No-answer / unmappable event_type
             continue
         if not row["text"]:
             continue
@@ -346,18 +415,9 @@ def build_dataset(
     if df.empty:
         raise RuntimeError("No usable MAUDE records after parsing.")
 
-    # Balance the two classes for a fair selective-classification benchmark.
-    parts = []
-    for label in (0, 1):
-        sub = df[df["product_problem_flag"] == label].copy()
-        if len(sub) == 0:
-            raise RuntimeError(f"No examples found for class {label}.")
-        if len(sub) > max_per_class:
-            sub = sub.sample(n=max_per_class, random_state=DEFAULT_SEED)
-        parts.append(sub)
-    balanced = pd.concat(parts, axis=0).sample(frac=1.0, random_state=DEFAULT_SEED).reset_index(drop=True)
-    balanced = balanced.rename(columns={"product_problem_flag": "label"})
-    return balanced
+    # Natural MAUDE proportions: no per-class balancing, just a deterministic shuffle.
+    df = df.sample(frac=1.0, random_state=DEFAULT_SEED).reset_index(drop=True)
+    return df
 
 
 def make_splits(
@@ -655,7 +715,9 @@ def reject_sweep(y_true: np.ndarray, proba: np.ndarray, abstain_prob: np.ndarray
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--outdir", type=str, default="out_maude_product_problem_abstention")
-    parser.add_argument("--max-per-class", type=int, default=3000)
+    parser.add_argument("--max-records", "--max-per-class", dest="max_records",
+                        type=int, default=40000,
+                        help="total records to fetch (natural class proportions)")
     parser.add_argument("--page-size", type=int, default=100)
     parser.add_argument("--api-key", type=str, default=os.getenv("OPENFDA_API_KEY", ""))
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -687,7 +749,7 @@ def main() -> None:
     print("Running maude_product_problem_abstention_mlp.py with the following parameters:")
     print(f"OUTDIR: {outdir}")
     print(f"OPENFDA_API_KEY: {'<set>' if args.api_key else '<empty>'}")
-    print(f"MAX_PER_CLASS: {args.max_per_class}")
+    print(f"MAX_RECORDS: {args.max_records}")
     print(f"PAGE_SIZE: {args.page_size}")
     print(f"TARGET_COVERAGE: {args.target_coverage}")
     print(f"ABSTENTION PAYOFF o: {args.o}")
@@ -698,15 +760,15 @@ def main() -> None:
     df = build_dataset(
         session=session,
         api_key=args.api_key or None,
-        max_per_class=args.max_per_class,
+        max_records=args.max_records,
         page_size=args.page_size,
     )
 
     df.to_csv(outdir / "dataset_all.csv", index=False)
     df.to_json(outdir / "dataset_all.jsonl", orient="records", lines=True, force_ascii=False)
 
-    label_map = {0: "No product problem", 1: "Product problem"}
-    print(f"Class counts: {df['label'].value_counts().sort_index().to_dict()}")
+    label_map = LABEL_NAMES
+    print(f"Class counts: {{{', '.join(f'{label_map[k]}={v}' for k, v in df['label'].value_counts().sort_index().items())}}}")
 
     train_df, val_df, test_df = make_splits(df, seed=args.seed)
     split_counts = {
@@ -725,6 +787,17 @@ def main() -> None:
             json.dump(payload, f, indent=2)
         print(json.dumps(payload, indent=2))
         return
+
+    # The single-head model + binary metrics below are still 2-class. The scraper now
+    # emits a 4-class label (Malfunction/Basic injury/Serious injury/Death), so the
+    # in-script training path is disabled until the MLP is updated for >2 classes.
+    # Use --save-dataset-only (or the cluster prep) to build the dataset meanwhile.
+    n_classes = int(df["label"].nunique())
+    if n_classes > 2:
+        raise SystemExit(
+            f"dataset has {n_classes} classes ({sorted(df['label'].unique())}); the "
+            f"in-script abstention MLP is still binary. Re-run with --save-dataset-only "
+            f"to just build the dataset, or update the MLP for multi-class first.")
 
     X_train, X_val, X_test, feature_names, text_pipe = build_feature_matrix(
         train_df, val_df, test_df,
@@ -835,8 +908,9 @@ def main() -> None:
         json.dump(metrics, f, indent=2)
 
     summary = {
-        "task": "MAUDE product problem detection from narrative",
-        "label_definition": "product_problem_flag Y/N from openFDA MAUDE reports",
+        "task": "MAUDE event severity classification from narrative",
+        "label_definition": "event_type -> {0 Malfunction, 1 Basic injury, 2 Serious "
+                            "injury, 3 Death}; injuries split by narrative severity",
         "text_source": "MAUDE narrative text redacted to remove obvious label cues",
         "model": "TF-IDF + SVD + PyTorch MLP with LEARNED abstention (-log(o*p_y + r))",
         "heads": "single classification head (2 classes + 1 abstain column)",

@@ -20,11 +20,11 @@ if [ -z "${OPENFDA_API_KEY:-}" ]; then
   echo "WARNING: OPENFDA_API_KEY not set; using anonymous openFDA access."
 fi
 
-echo "[prep] scraping MAUDE -> $RCA_CACHE  (seed=$RCA_DATA_SEED, max/class=$RCA_MAX_PER_CLASS)"
+echo "[prep] scraping MAUDE -> $RCA_CACHE  (seed=$RCA_DATA_SEED, max_records=$RCA_MAX_RECORDS)"
 python real-data/prep_dataset.py \
   --cache "$RCA_CACHE" \
   --api-key "${OPENFDA_API_KEY:-}" \
-  --max-per-class "$RCA_MAX_PER_CLASS" \
+  --max-records "$RCA_MAX_RECORDS" \
   --page-size "$RCA_PAGE_SIZE" \
   --seed "$RCA_DATA_SEED"
 echo "[prep] cached dataset + features in $RCA_CACHE"

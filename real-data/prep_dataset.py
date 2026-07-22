@@ -38,7 +38,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Scrape MAUDE + cache dataset/features")
     parser.add_argument("--cache", type=str, default="real-data/data/maude",
                         help="output cache directory")
-    parser.add_argument("--max-per-class", type=int, default=3000)
+    parser.add_argument("--max-records", "--max-per-class", dest="max_records",
+                        type=int, default=40000,
+                        help="total records to fetch (natural class proportions)")
     parser.add_argument("--page-size", type=int, default=100)
     parser.add_argument("--api-key", type=str, default=os.getenv("OPENFDA_API_KEY", ""))
     parser.add_argument("--seed", type=int, default=pipe.DEFAULT_SEED)
@@ -55,20 +57,21 @@ def main() -> None:
     print("prep_dataset.py -- scraping MAUDE and caching the dataset")
     print(f"  cache        : {cache}")
     print(f"  api key      : {'<set>' if args.api_key else '<empty> (anonymous)'}")
-    print(f"  max/class    : {args.max_per_class}")
+    print(f"  fetch budget : {args.max_records} records")
     print(f"  seed (split) : {args.seed}")
 
-    # --- the professor's data pipeline, verbatim ---
+    # --- MAUDE scrape: 4-class event_type labels, natural proportions ---
     session = pipe.make_session()
     df = pipe.build_dataset(
         session=session,
         api_key=args.api_key or None,
-        max_per_class=args.max_per_class,
+        max_records=args.max_records,
         page_size=args.page_size,
     )
 
-    label_map = {0: "No product problem", 1: "Product problem"}
-    print(f"  class counts : {df['label'].value_counts().sort_index().to_dict()}")
+    label_map = pipe.LABEL_NAMES
+    counts = df["label"].value_counts().sort_index()
+    print(f"  class counts : {{{', '.join(f'{label_map[k]}={v}' for k, v in counts.items())}}}")
 
     df.to_csv(cache / "dataset_all.csv", index=False)
     df.to_json(cache / "dataset_all.jsonl", orient="records", lines=True, force_ascii=False)
@@ -107,12 +110,14 @@ def main() -> None:
         "n_val": int(len(val_df)),
         "n_test": int(len(test_df)),
         "n_features": int(X_train.shape[1]),
+        "n_classes": int(df["label"].nunique()),
+        "label_names": label_map,
         "class_counts": {label_map[k]: int(v) for k, v in df["label"].value_counts().sort_index().items()},
-        "label_balance": {
-            "overall_pos_rate": float(df["label"].mean()),
-            "train_pos_rate": float(train_df["label"].mean()),
-            "val_pos_rate": float(val_df["label"].mean()),
-            "test_pos_rate": float(test_df["label"].mean()),
+        "class_proportions": {
+            split: {label_map[k]: float(v) for k, v in
+                    frame["label"].value_counts(normalize=True).sort_index().items()}
+            for split, frame in (("overall", df), ("train", train_df),
+                                 ("val", val_df), ("test", test_df))
         },
         "feature_config": {
             "tfidf_max_features": args.tfidf_max_features,

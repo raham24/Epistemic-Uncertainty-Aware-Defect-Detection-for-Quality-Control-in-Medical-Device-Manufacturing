@@ -30,7 +30,10 @@ export RCA_DEVICE="${RCA_DEVICE:-cpu}"
 # too (lower rate limit). Do NOT hardcode a key here (this file is tracked).
 
 # --- MAUDE scrape knobs (prep.slurm) ---
-export RCA_MAX_PER_CLASS="${RCA_MAX_PER_CLASS:-3000}"
+# Total records to fetch. The dataset is now 4-class (Malfunction / Basic injury /
+# Serious injury / Death) at NATURAL proportions -- Malfunction dominates and Death
+# is rare, so fetch a large budget to get enough deaths for a stratified split.
+export RCA_MAX_RECORDS="${RCA_MAX_RECORDS:-${RCA_MAX_PER_CLASS:-40000}}"
 export RCA_PAGE_SIZE="${RCA_PAGE_SIZE:-100}"
 export RCA_DATA_SEED="${RCA_DATA_SEED:-7}"          # split seed for the cached dataset
 export RCA_CACHE="${RCA_CACHE:-real-data/data/maude}"
