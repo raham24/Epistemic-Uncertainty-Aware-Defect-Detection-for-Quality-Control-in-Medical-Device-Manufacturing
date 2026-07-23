@@ -817,8 +817,9 @@ def reject_keep(abstain_prob: np.ndarray, h: float) -> np.ndarray:
 
 def choose_threshold_by_val(proba_val: np.ndarray, target_coverage: float) -> float:
     """Largest confidence threshold whose val coverage still >= target (most
-    selective while meeting coverage). Mirrors the original script."""
-    candidates = np.arange(0.50, 0.991, 0.01)
+    selective while meeting coverage). Mirrors the original script. Starts at 0.20 so
+    multi-class models (max prob can be < 0.5) can still reach high coverage."""
+    candidates = np.arange(0.20, 0.991, 0.01)
     best = float(candidates[-1])
     for t in candidates:
         if confidence_keep(proba_val, float(t)).mean() >= target_coverage:

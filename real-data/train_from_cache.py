@@ -132,8 +132,10 @@ def main() -> None:
     # confidence baseline (any loss): max class prob >= threshold, chosen on val
     t = pipe.choose_threshold_by_val(proba_val, args.target_coverage)
     baseline = pipe.selective_metrics(y_test, proba_test, pipe.confidence_keep(proba_test, t))
+    # sweep from 0.20 (below 1/n_classes for up to 5 classes) so the Chow o-threshold
+    # 1/o -- which can be as low as 0.25 at o=4 -- is covered by the curve.
     confidence_curve = _curve_rows(
-        pipe.confidence_sweep(y_test, proba_test, 0.50, 0.99, args.sweep_step))
+        pipe.confidence_sweep(y_test, proba_test, 0.20, 0.99, args.sweep_step))
 
     # learned reject: only the abstention loss has an abstain column
     if args.loss == "abstention":

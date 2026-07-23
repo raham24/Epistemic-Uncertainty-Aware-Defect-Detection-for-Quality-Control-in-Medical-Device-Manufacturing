@@ -249,56 +249,67 @@ else:
     print("no study runs loaded")
 '''
 
-REG_VS_SEL = '''# REGULAR vs SELECTIVE, the paper comparison -- on ONE FIXED model (the base payoff
-# o), sweeping the reject threshold at inference. This is the standard selective-
-# classification view: REGULAR accuracy is the single full-coverage point, so it is a
-# FLAT reference that does NOT change as you abstain more; SELECTIVE accuracy is the
-# curve, rising as coverage drops (you decline the ambiguous rows). Because o is a
-# TRAINING hyperparameter, comparing regular accuracy ACROSS o would compare different
-# models -- that belongs in the o-effect study, not here. Two panels: accuracy and
-# MACRO-F1 (weights the rare classes -- Serious injury, Death -- equally).
-base_o = manifest["base"]["o"]
-sub = study("payoff")
-sub = sub[sub["o"] == base_o] if len(sub) else sub
-if len(sub):
-    grid = np.linspace(0.3, 1.0, 40)
-    def mean_curve(field):
-        """Seed-averaged reject curve: interpolate each seed's (coverage, field) onto
-        a common coverage grid, then average."""
+REG_VS_SEL = '''# REGULAR vs SELECTIVE across o, on ONE FIXED model -- the paper comparison.
+# The model is the abstention config with the HIGHEST selective accuracy. On that one
+# model, o is applied as an INFERENCE reject threshold via Chow's rule: predict only
+# when the top class prob p_max >= 1/o, else abstain. So:
+#   regular   = the model's full-coverage accuracy -> a FLAT line (same model, does
+#               NOT change with o) -- exactly the invariance the prof asked for.
+#   selective = accuracy on the kept rows at threshold 1/o -> VARIES with o (smaller o
+#               => higher cutoff => reject more ambiguous rows => higher selective acc).
+# Two panels: accuracy and MACRO-F1 (weights the rare classes equally). Coverage at
+# each o is printed, since a selective number at low coverage is scored on fewer rows.
+ab = df[(df["loss"] == "abstention")].dropna(subset=["learned_sel_acc"]) if len(df) else df
+if len(ab):
+    keys = ["o", "class_weight", "hidden", "dropout", "lr"]
+    grp = ab.groupby(keys, dropna=False)["learned_sel_acc"].mean().reset_index()
+    best = grp.loc[grp["learned_sel_acc"].idxmax()]
+    rows = ab[np.logical_and.reduce([ab[k] == best[k] for k in keys])]   # its seeds
+    print(f"single model = best-selective abstention config: "
+          + ", ".join(f"{k}={best[k]}" for k in keys))
+
+    # seed-averaged confidence curve of THIS model: value + coverage vs threshold
+    thr = np.linspace(0.20, 0.99, 80)
+    def mean_over_thr(field):
         ys = []
-        for _, r in sub.iterrows():
+        for _, r in rows.iterrows():
             m = json.loads(Path(r["_metrics_path"]).read_text())
-            c = pd.DataFrame(m.get("reject_curve") or [])
-            if not len(c):
-                continue
-            c = c.dropna(subset=["coverage", field])
+            c = pd.DataFrame(m.get("confidence_curve") or []).dropna(subset=["threshold", field])
             if len(c) < 2:
                 continue
-            order = np.argsort(c["coverage"].to_numpy())
-            ys.append(np.interp(grid, c["coverage"].to_numpy()[order],
+            order = np.argsort(c["threshold"].to_numpy())
+            ys.append(np.interp(thr, c["threshold"].to_numpy()[order],
                                 c[field].to_numpy()[order], left=np.nan, right=np.nan))
-        return np.nanmean(np.vstack(ys), axis=0) if ys else np.full_like(grid, np.nan)
+        return np.nanmean(np.vstack(ys), axis=0) if ys else np.full_like(thr, np.nan)
+    acc_of_t, f1_of_t, cov_of_t = (mean_over_thr("selective_accuracy"),
+                                   mean_over_thr("selective_f1"), mean_over_thr("coverage"))
 
-    reg_acc = float(sub["forced_acc"].mean())          # coverage=1 anchor (constant)
-    reg_f1 = float(sub["forced_macro_f1"].mean())
+    o_grid = np.round(np.arange(1.0, 4.01, 0.1), 2)
+    tau = np.clip(1.0 / o_grid, thr.min(), thr.max())        # Chow cutoff 1/o
+    sel_acc = np.interp(tau, thr, acc_of_t)
+    sel_f1 = np.interp(tau, thr, f1_of_t)
+    cov = np.interp(tau, thr, cov_of_t)
+    reg_acc = float(rows["forced_acc"].mean())               # flat, full coverage
+    reg_f1 = float(rows["forced_macro_f1"].mean())
+
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
     ax = axes[0]
     ax.axhline(reg_acc, color="0.35", ls="--", label=f"regular (full coverage) = {reg_acc:.3f}")
-    ax.plot(grid, mean_curve("selective_accuracy"), "-", color=C_LEARNED, lw=2,
-            label="selective (reject swept)")
-    ax.set_xlabel("coverage"); ax.set_ylabel("accuracy")
-    ax.set_title(f"Regular vs selective accuracy (fixed model, o={base_o})"); ax.legend()
+    ax.plot(o_grid, sel_acc, "-", color=C_LEARNED, lw=2, label="selective (predict if p_max >= 1/o)")
+    ax.set_xlabel("payoff  o"); ax.set_ylabel("accuracy")
+    ax.set_title("Regular vs selective accuracy (single model)"); ax.legend()
     ax = axes[1]
     ax.axhline(reg_f1, color="0.35", ls="--", label=f"regular macro-F1 = {reg_f1:.3f}")
-    ax.plot(grid, mean_curve("selective_f1"), "-", color=C_LEARNED, lw=2,
-            label="selective macro-F1 (reject swept)")
-    ax.set_xlabel("coverage"); ax.set_ylabel("macro-F1")
-    ax.set_title(f"Regular vs selective macro-F1 (fixed model, o={base_o})"); ax.legend()
+    ax.plot(o_grid, sel_f1, "-", color=C_LEARNED, lw=2, label="selective macro-F1")
+    ax.set_xlabel("payoff  o"); ax.set_ylabel("macro-F1")
+    ax.set_title("Regular vs selective macro-F1 (single model)"); ax.legend()
     fig.tight_layout(); save(fig, "fig_maude_regular_vs_selective"); plt.show()
-    print(f"fixed model o={base_o}: regular acc {reg_acc:.4f} (flat), macro-F1 {reg_f1:.4f} (flat)")
-    print("selective curves rise as coverage falls; regular stays constant (same model).")
+    print(pd.DataFrame({"o": o_grid, "reject_thresh_1/o": np.round(tau, 3),
+                        "coverage": np.round(cov, 3), "selective_acc": np.round(sel_acc, 3),
+                        "selective_macroF1": np.round(sel_f1, 3)}).to_string(index=False))
+    print(f"regular (flat): acc {reg_acc:.4f}, macro-F1 {reg_f1:.4f}")
 else:
-    print("no base-o payoff runs loaded")
+    print("no abstention runs loaded")
 '''
 
 OPTIMAL = '''# Best operating points. "Best learned" = highest learned selective accuracy at the
@@ -329,9 +340,10 @@ SECTIONS = [
      "**Saved: `fig_maude_gain_vs_o`.**", GAIN_VS_O),
     ("### Risk-coverage curves\\n\\nSelective accuracy vs coverage at the base payoff, learned "
      "reject vs confidence baseline. **Saved: `fig_maude_risk_coverage`.**", RISK_COVERAGE),
-    ("## Regular vs selective (paper comparison)\\n\\nONE fixed model (base `o`), reject threshold "
-     "swept: regular accuracy is the FLAT full-coverage reference, selective accuracy rises as "
-     "coverage drops. Accuracy + macro-F1. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
+    ("## Regular vs selective across o (paper comparison)\\n\\nONE fixed model (the "
+     "highest-selective-accuracy abstention config), with `o` applied as an inference reject "
+     "threshold (predict if `p_max >= 1/o`). Regular accuracy is the FLAT full-coverage reference; "
+     "selective accuracy varies with `o`. Accuracy + macro-F1. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
     ("## Effect of the training payoff o\\n\\nHow `o` changes the MODEL (forced accuracy varies "
      "because each `o` is a different model -- not the regular-vs-selective comparison above). "
      "**Saved: `fig_maude_metrics_vs_o`.**", METRICS_VS_O),
