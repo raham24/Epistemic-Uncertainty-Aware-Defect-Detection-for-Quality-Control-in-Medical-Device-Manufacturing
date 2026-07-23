@@ -37,10 +37,11 @@ OUT_DIR = "real-data/results/cluster"
 # Seeds every configuration is trained at (the top-level replication axis).
 SEEDS = [int(s) for s in os.environ.get("RCA_SEEDS", "0,1,2,3,4").split(",") if s.strip() != ""]
 
-# BASE model config (SEED-INDEPENDENT). Mirrors the original sklearn MLP shape, so a
-# base run == the standalone maude_product_problem_abstention_mlp.py defaults.
+# BASE model config (SEED-INDEPENDENT). Mirrors the sklearn MLP shape; the task is
+# the 4-class MAUDE severity label, so `loss` and `class_weight` are axes too.
 BASE = {
-    "o": 2.0, "hidden": "256,128", "dropout": 0.0, "lr": 0.001, "epochs": 80,
+    "loss": "abstention", "o": 2.0, "class_weight": "none",
+    "hidden": "256,128", "dropout": 0.0, "lr": 0.001, "epochs": 80,
 }
 
 # study axis grids
@@ -48,9 +49,10 @@ O_GRID = [round(1.0 + 0.1 * i, 1) for i in range(31)]       # 1.0, 1.1, ... 4.0
 HIDDEN_GRID = ["128,64", "256,128", "512,256", "256,128,64"]
 DROPOUT_GRID = [0.0, 0.1, 0.2, 0.3]
 LR_GRID = [0.0003, 0.001, 0.003]
+CW_GRID = ["none", "sqrt", "inverse"]                       # class weighting (skew)
 
 # axes that uniquely identify a CONFIGURATION (the de-dup signature; seed excluded).
-AXES = ["o", "hidden", "dropout", "lr", "epochs"]
+AXES = ["loss", "o", "class_weight", "hidden", "dropout", "lr", "epochs"]
 
 
 def _emit(configs: dict, study: str, **over) -> None:
@@ -67,9 +69,14 @@ def _emit(configs: dict, study: str, **over) -> None:
 
 def build_configs() -> list[dict]:
     configs: dict = {}
+    # core -- the plain cross-entropy baseline (class-weighted) vs base abstention
+    _emit(configs, "core", loss="ce", class_weight="sqrt")
     # payoff -- the headline abstention sweep over o
     for o in O_GRID:
         _emit(configs, "payoff", o=o)
+    # class_weight -- does weighting the skewed classes change the picture
+    for cw in CW_GRID:
+        _emit(configs, "class_weight", class_weight=cw)
     # capacity -- trunk width/depth at the base payoff
     for hidden in HIDDEN_GRID:
         _emit(configs, "capacity", hidden=hidden)
@@ -84,7 +91,11 @@ def build_configs() -> list[dict]:
 
 def _slug(c: dict, seed: int) -> str:
     """Readable run label: only the axes that differ from BASE, then the seed."""
-    parts = ["maude", f"o{c['o']:g}"]
+    parts = ["maude", c["loss"]]
+    if c["loss"] == "abstention":
+        parts.append(f"o{c['o']:g}")
+    if c["class_weight"] != BASE["class_weight"]:
+        parts.append("cw-" + c["class_weight"])
     if c["hidden"] != BASE["hidden"]:
         parts.append("h" + c["hidden"].replace(",", "x"))
     if c["dropout"] != BASE["dropout"]:
@@ -96,7 +107,8 @@ def _slug(c: dict, seed: int) -> str:
 
 def _args(c: dict, seed: int, run_id: str) -> str:
     """The exact train_from_cache.py CLI (every flag explicit -> reproducible)."""
-    return (f"--cache {CACHE} --o {c['o']:g} --seed {seed} --epochs {c['epochs']} "
+    return (f"--cache {CACHE} --loss {c['loss']} --o {c['o']:g} "
+            f"--class-weight {c['class_weight']} --seed {seed} --epochs {c['epochs']} "
             f"--hidden {c['hidden']} --dropout {c['dropout']:g} --lr {c['lr']:g} "
             f"--out {OUT_DIR}/{run_id}.json")
 
@@ -115,7 +127,8 @@ def main() -> None:
             run_id = f"{i:04d}_{_slug(c, seed)}"
             run_list.append({
                 "run_id": run_id,
-                "o": c["o"], "seed": seed, "hidden": c["hidden"],
+                "loss": c["loss"], "o": c["o"], "class_weight": c["class_weight"],
+                "seed": seed, "hidden": c["hidden"],
                 "dropout": c["dropout"], "lr": c["lr"], "epochs": c["epochs"],
                 "studies": sorted(set(c["studies"])),
                 "args": _args(c, seed, run_id),

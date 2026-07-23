@@ -445,16 +445,20 @@ def parse_record(record: Dict[str, Any]) -> Dict[str, Any]:
     if not text:
         text = flatten_text(record)
 
+    # Column order is human-facing (dataset_all.csv): keep event_type_raw and its
+    # derived `label` adjacent so the class is obvious. product_problem_flag is an
+    # unrelated MAUDE field kept only for provenance -- parked at the end so it is
+    # never mistaken for the label.
     row = {
         "report_id": first_nonempty(record.get("report_id"), record.get("mdr_report_key"), record.get("event_key")),
         "date_report": first_nonempty(record.get("date_report"), record.get("date_received"), record.get("date_of_event")),
         "manufacturer_name": first_nonempty(record.get("manufacturer_name"), record.get("manufacturer")),
-        "product_problem_flag": parse_flag(record.get("product_problem_flag")),  # kept for provenance
         "event_type_raw": event_type,
-        "text_raw": text,
-        "text": clean_text(text),
         # 4-class label from event_type + narrative severity (severity read on RAW text)
         "label": event_label(event_type, text),
+        "text_raw": text,
+        "text": clean_text(text),
+        "product_problem_flag": parse_flag(record.get("product_problem_flag")),  # provenance only
         "raw_json": json.dumps(record, ensure_ascii=False),
     }
     return row
@@ -591,13 +595,17 @@ def build_feature_matrix(
 # Learned-abstention MLP (replaces the sklearn MLPClassifier)
 # --------------------------------------------------------------------------- #
 
-def abstention_term(logits: torch.Tensor, y: torch.Tensor, o: float) -> torch.Tensor:
+def abstention_term(logits: torch.Tensor, y: torch.Tensor, o: float,
+                    class_weight: Optional[torch.Tensor] = None) -> torch.Tensor:
     """Selective-classification term on one softmax head (lifted from mlp.py).
 
     Input: (B, k+1) logits whose LAST column is the abstain output, the true class
-           index y in [0, k-1], and the payoff o (> 0).
+           index y in [0, k-1], and the payoff o (> 0). Works for any number of
+           real classes k (binary or multi-class).
     Return: mean of -log(o*p_y + r), where p_y is the true-class prob and r the
-            abstain prob. r=0 reduces this to cross-entropy + const.
+            abstain prob. r=0 reduces this to cross-entropy + const. With a
+            class_weight vector (k,), the mean is class-weighted -- needed on the
+            skewed MAUDE data so the rare classes (e.g. Death) are not just abstained.
 
     Computed in log-space so o*p_y + r stays stable when both are tiny:
         log(o*p_y + r) = logsumexp([log p_y + log o, log r])   -- no eps, no spike
@@ -607,22 +615,30 @@ def abstention_term(logits: torch.Tensor, y: torch.Tensor, o: float) -> torch.Te
     log_r = log_probs[:, -1]                                 # log r (abstain col)
     log_o = torch.log(torch.tensor(o, device=log_probs.device, dtype=log_probs.dtype))
     log_z = torch.logsumexp(torch.stack([log_py + log_o, log_r], 0), 0)
-    return -log_z.mean()
+    term = -log_z                                            # per-sample loss
+    if class_weight is not None:
+        w = class_weight[y]                                 # per-sample weight
+        return (term * w).sum() / w.sum().clamp_min(1e-12)
+    return term.mean()
 
 
 class AbstentionMLP(nn.Module):
     """Single-head feedforward MLP, same shape as the original sklearn MLPClassifier
-    (hidden (256, 128), ReLU), but the output head is widened by one "abstain" column:
-    width = n_classes + 1. The last column is the learned reject prob r.
+    (hidden (256, 128), ReLU). Works for any number of classes (binary or the 4-class
+    MAUDE severity task). With abstain=True the head is widened by one "abstain"
+    column (width n_classes + 1, last column = learned reject prob r), used by the
+    abstention loss; with abstain=False it is a plain n_classes softmax (the ce loss).
 
     "Same number of heads" as the original: ONE classification head. The abstain
     column is an extra output ON that head, not a second head.
     """
 
     def __init__(self, n_features: int, n_classes: int = 2,
-                 hidden: Tuple[int, ...] = HIDDEN, dropout: float = DROPOUT) -> None:
+                 hidden: Tuple[int, ...] = HIDDEN, dropout: float = DROPOUT,
+                 abstain: bool = True) -> None:
         super().__init__()
         self.n_classes = n_classes
+        self.abstain = abstain
         layers: List[nn.Module] = []
         d = n_features
         for w in hidden:
@@ -631,21 +647,38 @@ class AbstentionMLP(nn.Module):
                 layers.append(nn.Dropout(dropout))
             d = w
         self.trunk = nn.Sequential(*layers)
-        self.head = nn.Linear(d, n_classes + 1)   # +1 abstain column
+        self.head = nn.Linear(d, n_classes + (1 if abstain else 0))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.head(self.trunk(x))           # (B, n_classes + 1) logits
+        return self.head(self.trunk(x))           # (B, n_classes [+1]) logits
 
     @torch.no_grad()
     def predict(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Return renormalized real-class probabilities (2-col, sum to 1) plus the
-        abstain prob. The 2-col probs are the drop-in analogue of sklearn's
-        predict_proba, so the ORIGINAL confidence-threshold rule applies unchanged."""
+        """Return real-class probabilities (n_classes-wide, sum to 1) plus the abstain
+        prob (0 when abstain=False). `proba` is the drop-in analogue of sklearn's
+        predict_proba, so the max-prob confidence-threshold rule applies unchanged."""
         self.eval()
-        probs = F.softmax(self.forward(x), dim=1)          # (B, n_classes + 1)
+        probs = F.softmax(self.forward(x), dim=1)
+        if not self.abstain:
+            zeros = torch.zeros(probs.shape[0], device=probs.device, dtype=probs.dtype)
+            return {"proba": probs, "abstain_prob": zeros}
         real = probs[:, : self.n_classes]
         real = real / real.sum(dim=1, keepdim=True).clamp_min(1e-12)   # renormalize
         return {"proba": real, "abstain_prob": probs[:, self.n_classes]}
+
+
+def class_weights(y: np.ndarray, n_classes: int, mode: str) -> Optional[torch.Tensor]:
+    """Class weights normalized to mean 1 (None if mode == 'none'). Ported from
+    mlp.py. 'inverse' = 1/count, 'sqrt' = 1/sqrt(count) -- gentler. Matters on the
+    natural-proportion MAUDE data, where Malfunction dominates and Death is rare."""
+    if mode == "none":
+        return None
+    counts = np.bincount(y, minlength=n_classes).astype(np.float64)
+    w = 1.0 / np.clip(counts, 1, None)
+    if mode == "sqrt":
+        w = np.sqrt(w)
+    w = w / w.mean()
+    return torch.tensor(w, dtype=torch.float32)
 
 
 def train_abstention_mlp(
@@ -663,15 +696,33 @@ def train_abstention_mlp(
     batch: int,
     epochs: int,
     patience: int,
+    n_classes: Optional[int] = None,
+    loss: str = "abstention",
+    class_weight_mode: str = "none",
 ) -> AbstentionMLP:
-    """Train the abstention MLP with the -log(o*p_y + r) term, early-stopping on
-    validation loss (mirrors the original's early_stopping / n_iter_no_change)."""
+    """Train the single-head MLP, early-stopping on validation loss (mirrors the
+    original's early_stopping / n_iter_no_change). Two losses, like mlp.py:
+      abstention : -log(o*p_y + r) on an (n_classes+1)-wide head (learned reject).
+      ce         : plain (class-weighted) cross-entropy on an n_classes-wide head.
+    n_classes is inferred from the labels when not given, so the same code trains the
+    binary product-problem task and the 4-class MAUDE severity task."""
     from torch.utils.data import DataLoader, TensorDataset
 
     set_seed(seed)
-    model = AbstentionMLP(n_features=X_train.shape[1], n_classes=2,
-                          hidden=hidden, dropout=dropout).to(device)
+    if n_classes is None:
+        n_classes = int(max(int(y_train.max()), int(y_val.max()))) + 1
+    abstain = loss == "abstention"
+    model = AbstentionMLP(n_features=X_train.shape[1], n_classes=n_classes,
+                          hidden=hidden, dropout=dropout, abstain=abstain).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    cw = class_weights(y_train, n_classes, class_weight_mode)
+    cw = cw.to(device) if cw is not None else None
+
+    def loss_fn(logits: torch.Tensor, yb: torch.Tensor) -> torch.Tensor:
+        if abstain:
+            return abstention_term(logits, yb, o, class_weight=cw)
+        return F.cross_entropy(logits, yb, weight=cw)
 
     xt = torch.from_numpy(X_train.astype(np.float32))
     yt = torch.from_numpy(y_train.astype(np.int64))
@@ -688,15 +739,15 @@ def train_abstention_mlp(
         for xb, yb in dl:
             xb, yb = xb.to(device), yb.to(device)
             opt.zero_grad()
-            loss = abstention_term(model(xb), yb, o)
-            if not torch.isfinite(loss):
+            loss_val = loss_fn(model(xb), yb)
+            if not torch.isfinite(loss_val):
                 raise FloatingPointError(f"non-finite loss at epoch {ep}")
-            loss.backward()
+            loss_val.backward()
             opt.step()
 
         model.eval()
         with torch.no_grad():
-            val_loss = float(abstention_term(model(xv), yv, o))
+            val_loss = float(loss_fn(model(xv), yv))
         print(f"  epoch {ep:2d}  val_loss {val_loss:.4f}")
         if val_loss < best_val - 1e-4:
             best_val, waited = val_loss, 0
@@ -714,7 +765,7 @@ def train_abstention_mlp(
 
 @torch.no_grad()
 def model_outputs(model: AbstentionMLP, X: np.ndarray, device: str) -> Tuple[np.ndarray, np.ndarray]:
-    """Return (proba [N,2] renormalized real-class, abstain_prob [N])."""
+    """Return (proba [N, n_classes] real-class probs, abstain_prob [N])."""
     out = model.predict(torch.from_numpy(X.astype(np.float32)).to(device))
     return out["proba"].cpu().numpy(), out["abstain_prob"].cpu().numpy()
 
@@ -724,9 +775,12 @@ def model_outputs(model: AbstentionMLP, X: np.ndarray, device: str) -> Tuple[np.
 # --------------------------------------------------------------------------- #
 
 def selective_metrics(y_true: np.ndarray, proba: np.ndarray, keep: np.ndarray) -> Dict[str, Any]:
-    """Metrics on the ACCEPTED (kept) subset. keep is a boolean mask. This is the
-    shared core for both the confidence baseline and the learned-reject curve."""
-    y_pred = (proba[:, 1] >= 0.5).astype(int)
+    """Metrics on the ACCEPTED (kept) subset. keep is a boolean mask. Multi-class:
+    prediction is argmax over the real-class probabilities (for binary this is the
+    same as the >=0.5 threshold), and precision/recall/F1 are MACRO-averaged so the
+    rare MAUDE classes count equally. Shared by the confidence baseline and the
+    learned-reject curve."""
+    y_pred = proba.argmax(axis=1)
     coverage = float(keep.mean())
     if keep.sum() == 0:
         return {
@@ -739,12 +793,12 @@ def selective_metrics(y_true: np.ndarray, proba: np.ndarray, keep: np.ndarray) -
         }
     yt, yp = y_true[keep], y_pred[keep]
     precision, recall, _, _ = precision_recall_fscore_support(
-        yt, yp, average="binary", zero_division=0,
+        yt, yp, average="macro", zero_division=0,
     )
     return {
         "coverage": coverage,
         "selective_accuracy": float(accuracy_score(yt, yp)),
-        "selective_f1": float(f1_score(yt, yp, zero_division=0)),
+        "selective_f1": float(f1_score(yt, yp, average="macro", zero_division=0)),
         "selective_precision": float(precision),
         "selective_recall": float(recall),
         "selective_balanced_accuracy": float(balanced_accuracy_score(yt, yp)),
@@ -885,16 +939,18 @@ def main() -> None:
         print(json.dumps(payload, indent=2))
         return
 
-    # The single-head model + binary metrics below are still 2-class. The scraper now
-    # emits a 4-class label (Malfunction/Basic injury/Serious injury/Death), so the
-    # in-script training path is disabled until the MLP is updated for >2 classes.
-    # Use --save-dataset-only (or the cluster prep) to build the dataset meanwhile.
+    # The MLP itself is multi-class (see train_abstention_mlp / AbstentionMLP), but the
+    # forced/selective metrics INLINE in this convenience script below are still binary.
+    # The multi-class training + metrics live in the cluster path (prep_dataset.py ->
+    # train_from_cache.py). So for the 4-class MAUDE label, build the dataset here and
+    # train there.
     n_classes = int(df["label"].nunique())
     if n_classes > 2:
         raise SystemExit(
-            f"dataset has {n_classes} classes ({sorted(df['label'].unique())}); the "
-            f"in-script abstention MLP is still binary. Re-run with --save-dataset-only "
-            f"to just build the dataset, or update the MLP for multi-class first.")
+            f"dataset has {n_classes} classes ({sorted(df['label'].unique())}); this "
+            f"single-shot script's inline metrics are binary. Re-run with "
+            f"--save-dataset-only, or use the cluster path "
+            f"(prep_dataset.py -> train_from_cache.py) which is multi-class.")
 
     X_train, X_val, X_test, feature_names, text_pipe = build_feature_matrix(
         train_df, val_df, test_df,

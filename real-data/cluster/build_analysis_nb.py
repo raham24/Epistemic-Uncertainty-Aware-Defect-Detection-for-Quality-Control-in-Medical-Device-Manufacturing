@@ -70,16 +70,20 @@ def load_rows():
         if not p.exists():
             missing.append(r["run_id"]); continue
         m = json.loads(p.read_text())
-        lr_, cb = m["learned_reject"], m["confidence_baseline"]
+        lr_ = m.get("learned_reject") or {}        # None for the ce baseline (no abstain)
+        cb = m["confidence_baseline"]
+        f = m["forced"]
         rows.append({
-            "run_id": r["run_id"], "o": r["o"], "seed": r["seed"],
+            "run_id": r["run_id"], "loss": r.get("loss"), "o": r["o"],
+            "class_weight": r.get("class_weight"), "seed": r["seed"],
             "hidden": r.get("hidden"), "dropout": r.get("dropout"), "lr": r.get("lr"),
             "studies": r.get("studies", []),
-            "forced_acc": m["forced"]["accuracy"], "forced_f1": m["forced"]["f1"],
-            "forced_auc": m["forced"]["roc_auc"], "mean_abstain": m["mean_abstain_prob"],
-            "learned_cov": lr_["coverage"], "learned_sel_acc": lr_["selective_accuracy"],
+            "forced_acc": f["accuracy"], "forced_f1": f.get("f1"),
+            "forced_macro_f1": f.get("macro_f1"), "forced_auc": f.get("roc_auc"),
+            "mean_abstain": m["mean_abstain_prob"],
+            "learned_cov": lr_.get("coverage"), "learned_sel_acc": lr_.get("selective_accuracy"),
             "conf_cov": cb["coverage"], "conf_sel_acc": cb["selective_accuracy"],
-            "gain_vs_conf": m["gain_vs_conf"],
+            "gain_vs_conf": m.get("gain_vs_conf"),
             "_metrics_path": str(p),
         })
     if missing:
@@ -133,14 +137,19 @@ def save(fig, name):
     print("saved", FIGS / f"{name}.png")
 '''
 
-FORCED = '''# Sanity: forced (full-coverage) test accuracy across the whole sweep. This is the
-# plain classifier number -- how well the redacted narrative predicts the product-
-# problem flag at all. The abstention only changes what we DECLINE to predict.
+FORCED = '''# Sanity: forced (full-coverage) test metrics across the whole sweep. This is the
+# plain classifier number -- how well the redacted narrative predicts the 4-class
+# severity label at all. On the skewed classes, MACRO-F1 matters more than accuracy
+# (accuracy can be high just by predicting Malfunction). Abstention only changes what
+# we DECLINE to predict, not these full-coverage numbers.
 if len(df):
     print("forced accuracy  : %.4f +/- %.4f" % (df.forced_acc.mean(), df.forced_acc.std()))
+    print("forced macro-F1  : %.4f +/- %.4f" % (df.forced_macro_f1.mean(), df.forced_macro_f1.std()))
     print("forced ROC-AUC   : %.4f" % df.forced_auc.dropna().mean())
     print("mean abstain prob: %.4f" % df.mean_abstain.mean())
-    display(df.sort_values(["o", "seed"]).head(12))
+    display(df.sort_values(["loss", "o", "seed"])
+              [["run_id", "loss", "o", "class_weight", "forced_acc",
+                "forced_macro_f1", "learned_sel_acc", "conf_sel_acc"]].head(12))
 else:
     print("no runs loaded yet -- run the sweep first")
 '''
@@ -214,9 +223,10 @@ else:
     print("no payoff-study runs loaded")
 '''
 
-STUDIES = '''# Hyperparameter studies: gain_vs_conf and forced accuracy under capacity (trunk
-# width/depth), dropout, and lr -- each varied one at a time around BASE.
-studies = [("capacity", "hidden"), ("dropout", "dropout"), ("lr", "lr")]
+STUDIES = '''# Hyperparameter studies: gain_vs_conf and forced accuracy under class weighting,
+# capacity (trunk width/depth), dropout, and lr -- each varied one at a time.
+studies = [("class_weight", "class_weight"), ("capacity", "hidden"),
+           ("dropout", "dropout"), ("lr", "lr")]
 present = [(s, k) for s, k in studies if len(study(s))]
 if present:
     fig, axes = plt.subplots(1, len(present), figsize=(5.5 * len(present), 4.2), squeeze=False)
@@ -232,6 +242,54 @@ if present:
     fig.tight_layout(); save(fig, "fig_maude_studies"); plt.show()
 else:
     print("no study runs loaded")
+'''
+
+REG_VS_SEL = '''# REGULAR vs SELECTIVE accuracy across the payoff o -- the core paper comparison.
+#   regular   = forced, full-coverage accuracy: predict on EVERY test report.
+#   selective = accuracy only on the rows the model did NOT abstain on (learned
+#               reject r < H); the declined rows do not count.
+# Accuracy is dominated by the majority class (Malfunction), so the second panel
+# repeats the split on MACRO-F1, which weights the rare classes (Serious injury,
+# Death) equally -- the honest view of what abstaining actually buys.
+H = 0.5   # abstain cutoff on r: rows with r >= H are declined (tune 0.3 / 0.5 / 0.7)
+
+def sel_at_h(path, H, field):
+    """(value, coverage) at abstain threshold H from a run's reject_curve."""
+    m = json.loads(Path(path).read_text())
+    c = pd.DataFrame(m.get("reject_curve") or []).dropna(subset=[field]) \\
+        if m.get("reject_curve") else pd.DataFrame()
+    if c.empty:
+        return np.nan, np.nan
+    i = (c["h"] - H).abs().idxmin()
+    return float(c.loc[i, field]), float(c.loc[i, "coverage"])
+
+pay = study("payoff").copy()
+if len(pay):
+    paths = pay["_metrics_path"].tolist()
+    pay["sel_acc"] = [sel_at_h(p, H, "selective_accuracy")[0] for p in paths]
+    pay["sel_f1"]  = [sel_at_h(p, H, "selective_f1")[0] for p in paths]
+    pay["cov"]     = [sel_at_h(p, H, "selective_accuracy")[1] for p in paths]
+    agg = (pay.groupby("o")
+              .agg(reg_acc=("forced_acc", "mean"), sel_acc=("sel_acc", "mean"),
+                   reg_f1=("forced_macro_f1", "mean"), sel_f1=("sel_f1", "mean"),
+                   cov=("cov", "mean"))
+              .reset_index().sort_values("o"))
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+    ax = axes[0]
+    ax.plot(agg["o"], agg["reg_acc"], "o--", color="0.35", label="regular (full coverage)")
+    ax.plot(agg["o"], agg["sel_acc"], "o-", color=C_LEARNED, label=f"selective (r < {H})")
+    ax.set_xlabel("payoff  o"); ax.set_ylabel("accuracy")
+    ax.set_title("Regular vs selective accuracy"); ax.legend()
+    ax = axes[1]
+    ax.plot(agg["o"], agg["reg_f1"], "s--", color="0.35", label="regular macro-F1")
+    ax.plot(agg["o"], agg["sel_f1"], "s-", color=C_LEARNED, label=f"selective macro-F1 (r < {H})")
+    ax.set_xlabel("payoff  o"); ax.set_ylabel("macro-F1")
+    ax.set_title("Regular vs selective macro-F1"); ax.legend()
+    fig.tight_layout(); save(fig, "fig_maude_regular_vs_selective"); plt.show()
+    # coverage matters: a selective number at low coverage is scored on fewer, easier rows
+    print(agg.to_string(index=False))
+else:
+    print("no payoff-study runs loaded")
 '''
 
 OPTIMAL = '''# Best operating points. "Best learned" = highest learned selective accuracy at the
@@ -263,6 +321,9 @@ SECTIONS = [
     ("### Risk-coverage curves\\n\\nSelective accuracy vs coverage at the base payoff, learned "
      "reject vs confidence baseline. **Saved: `fig_maude_risk_coverage`.**", RISK_COVERAGE),
     ("### Accuracy + abstention behavior across o\\n\\n**Saved: `fig_maude_metrics_vs_o`.**", METRICS_VS_O),
+    ("## Regular vs selective accuracy (paper comparison)\\n\\nForced full-coverage accuracy vs "
+     "accuracy on the non-abstained predictions, across `o`, on both accuracy and macro-F1. "
+     "**Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
     ("## Hyperparameter studies\\n\\nCapacity / dropout / lr. **Saved: `fig_maude_studies`.**", STUDIES),
     ("## Optimal configurations", OPTIMAL),
 ]
