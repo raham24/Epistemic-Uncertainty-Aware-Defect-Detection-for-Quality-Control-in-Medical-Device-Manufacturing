@@ -201,9 +201,14 @@ else:
     print("no base-o runs loaded")
 '''
 
-METRICS_VS_O = '''# Forced accuracy, selective accuracy (learned reject @ target coverage), and mean
-# abstain prob as o sweeps. Larger o -> the payoff rewards predicting -> the model
-# abstains LESS (mean abstain prob falls, coverage rises).
+METRICS_VS_O = '''# EFFECT OF THE TRAINING PAYOFF o (a MODEL study, not the regular-vs-selective
+# comparison). Because o is a TRAINING hyperparameter, each o is a DIFFERENT model, so
+# forced (full-coverage) accuracy legitimately CHANGES across o: at low o the reject
+# column soaks up probability mass and the classifier under-trains (forced accuracy
+# sags toward the majority class), then recovers as o rewards predicting. That is why
+# regular accuracy must NOT be read off this axis -- for the fixed-model regular-vs-
+# selective comparison see the previous section. Larger o -> abstains LESS (mean
+# abstain prob falls, coverage rises).
 pay = study("payoff")
 if len(pay):
     agg = seed_mean(pay, ["o"], ["forced_acc", "learned_sel_acc", "conf_sel_acc",
@@ -244,52 +249,56 @@ else:
     print("no study runs loaded")
 '''
 
-REG_VS_SEL = '''# REGULAR vs SELECTIVE accuracy across the payoff o -- the core paper comparison.
-#   regular   = forced, full-coverage accuracy: predict on EVERY test report.
-#   selective = accuracy only on the rows the model did NOT abstain on (learned
-#               reject r < H); the declined rows do not count.
-# Accuracy is dominated by the majority class (Malfunction), so the second panel
-# repeats the split on MACRO-F1, which weights the rare classes (Serious injury,
-# Death) equally -- the honest view of what abstaining actually buys.
-H = 0.5   # abstain cutoff on r: rows with r >= H are declined (tune 0.3 / 0.5 / 0.7)
+REG_VS_SEL = '''# REGULAR vs SELECTIVE, the paper comparison -- on ONE FIXED model (the base payoff
+# o), sweeping the reject threshold at inference. This is the standard selective-
+# classification view: REGULAR accuracy is the single full-coverage point, so it is a
+# FLAT reference that does NOT change as you abstain more; SELECTIVE accuracy is the
+# curve, rising as coverage drops (you decline the ambiguous rows). Because o is a
+# TRAINING hyperparameter, comparing regular accuracy ACROSS o would compare different
+# models -- that belongs in the o-effect study, not here. Two panels: accuracy and
+# MACRO-F1 (weights the rare classes -- Serious injury, Death -- equally).
+base_o = manifest["base"]["o"]
+sub = study("payoff")
+sub = sub[sub["o"] == base_o] if len(sub) else sub
+if len(sub):
+    grid = np.linspace(0.3, 1.0, 40)
+    def mean_curve(field):
+        """Seed-averaged reject curve: interpolate each seed's (coverage, field) onto
+        a common coverage grid, then average."""
+        ys = []
+        for _, r in sub.iterrows():
+            m = json.loads(Path(r["_metrics_path"]).read_text())
+            c = pd.DataFrame(m.get("reject_curve") or [])
+            if not len(c):
+                continue
+            c = c.dropna(subset=["coverage", field])
+            if len(c) < 2:
+                continue
+            order = np.argsort(c["coverage"].to_numpy())
+            ys.append(np.interp(grid, c["coverage"].to_numpy()[order],
+                                c[field].to_numpy()[order], left=np.nan, right=np.nan))
+        return np.nanmean(np.vstack(ys), axis=0) if ys else np.full_like(grid, np.nan)
 
-def sel_at_h(path, H, field):
-    """(value, coverage) at abstain threshold H from a run's reject_curve."""
-    m = json.loads(Path(path).read_text())
-    c = pd.DataFrame(m.get("reject_curve") or []).dropna(subset=[field]) \\
-        if m.get("reject_curve") else pd.DataFrame()
-    if c.empty:
-        return np.nan, np.nan
-    i = (c["h"] - H).abs().idxmin()
-    return float(c.loc[i, field]), float(c.loc[i, "coverage"])
-
-pay = study("payoff").copy()
-if len(pay):
-    paths = pay["_metrics_path"].tolist()
-    pay["sel_acc"] = [sel_at_h(p, H, "selective_accuracy")[0] for p in paths]
-    pay["sel_f1"]  = [sel_at_h(p, H, "selective_f1")[0] for p in paths]
-    pay["cov"]     = [sel_at_h(p, H, "selective_accuracy")[1] for p in paths]
-    agg = (pay.groupby("o")
-              .agg(reg_acc=("forced_acc", "mean"), sel_acc=("sel_acc", "mean"),
-                   reg_f1=("forced_macro_f1", "mean"), sel_f1=("sel_f1", "mean"),
-                   cov=("cov", "mean"))
-              .reset_index().sort_values("o"))
+    reg_acc = float(sub["forced_acc"].mean())          # coverage=1 anchor (constant)
+    reg_f1 = float(sub["forced_macro_f1"].mean())
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
     ax = axes[0]
-    ax.plot(agg["o"], agg["reg_acc"], "o--", color="0.35", label="regular (full coverage)")
-    ax.plot(agg["o"], agg["sel_acc"], "o-", color=C_LEARNED, label=f"selective (r < {H})")
-    ax.set_xlabel("payoff  o"); ax.set_ylabel("accuracy")
-    ax.set_title("Regular vs selective accuracy"); ax.legend()
+    ax.axhline(reg_acc, color="0.35", ls="--", label=f"regular (full coverage) = {reg_acc:.3f}")
+    ax.plot(grid, mean_curve("selective_accuracy"), "-", color=C_LEARNED, lw=2,
+            label="selective (reject swept)")
+    ax.set_xlabel("coverage"); ax.set_ylabel("accuracy")
+    ax.set_title(f"Regular vs selective accuracy (fixed model, o={base_o})"); ax.legend()
     ax = axes[1]
-    ax.plot(agg["o"], agg["reg_f1"], "s--", color="0.35", label="regular macro-F1")
-    ax.plot(agg["o"], agg["sel_f1"], "s-", color=C_LEARNED, label=f"selective macro-F1 (r < {H})")
-    ax.set_xlabel("payoff  o"); ax.set_ylabel("macro-F1")
-    ax.set_title("Regular vs selective macro-F1"); ax.legend()
+    ax.axhline(reg_f1, color="0.35", ls="--", label=f"regular macro-F1 = {reg_f1:.3f}")
+    ax.plot(grid, mean_curve("selective_f1"), "-", color=C_LEARNED, lw=2,
+            label="selective macro-F1 (reject swept)")
+    ax.set_xlabel("coverage"); ax.set_ylabel("macro-F1")
+    ax.set_title(f"Regular vs selective macro-F1 (fixed model, o={base_o})"); ax.legend()
     fig.tight_layout(); save(fig, "fig_maude_regular_vs_selective"); plt.show()
-    # coverage matters: a selective number at low coverage is scored on fewer, easier rows
-    print(agg.to_string(index=False))
+    print(f"fixed model o={base_o}: regular acc {reg_acc:.4f} (flat), macro-F1 {reg_f1:.4f} (flat)")
+    print("selective curves rise as coverage falls; regular stays constant (same model).")
 else:
-    print("no payoff-study runs loaded")
+    print("no base-o payoff runs loaded")
 '''
 
 OPTIMAL = '''# Best operating points. "Best learned" = highest learned selective accuracy at the
@@ -320,10 +329,12 @@ SECTIONS = [
      "**Saved: `fig_maude_gain_vs_o`.**", GAIN_VS_O),
     ("### Risk-coverage curves\\n\\nSelective accuracy vs coverage at the base payoff, learned "
      "reject vs confidence baseline. **Saved: `fig_maude_risk_coverage`.**", RISK_COVERAGE),
-    ("### Accuracy + abstention behavior across o\\n\\n**Saved: `fig_maude_metrics_vs_o`.**", METRICS_VS_O),
-    ("## Regular vs selective accuracy (paper comparison)\\n\\nForced full-coverage accuracy vs "
-     "accuracy on the non-abstained predictions, across `o`, on both accuracy and macro-F1. "
-     "**Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
+    ("## Regular vs selective (paper comparison)\\n\\nONE fixed model (base `o`), reject threshold "
+     "swept: regular accuracy is the FLAT full-coverage reference, selective accuracy rises as "
+     "coverage drops. Accuracy + macro-F1. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
+    ("## Effect of the training payoff o\\n\\nHow `o` changes the MODEL (forced accuracy varies "
+     "because each `o` is a different model -- not the regular-vs-selective comparison above). "
+     "**Saved: `fig_maude_metrics_vs_o`.**", METRICS_VS_O),
     ("## Hyperparameter studies\\n\\nCapacity / dropout / lr. **Saved: `fig_maude_studies`.**", STUDIES),
     ("## Optimal configurations", OPTIMAL),
 ]
