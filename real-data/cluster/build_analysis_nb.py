@@ -249,53 +249,115 @@ else:
     print("no study runs loaded")
 '''
 
-REG_VS_SEL = '''# REGULAR vs SELECTIVE accuracy -- the plain comparison, on the single best model
-# (the abstention config with the highest selective accuracy).
-#   regular   = accuracy predicting on EVERY test row (full coverage).
-#   selective = accuracy only on the rows the model did NOT abstain on.
-# Left: the two headline numbers side by side (selective at the model's target
-# coverage). Right: selective accuracy as you abstain more (coverage swept), with
-# regular as the flat reference. Uses the reject curve already in each run -- no
-# retrain, no NaN.
-ab = df[df["loss"] == "abstention"].dropna(subset=["learned_sel_acc"]) if len(df) else df
-if len(ab):
-    keys = ["o", "class_weight", "hidden", "dropout", "lr"]
-    grp = ab.groupby(keys, dropna=False)["learned_sel_acc"].mean().reset_index()
-    best = grp.loc[grp["learned_sel_acc"].idxmax()]
-    rows = ab[np.logical_and.reduce([ab[k] == best[k] for k in keys])]   # its seeds
-    reg = float(rows["forced_acc"].mean())                 # accuracy on ALL rows
-    sel = float(rows["learned_sel_acc"].mean())            # accuracy on kept rows
-    cov = float(rows["learned_cov"].mean())
-    print("single best model: " + ", ".join(f"{k}={best[k]}" for k in keys))
-    print(f"regular  (full-coverage) accuracy : {reg:.4f}")
-    print(f"selective accuracy @ {cov:.0%} coverage : {sel:.4f}   (+{sel - reg:.4f})")
-
-    grid = np.linspace(0.3, 1.0, 40)
-    def sel_curve(field):
+CHOOSER = '''# CHOOSE the operating point. Each o trains a different model; each model trades
+# coverage for selective accuracy by how much it abstains. This plots selective
+# accuracy vs coverage for EVERY o (color = o), so you can find an o that keeps GOOD
+# COVERAGE with GOOD ACCURACY -- not the highest accuracy at a tiny coverage. The table
+# gives selective accuracy at a few fixed coverages so you can pick a value numerically,
+# then set PICK_O in the next cell.
+import matplotlib.cm as cm
+from matplotlib.colors import Normalize
+pay = study("payoff")
+if len(pay):
+    o_vals = sorted(pay["o"].unique())
+    norm = Normalize(min(o_vals), max(o_vals)); cmap = cm.viridis
+    grid = np.linspace(0.2, 1.0, 60)
+    def cov_curve(o, field):
         ys = []
-        for _, r in rows.iterrows():
-            m = json.loads(Path(r["_metrics_path"]).read_text())
+        for p in pay[pay["o"] == o]["_metrics_path"]:
+            m = json.loads(Path(p).read_text())
             c = pd.DataFrame(m.get("reject_curve") or []).dropna(subset=["coverage", field])
             if len(c) < 2:
                 continue
-            order = np.argsort(c["coverage"].to_numpy())
-            ys.append(np.interp(grid, c["coverage"].to_numpy()[order],
-                                c[field].to_numpy()[order], left=np.nan, right=np.nan))
+            c = c.sort_values("coverage")
+            ys.append(np.interp(grid, c["coverage"], c[field], left=np.nan, right=np.nan))
         return np.nanmean(np.vstack(ys), axis=0) if ys else np.full_like(grid, np.nan)
 
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    for o in o_vals:
+        ax.plot(grid, cov_curve(o, "selective_accuracy"), color=cmap(norm(o)), lw=1.3)
+    ax.set_xlabel("coverage (fraction predicted)"); ax.set_ylabel("selective accuracy")
+    ax.set_title("Selective accuracy vs coverage, one line per payoff o")
+    fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label="payoff o")
+    save(fig, "fig_maude_coverage_accuracy_by_o"); plt.show()
+
+    targets = [0.70, 0.80, 0.90, 0.95]
+    tbl = []
+    for o in o_vals:
+        ca = cov_curve(o, "selective_accuracy")
+        row = {"o": o}
+        for tc in targets:
+            row[f"acc@cov{tc:g}"] = round(float(ca[int(np.argmin(np.abs(grid - tc)))]), 3)
+        tbl.append(row)
+    print("selective accuracy at fixed coverages (pick the o that suits you):")
+    print(pd.DataFrame(tbl).to_string(index=False))
+else:
+    print("no payoff-study runs loaded")
+'''
+
+REG_VS_SEL = '''# REGULAR vs SELECTIVE accuracy on ONE chosen model. Selection is COVERAGE-AWARE:
+# by default it picks the o with the best selective accuracy AT the coverage you care
+# about (TARGET_COV) -- not the highest accuracy at some tiny coverage. Set PICK_O to a
+# specific o (from the chooser above) to override.
+#   regular   = accuracy predicting on EVERY test row (full coverage).
+#   selective = accuracy on the non-abstained rows, at coverage = TARGET_COV.
+PICK_O = None        # set e.g. 1.6 to force that model; None = auto-pick at TARGET_COV
+TARGET_COV = 0.80    # the coverage you want good accuracy at
+
+pay = study("payoff")
+def at_cov(path, cov, field):
+    m = json.loads(Path(path).read_text())
+    c = pd.DataFrame(m.get("reject_curve") or []).dropna(subset=["coverage", field])
+    if len(c) < 2:
+        return np.nan
+    c = c.sort_values("coverage")
+    return float(np.interp(cov, c["coverage"], c[field]))
+
+if len(pay):
+    o_vals = sorted(pay["o"].unique())
+    if PICK_O is not None:
+        chosen_o = PICK_O
+    else:
+        scores = {o: np.nanmean([at_cov(p, TARGET_COV, "selective_accuracy")
+                                 for p in pay[pay["o"] == o]["_metrics_path"]]) for o in o_vals}
+        chosen_o = max(o_vals, key=lambda o: (-1 if np.isnan(scores[o]) else scores[o]))
+    rows = pay[pay["o"] == chosen_o]
+    paths = rows["_metrics_path"].tolist()
+    reg = float(rows["forced_acc"].mean())                                  # all rows
+    sel = float(np.nanmean([at_cov(p, TARGET_COV, "selective_accuracy") for p in paths]))
+    sel_f1 = float(np.nanmean([at_cov(p, TARGET_COV, "selective_f1") for p in paths]))
+    print(f"chosen model: o={chosen_o} (auto = best selective acc at {TARGET_COV:.0%} coverage; "
+          f"set PICK_O to override)")
+    print(f"regular  (full-coverage) accuracy : {reg:.4f}")
+    print(f"selective accuracy @ {TARGET_COV:.0%} coverage : {sel:.4f}   (+{sel - reg:.4f})")
+    print(f"selective macro-F1 @ {TARGET_COV:.0%} coverage : {sel_f1:.4f}")
+
+    grid = np.linspace(0.3, 1.0, 40)
+    ys = []
+    for p in paths:
+        m = json.loads(Path(p).read_text())
+        c = pd.DataFrame(m.get("reject_curve") or []).dropna(subset=["coverage", "selective_accuracy"])
+        if len(c) < 2:
+            continue
+        c = c.sort_values("coverage")
+        ys.append(np.interp(grid, c["coverage"], c["selective_accuracy"], left=np.nan, right=np.nan))
+    sel_vs_cov = np.nanmean(np.vstack(ys), axis=0) if ys else np.full_like(grid, np.nan)
+
     fig, (a0, a1) = plt.subplots(1, 2, figsize=(12, 4.5))
-    a0.bar(["regular\\n(all rows)", f"selective\\n({cov:.0%} coverage)"], [reg, sel],
+    a0.bar(["regular\\n(all rows)", f"selective\\n({TARGET_COV:.0%} coverage)"], [reg, sel],
            color=["0.55", C_LEARNED])
     for i, v in enumerate([reg, sel]):
         a0.text(i, v + 0.01, f"{v:.3f}", ha="center")
-    a0.set_ylabel("accuracy"); a0.set_ylim(0, 1); a0.set_title("Regular vs selective accuracy")
+    a0.set_ylabel("accuracy"); a0.set_ylim(0, 1)
+    a0.set_title(f"Regular vs selective accuracy (o={chosen_o})")
     a1.axhline(reg, color="0.35", ls="--", label=f"regular = {reg:.3f}")
-    a1.plot(grid, sel_curve("selective_accuracy"), color=C_LEARNED, lw=2, label="selective")
+    a1.plot(grid, sel_vs_cov, color=C_LEARNED, lw=2, label="selective")
+    a1.axvline(TARGET_COV, color="0.7", ls=":", label=f"chosen coverage = {TARGET_COV:.0%}")
     a1.set_xlabel("coverage (fraction predicted)"); a1.set_ylabel("accuracy")
     a1.set_title("Selective accuracy vs coverage"); a1.legend()
     fig.tight_layout(); save(fig, "fig_maude_regular_vs_selective"); plt.show()
 else:
-    print("no abstention runs loaded")
+    print("no payoff-study runs loaded")
 '''
 
 OPTIMAL = '''# Best operating points. "Best learned" = highest learned selective accuracy at the
@@ -326,9 +388,12 @@ SECTIONS = [
      "**Saved: `fig_maude_gain_vs_o`.**", GAIN_VS_O),
     ("### Risk-coverage curves\\n\\nSelective accuracy vs coverage at the base payoff, learned "
      "reject vs confidence baseline. **Saved: `fig_maude_risk_coverage`.**", RISK_COVERAGE),
-    ("## Regular vs selective accuracy (paper comparison)\\n\\nSingle best model: accuracy on ALL "
-     "rows (regular) vs accuracy on the non-abstained rows (selective) -- two headline numbers, plus "
-     "selective accuracy across coverage with regular as a flat line. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
+    ("## Choose the operating point\\n\\nSelective accuracy vs coverage for every `o`, plus a table "
+     "of accuracy at fixed coverages -- so you can pick an `o` with good coverage AND accuracy. "
+     "**Saved: `fig_maude_coverage_accuracy_by_o`.**", CHOOSER),
+    ("## Regular vs selective accuracy (paper comparison)\\n\\nAccuracy on ALL rows (regular) vs on "
+     "the non-abstained rows (selective) for the chosen model. Coverage-aware selection: set "
+     "`TARGET_COV` (and optionally `PICK_O`) at the top of the cell. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
     ("## Effect of the training payoff o\\n\\nHow `o` changes the MODEL (forced accuracy varies "
      "because each `o` is a different model -- not the regular-vs-selective comparison above). "
      "**Saved: `fig_maude_metrics_vs_o`.**", METRICS_VS_O),
