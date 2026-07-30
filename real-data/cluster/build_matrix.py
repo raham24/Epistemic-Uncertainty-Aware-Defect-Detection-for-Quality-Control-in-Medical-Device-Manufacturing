@@ -1,32 +1,32 @@
-"""Build the MAUDE abstention-sweep matrix: one scraped dataset x a structured model
-sweep, replicated across multiple random SEEDS.
+"""Build the MAUDE abstention-sweep matrix: the FULL payoff sweep for EVERY
+hyperparameter config, so the notebook can auto-pick the best config and then show its
+o-sweep (nothing changes models midway).
 
 Single source of truth for the sweep (mirrors cluster/build_matrix.py for the
-synthetic pipeline). Unlike the synthetic sweep there is ONE real dataset (the
-scraped MAUDE cache), so the axis that varies is the model -- above all the
-abstention payoff `o`. Emits two files into real-data/cluster/:
+synthetic pipeline). There is ONE real dataset (the scraped MAUDE cache). The matrix
+is the CROSS PRODUCT of:
+
+  configs   one-factor-from-BASE hyperparameter variants: class_weight, capacity
+            (hidden), dropout, lr -- the settings to auto-pick the best from.
+  o         the payoff sweep, o in 1.0..5.0 step 0.1, run for EVERY config.
+
+So every config gets its own full o-sweep; the notebook ranks configs (forced macro-F1
+in the plain-classifier regime at the largest o), freezes the winner, and draws every
+figure from that one config's o-sweep. Emits into real-data/cluster/:
 
   runs.tsv       one line per training run:  run_id <TAB> train_from_cache args
-  manifest.json  the full structured matrix (configs + study tags + output paths)
-
-The sweep is a BASE config plus one-factor-at-a-time STUDIES; shared center points
-are de-duplicated (defined once, tagged with every study that wants them):
-
-  payoff     o in 1.0..4.0 step 0.1        -- coverage vs selective accuracy vs o (headline)
-  capacity   trunk width/depth             -- does a bigger net change the reject signal
-  dropout    dropout in {0,.1,.2,.3}       -- regularization
-  lr         Adam lr in {3e-4,1e-3,3e-3}   -- optimization
+  manifest.json  the structured matrix (configs + tags + output paths)
 
 SEEDS ARE A TOP-LEVEL AXIS: each seed-independent configuration is trained once per
 seed in SEEDS, so total runs = distinct configs x len(SEEDS). Set RCA_SEEDS
-(comma-separated), e.g. RCA_SEEDS=0,1,2,3,4.
+(comma-separated), e.g. RCA_SEEDS=0,1,2,3,4. This is a big matrix (configs x 41 o x
+seeds); submit.sh auto-chunks the training array past the Slurm array cap.
 
 Stdlib only. Re-run after editing the config blocks, then re-submit.
 """
 
 import json
 import os
-from collections import Counter
 from pathlib import Path
 
 # real-data/ is the parent of this cluster/ folder; paths are repo-root-relative.
@@ -37,6 +37,9 @@ OUT_DIR = "real-data/results/cluster"
 # Seeds every configuration is trained at (the top-level replication axis).
 SEEDS = [int(s) for s in os.environ.get("RCA_SEEDS", "0,1,2,3,4").split(",") if s.strip() != ""]
 
+# the non-o knobs that identify a hyperparameter CONFIG (what we auto-pick the best of).
+CONFIG_KEYS = ["class_weight", "hidden", "dropout", "lr"]
+
 # BASE model config (SEED-INDEPENDENT). Mirrors the sklearn MLP shape; the task is
 # the 4-class MAUDE severity label, so `loss` and `class_weight` are axes too.
 BASE = {
@@ -45,7 +48,7 @@ BASE = {
 }
 
 # study axis grids
-O_GRID = [round(1.0 + 0.1 * i, 1) for i in range(31)]       # 1.0, 1.1, ... 4.0
+O_GRID = [round(1.0 + 0.1 * i, 1) for i in range(41)]       # 1.0, 1.1, ... 5.0
 HIDDEN_GRID = ["128,64", "256,128", "512,256", "256,128,64"]
 DROPOUT_GRID = [0.0, 0.1, 0.2, 0.3]
 LR_GRID = [0.0003, 0.001, 0.003]
@@ -67,25 +70,35 @@ def _emit(configs: dict, study: str, **over) -> None:
     configs[sig] = cfg
 
 
-def build_configs() -> list[dict]:
-    configs: dict = {}
-    # core -- the plain cross-entropy baseline (class-weighted) vs base abstention
-    _emit(configs, "core", loss="ce", class_weight="sqrt")
-    # payoff -- the headline abstention sweep over o
-    for o in O_GRID:
-        _emit(configs, "payoff", o=o)
-    # class_weight -- does weighting the skewed classes change the picture
+def config_variants() -> list[dict]:
+    """The non-o hyperparameter configs to auto-pick the best from: BASE plus each knob
+    varied ONE AT A TIME (class_weight, capacity, dropout, lr). De-duplicated by the
+    (class_weight, hidden, dropout, lr) signature."""
+    seen: dict = {}
+
+    def add(**over):
+        cfg = {k: over.get(k, BASE[k]) for k in CONFIG_KEYS}
+        seen.setdefault(tuple(cfg[k] for k in CONFIG_KEYS), cfg)
+
+    add()                                       # BASE center point
     for cw in CW_GRID:
-        _emit(configs, "class_weight", class_weight=cw)
-    # capacity -- trunk width/depth at the base payoff
+        add(class_weight=cw)
     for hidden in HIDDEN_GRID:
-        _emit(configs, "capacity", hidden=hidden)
-    # dropout -- regularization strength
+        add(hidden=hidden)
     for do in DROPOUT_GRID:
-        _emit(configs, "dropout", dropout=do)
-    # lr -- Adam learning rate
+        add(dropout=do)
     for lr in LR_GRID:
-        _emit(configs, "lr", lr=lr)
+        add(lr=lr)
+    return list(seen.values())
+
+
+def build_configs() -> list[dict]:
+    """Cross every config with the full o-sweep -> one (config, o) entry per run.
+    Everything is tagged 'payoff' (the notebook groups by the config knobs itself)."""
+    configs: dict = {}
+    for variant in config_variants():
+        for o in O_GRID:
+            _emit(configs, "payoff", o=o, **variant)
     return list(configs.values())
 
 
@@ -141,19 +154,19 @@ def main() -> None:
 
     manifest = {
         "cache": CACHE, "out_dir": OUT_DIR, "base": BASE, "seeds": SEEDS,
+        "n_config_variants": len(config_variants()),
         "n_configs": len(configs), "runs": run_list,
     }
     (CLUSTER / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
-    by_study = Counter(s for r in run_list for s in r["studies"])
     print(f"dataset : 1 (scraped MAUDE cache at {CACHE})")
-    print(f"configs : {len(configs)}  (seed-independent)")
+    print(f"configs : {len(config_variants())} hyperparameter variants x {len(O_GRID)} o "
+          f"= {len(configs)} (config, o) points")
     print(f"seeds   : {SEEDS}  ({len(SEEDS)})")
-    print(f"runs    : {len(run_list)}  = {len(configs)} configs x {len(SEEDS)} seeds")
-    for s, n in sorted(by_study.items()):
-        print(f"  study {s:10s}: {n} runs")
+    print(f"runs    : {len(run_list)}  = {len(configs)} points x {len(SEEDS)} seeds")
     if len(run_list) > 1000:
-        print(f"WARNING: {len(run_list)} runs exceeds the usual Slurm MaxArraySize (1001).")
+        print(f"note    : {len(run_list)} runs exceeds the usual Slurm array cap (~1001); "
+              f"submit.sh auto-chunks the training array.")
     print("wrote real-data/cluster/runs.tsv, real-data/cluster/manifest.json")
 
 

@@ -14,31 +14,34 @@ coverage (does the learned reject add anything). Key figures save to figs/.
 import json
 from pathlib import Path
 
-TITLE = """# MAUDE learned-abstention sweep analysis
+TITLE = """# MAUDE abstention sweep -- regular vs abstention model
 
-Analyses every model trained by the real-data sweep (`real-data/cluster/`). One
-scraped MAUDE dataset (product-problem detection from redacted narratives), a
-single-head MLP trained with the learned-abstention term `-log(o*p_y + r)`, swept
-over the payoff **o** (plus capacity / dropout / lr studies), replicated across
-seeds.
+One scraped MAUDE dataset (4-class severity from redacted narratives: Malfunction /
+Basic injury / Serious injury / Death). Every hyperparameter config (class_weight /
+capacity / dropout / lr) is trained with the learned-abstention term `-log(o*p_y + r)`
+over the **full** payoff sweep **o** (1.0 .. 5.0), replicated across seeds.
 
-Every run reports two selective-classification operating points on the SAME model:
-the **learned reject** (accept when abstain prob `r < h`) and the **confidence
-baseline** (accept when `max class prob >= threshold`, the professor's original
-rule), both at a matched target coverage. `gain_vs_conf` is their difference -- the
-question is whether the learned reject beats plain confidence thresholding.
+The notebook then **auto-picks the best config** -- ranked by forced macro-F1 in the
+plain-classifier regime (largest `o`) -- freezes it, and draws every figure from that
+one config's o-sweep. So the whole analysis is **one model**, `o` the only thing that
+moves; it never changes models midway. (Set `PICK_CONFIG` in the select cell to
+override the auto-pick.)
+
+The **regular baseline** is that same model at the largest `o`: there the reject
+threshold `1/o` drops below chance (0.25 for 4 classes), so it never abstains -- a
+plain classifier. Lowering `o` turns abstention on: the model declines the rows it is
+unsure about and is more accurate on the rows it keeps.
 
 Paper-ready figures write to `figs/fig_maude_*.{png,pdf}`:
 
 | figure | what it shows |
 |---|---|
-| `fig_maude_gain_vs_o` | learned-reject minus confidence selective accuracy, vs `o` (headline) |
-| `fig_maude_risk_coverage` | selective accuracy vs coverage: learned-reject curve vs confidence baseline |
-| `fig_maude_metrics_vs_o` | forced accuracy, selective accuracy, mean abstain prob vs `o` |
-| `fig_maude_studies` | capacity / dropout / lr studies |
+| `fig_maude_accuracy_vs_o` | accuracy vs `o`: forced (monotone) + selective at each model's chosen operating point |
+| `fig_maude_coverage_accuracy_by_o` | selective accuracy vs coverage, one line per `o` (pick an operating point) |
+| `fig_maude_regular_vs_selective` | regular (baseline, all rows) vs selective (abstain on hard rows) |
 
-Prereq: run the sweep first (`bash real-data/cluster/submit.sh`, or `run_local.sh`),
-then run this notebook from the repo root.
+Prereq: run the sweep first (`bash real-data/cluster/submit.sh`), then run this
+notebook from the repo root.
 """
 
 LOAD = '''from __future__ import annotations
@@ -70,8 +73,8 @@ def load_rows():
         if not p.exists():
             missing.append(r["run_id"]); continue
         m = json.loads(p.read_text())
-        lr_ = m.get("learned_reject") or {}        # None for the ce baseline (no abstain)
-        cb = m["confidence_baseline"]
+        lr_ = m.get("learned_reject") or {}        # None if a run had no abstain column
+        cb = m.get("confidence_baseline") or {}    # legacy field; unused in the main story
         f = m["forced"]
         rows.append({
             "run_id": r["run_id"], "loss": r.get("loss"), "o": r["o"],
@@ -82,7 +85,7 @@ def load_rows():
             "forced_macro_f1": f.get("macro_f1"), "forced_auc": f.get("roc_auc"),
             "mean_abstain": m["mean_abstain_prob"],
             "learned_cov": lr_.get("coverage"), "learned_sel_acc": lr_.get("selective_accuracy"),
-            "conf_cov": cb["coverage"], "conf_sel_acc": cb["selective_accuracy"],
+            "conf_cov": cb.get("coverage"), "conf_sel_acc": cb.get("selective_accuracy"),
             "gain_vs_conf": m.get("gain_vs_conf"),
             "_metrics_path": str(p),
         })
@@ -137,116 +140,109 @@ def save(fig, name):
     print("saved", FIGS / f"{name}.png")
 '''
 
-FORCED = '''# Sanity: forced (full-coverage) test metrics across the whole sweep. This is the
-# plain classifier number -- how well the redacted narrative predicts the 4-class
-# severity label at all. On the skewed classes, MACRO-F1 matters more than accuracy
-# (accuracy can be high just by predicting Malfunction). Abstention only changes what
-# we DECLINE to predict, not these full-coverage numbers.
-if len(df):
-    print("forced accuracy  : %.4f +/- %.4f" % (df.forced_acc.mean(), df.forced_acc.std()))
-    print("forced macro-F1  : %.4f +/- %.4f" % (df.forced_macro_f1.mean(), df.forced_macro_f1.std()))
-    print("forced ROC-AUC   : %.4f" % df.forced_auc.dropna().mean())
-    print("mean abstain prob: %.4f" % df.mean_abstain.mean())
-    display(df.sort_values(["loss", "o", "seed"])
-              [["run_id", "loss", "o", "class_weight", "forced_acc",
-                "forced_macro_f1", "learned_sel_acc", "conf_sel_acc"]].head(12))
-else:
-    print("no runs loaded yet -- run the sweep first")
-'''
-
-GAIN_VS_O = '''# HEADLINE: does the learned reject beat confidence thresholding, as a function of
-# the payoff o? gain_vs_conf = selective_acc(learned) - selective_acc(confidence) at
-# matched coverage. > 0 means the learned reject head adds something; <= 0 means the
-# model's own class confidence is already as good a reject signal (the SMT finding).
-pay = study("payoff")
+BASELINE = '''# The REGULAR BASELINE = the abstention model at the LARGEST o. There 1/o is below
+# chance (0.25 for 4 classes), so the model effectively never abstains -- it is a
+# plain classifier that predicts on EVERY row. Everything below is the SAME model at
+# smaller o (abstention turned on). On the skewed 4 classes, MACRO-F1 / balanced
+# accuracy matter more than plain accuracy, which Malfunction (~65% of rows) can carry
+# on its own.
+pay = PAY
 if len(pay):
-    agg = seed_mean(pay, ["o"], ["gain_vs_conf", "learned_sel_acc", "conf_sel_acc"]).sort_values("o")
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.axhline(0, color="0.6", lw=1, ls="--")
-    ax.errorbar(agg["o"], agg["gain_vs_conf"], yerr=agg["gain_vs_conf_std"],
-                marker="o", color=C_LEARNED, capsize=3)
-    ax.set_xlabel("abstention payoff  o"); ax.set_ylabel("selective-acc gain (learned - confidence)")
-    ax.set_title("Learned reject vs confidence threshold, across o")
-    save(fig, "fig_maude_gain_vs_o"); plt.show()
-    print(agg[["o", "gain_vs_conf", "gain_vs_conf_std"]].to_string(index=False))
+    o_max = pay["o"].max()
+    b = seed_mean(pay[pay["o"] == o_max], ["o"],
+                  ["forced_acc", "forced_macro_f1", "mean_abstain"]).iloc[0]
+    print(f"regular baseline = abstention model at o={o_max:g}  (never abstains)")
+    print(f"  forced accuracy   : {b.forced_acc:.4f}   (predicts on all rows)")
+    print(f"  forced macro-F1   : {b.forced_macro_f1:.4f}")
+    print(f"  mean abstain prob : {b.mean_abstain:.4f}   (~0 confirms it does not abstain)")
+    display(seed_mean(pay, ["o"], ["forced_acc", "forced_macro_f1", "mean_abstain"])
+            .sort_values("o").round(4))
 else:
-    print("no payoff-study runs loaded")
+    print("no payoff runs loaded yet -- run the sweep first")
 '''
 
-RISK_COVERAGE = '''# Selective accuracy vs coverage: the learned-reject curve (sweep h) against the
-# confidence baseline curve (sweep threshold), for the BASE payoff o, averaged over
-# seeds by interpolating each seed onto a common coverage grid. This is the
-# risk-coverage / selective-risk view -- the closer to the top-right, the better.
-base_o = manifest["base"]["o"]
-sub = study("payoff")
-sub = sub[sub["o"] == base_o] if len(sub) else sub
-if len(sub):
-    grid = np.linspace(0.3, 1.0, 40)
-    def mean_curve(key):
-        ys = []
-        for _, r in sub.iterrows():
-            cov, acc = load_curve(r["_metrics_path"], key)
-            if len(cov) < 2:
-                continue
-            order = np.argsort(cov)
-            ys.append(np.interp(grid, cov[order], acc[order], left=np.nan, right=np.nan))
-        return np.nanmean(np.vstack(ys), axis=0) if ys else np.full_like(grid, np.nan)
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.plot(grid, mean_curve("reject_curve"), color=C_LEARNED, lw=2, label="learned reject (r < h)")
-    ax.plot(grid, mean_curve("confidence_curve"), color=C_CONF, lw=2, ls="--", label="confidence (max prob >= t)")
-    ax.set_xlabel("coverage"); ax.set_ylabel("selective accuracy")
-    ax.set_title(f"Risk-coverage at base payoff o={base_o}")
-    ax.legend(); save(fig, "fig_maude_risk_coverage"); plt.show()
-else:
-    print("no base-o runs loaded")
-'''
-
-METRICS_VS_O = '''# EFFECT OF THE TRAINING PAYOFF o (a MODEL study, not the regular-vs-selective
-# comparison). Because o is a TRAINING hyperparameter, each o is a DIFFERENT model, so
-# forced (full-coverage) accuracy legitimately CHANGES across o: at low o the reject
-# column soaks up probability mass and the classifier under-trains (forced accuracy
-# sags toward the majority class), then recovers as o rewards predicting. That is why
-# regular accuracy must NOT be read off this axis -- for the fixed-model regular-vs-
-# selective comparison see the previous section. Larger o -> abstains LESS (mean
-# abstain prob falls, coverage rises).
-pay = study("payoff")
+ACC_VS_O = '''# ACCURACY vs PAYOFF o -- the headline. NO fixed coverage: each o is read at ITS OWN
+# chosen operating point -- the learned-reject model (accept when abstain r < h, with h
+# tuned on val to the target coverage), i.e. the same model the analysis picks. So both
+# the accuracy AND the coverage vary with o; read the two panels together.
+#   forced (grey)    : accuracy on ALL rows -- rises with o and saturates (each o is a
+#                      different model; at low o the abstain column steals probability
+#                      during training so the classifier under-trains).
+#   selective (blue) : accuracy at the chosen learned-reject operating point. At low o
+#                      the model keeps few rows of an under-trained classifier; at the
+#                      largest o it cannot abstain (coverage -> 1) so it collapses onto
+#                      forced. A mid o -- decent classifier AND real selectivity -- can
+#                      PEAK. That peak is the best payoff o.
+#   baseline (dashed): the largest-o model (never abstains), accuracy on all rows.
+pay = PAY
 if len(pay):
-    agg = seed_mean(pay, ["o"], ["forced_acc", "learned_sel_acc", "conf_sel_acc",
-                                 "mean_abstain", "learned_cov"]).sort_values("o")
+    agg = (seed_mean(pay, ["o"], ["forced_acc", "learned_sel_acc", "learned_cov",
+                                  "mean_abstain"]).sort_values("o").reset_index(drop=True))
+    o_arr = agg["o"].to_numpy()
+    o_base = float(o_arr.max()); base_acc = float(agg.loc[agg["o"].idxmax(), "forced_acc"])
+    sel = agg["learned_sel_acc"].to_numpy()
+    peak_i = int(np.nanargmax(sel)); peak_o = float(o_arr[peak_i])
+
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
     ax = axes[0]
-    ax.plot(agg["o"], agg["forced_acc"], marker="o", color="0.4", label="forced (full coverage)")
-    ax.plot(agg["o"], agg["learned_sel_acc"], marker="o", color=C_LEARNED, label="learned reject (selective)")
-    ax.plot(agg["o"], agg["conf_sel_acc"], marker="s", color=C_CONF, ls="--", label="confidence (selective)")
-    ax.set_xlabel("payoff o"); ax.set_ylabel("accuracy"); ax.set_title("Accuracy vs o"); ax.legend()
-    ax = axes[1]
-    ax.plot(agg["o"], agg["mean_abstain"], marker="o", color="#2ca02c", label="mean abstain prob")
-    ax.plot(agg["o"], agg["learned_cov"], marker="s", color="#9467bd", label="coverage @ target")
-    ax.set_xlabel("payoff o"); ax.set_ylabel("value"); ax.set_title("Abstention behavior vs o"); ax.legend()
-    fig.tight_layout(); save(fig, "fig_maude_metrics_vs_o"); plt.show()
+    ax.plot(o_arr, agg["forced_acc"], marker="o", color="0.6", lw=1.5,
+            label="regular / forced (all rows)")
+    ax.plot(o_arr, sel, marker="o", color=C_LEARNED, lw=2,
+            label="selective (learned reject -- the chosen model)")
+    ax.axhline(base_acc, color="0.35", ls="--", lw=1, label=f"baseline (o={o_base:g}) = {base_acc:.3f}")
+    ax.axvline(peak_o, color=C_LEARNED, ls=":", lw=1)
+    ax.annotate(f"best o={peak_o:g}", (peak_o, sel[peak_i]),
+                textcoords="offset points", xytext=(6, 6), color=C_LEARNED)
+    ax.set_xlabel("payoff o"); ax.set_ylabel("accuracy")
+    ax.set_title("Accuracy vs o (selective read at each model's chosen operating point)")
+    ax.legend()
+    ax2 = axes[1]
+    ax2.plot(o_arr, agg["learned_cov"], marker="o", color="#9467bd", label="coverage (kept fraction)")
+    ax2.plot(o_arr, agg["mean_abstain"], marker="s", color="#2ca02c", label="mean abstain prob")
+    ax2.set_xlabel("payoff o"); ax2.set_ylabel("value")
+    ax2.set_title("Operating point vs o (coverage is NOT held fixed)"); ax2.legend()
+    fig.tight_layout(); save(fig, "fig_maude_accuracy_vs_o"); plt.show()
+
+    print(f"regular baseline (o={o_base:g}) forced accuracy : {base_acc:.4f}")
+    print(f"best payoff o = {peak_o:g}: selective accuracy = {sel[peak_i]:.4f} "
+          f"@ coverage {agg.loc[peak_i, 'learned_cov']:.3f}  (+{sel[peak_i] - base_acc:.4f} over baseline)")
+    print(agg[["o", "forced_acc", "learned_sel_acc", "learned_cov"]].round(4).to_string(index=False))
 else:
     print("no payoff-study runs loaded")
 '''
 
-STUDIES = '''# Hyperparameter studies: gain_vs_conf and forced accuracy under class weighting,
-# capacity (trunk width/depth), dropout, and lr -- each varied one at a time.
-studies = [("class_weight", "class_weight"), ("capacity", "hidden"),
-           ("dropout", "dropout"), ("lr", "lr")]
-present = [(s, k) for s, k in studies if len(study(s))]
-if present:
-    fig, axes = plt.subplots(1, len(present), figsize=(5.5 * len(present), 4.2), squeeze=False)
-    for ax, (s, key) in zip(axes[0], present):
-        agg = seed_mean(study(s), [key], ["gain_vs_conf", "forced_acc"])
-        agg = agg.sort_values(key)
-        xs = agg[key].astype(str)
-        ax.axhline(0, color="0.6", lw=1, ls="--")
-        ax.errorbar(xs, agg["gain_vs_conf"], yerr=agg["gain_vs_conf_std"],
-                    marker="o", color=C_LEARNED, capsize=3, label="gain vs conf")
-        ax.set_title(f"{s} study"); ax.set_xlabel(key); ax.set_ylabel("gain vs conf")
-        ax.tick_params(axis="x", rotation=30)
-    fig.tight_layout(); save(fig, "fig_maude_studies"); plt.show()
+SELECT = '''# AUTO-PICK the best config. Every hyperparameter config was swept over the FULL o
+# range; here we rank the configs by forced macro-F1 in the PLAIN-CLASSIFIER regime --
+# the largest o, where the reject threshold 1/o is below chance (0.25 for 4 classes) so
+# abstention is off and forced macro-F1 is pure classifier quality. We FREEZE the winner
+# and set `PAY` = that one config's o-sweep; every figure below draws from PAY only, so
+# nothing changes models midway. Set PICK_CONFIG to override the auto-pick.
+PICK_CONFIG = None    # e.g. {"class_weight": "sqrt", "dropout": 0.1}; None = auto-pick
+CONFIG_COLS = ["class_weight", "hidden", "dropout", "lr"]
+
+pay_all = study("payoff")
+if len(pay_all):
+    o_max = pay_all["o"].max()
+    ranking = (seed_mean(pay_all[pay_all["o"] == o_max], CONFIG_COLS,
+                         ["forced_macro_f1", "forced_acc"])
+               .sort_values("forced_macro_f1", ascending=False).reset_index(drop=True))
+    print(f"config ranking by forced macro-F1 at o={o_max:g} (plain-classifier regime, "
+          f"mean over seeds):")
+    print(ranking.round(4).to_string(index=False))
+    if PICK_CONFIG is not None:
+        CHOSEN = {c: PICK_CONFIG.get(c, manifest["base"][c]) for c in CONFIG_COLS}
+    else:
+        CHOSEN = {c: ranking.loc[0, c] for c in CONFIG_COLS}
+    mask = np.ones(len(pay_all), bool)
+    for c in CONFIG_COLS:
+        mask &= (pay_all[c] == CHOSEN[c])
+    PAY = pay_all[mask]
+    print("\\nchosen config (frozen for every figure below):")
+    print("  " + ", ".join(f"{c}={CHOSEN[c]}" for c in CONFIG_COLS))
+    print(f"  o-sweep runs for this config: {len(PAY)}")
 else:
-    print("no study runs loaded")
+    PAY = pay_all
+    print("no payoff runs loaded yet -- run the sweep first")
 '''
 
 CHOOSER = '''# CHOOSE the operating point. Each o trains a different model; each model trades
@@ -257,7 +253,7 @@ CHOOSER = '''# CHOOSE the operating point. Each o trains a different model; each
 # then set PICK_O in the next cell.
 import matplotlib.cm as cm
 from matplotlib.colors import Normalize
-pay = study("payoff")
+pay = PAY
 if len(pay):
     o_vals = sorted(pay["o"].unique())
     norm = Normalize(min(o_vals), max(o_vals)); cmap = cm.viridis
@@ -295,16 +291,17 @@ else:
     print("no payoff-study runs loaded")
 '''
 
-REG_VS_SEL = '''# REGULAR vs SELECTIVE accuracy on ONE chosen model. Selection is COVERAGE-AWARE:
-# by default it picks the o with the best selective accuracy AT the coverage you care
-# about (TARGET_COV) -- not the highest accuracy at some tiny coverage. Set PICK_O to a
-# specific o (from the chooser above) to override.
-#   regular   = accuracy predicting on EVERY test row (full coverage).
-#   selective = accuracy on the non-abstained rows, at coverage = TARGET_COV.
+REG_VS_SEL = '''# REGULAR vs SELECTIVE accuracy -- two models from the SAME family.
+#   regular   = the BASELINE (largest o, never abstains): accuracy on EVERY test row.
+#   selective = an abstention model (mid o): accuracy on the rows it KEEPS, at
+#               coverage = TARGET_COV. Selection is COVERAGE-AWARE -- by default it
+#               picks the abstaining o with the best selective accuracy AT the coverage
+#               you care about (not the highest accuracy at a tiny coverage). Set PICK_O
+#               to a specific o (from the chooser above) to override.
 PICK_O = None        # set e.g. 1.6 to force that model; None = auto-pick at TARGET_COV
 TARGET_COV = 0.80    # the coverage you want good accuracy at
 
-pay = study("payoff")
+pay = PAY
 def at_cov(path, cov, field):
     m = json.loads(Path(path).read_text())
     c = pd.DataFrame(m.get("reject_curve") or []).dropna(subset=["coverage", field])
@@ -315,21 +312,23 @@ def at_cov(path, cov, field):
 
 if len(pay):
     o_vals = sorted(pay["o"].unique())
+    o_base = max(o_vals)                                          # the no-abstention baseline
+    reg = float(pay[pay["o"] == o_base]["forced_acc"].mean())    # baseline, all rows
+    cand = [o for o in o_vals if o != o_base]                    # abstaining models only
     if PICK_O is not None:
         chosen_o = PICK_O
     else:
         scores = {o: np.nanmean([at_cov(p, TARGET_COV, "selective_accuracy")
-                                 for p in pay[pay["o"] == o]["_metrics_path"]]) for o in o_vals}
-        chosen_o = max(o_vals, key=lambda o: (-1 if np.isnan(scores[o]) else scores[o]))
+                                 for p in pay[pay["o"] == o]["_metrics_path"]]) for o in cand}
+        chosen_o = max(cand, key=lambda o: (-1 if np.isnan(scores[o]) else scores[o]))
     rows = pay[pay["o"] == chosen_o]
     paths = rows["_metrics_path"].tolist()
-    reg = float(rows["forced_acc"].mean())                                  # all rows
     sel = float(np.nanmean([at_cov(p, TARGET_COV, "selective_accuracy") for p in paths]))
     sel_f1 = float(np.nanmean([at_cov(p, TARGET_COV, "selective_f1") for p in paths]))
-    print(f"chosen model: o={chosen_o} (auto = best selective acc at {TARGET_COV:.0%} coverage; "
-          f"set PICK_O to override)")
-    print(f"regular  (full-coverage) accuracy : {reg:.4f}")
-    print(f"selective accuracy @ {TARGET_COV:.0%} coverage : {sel:.4f}   (+{sel - reg:.4f})")
+    print(f"regular baseline : o={o_base:g}, accuracy on ALL rows = {reg:.4f}")
+    print(f"abstention model : o={chosen_o} (auto = best selective acc at {TARGET_COV:.0%} "
+          f"coverage; set PICK_O to override)")
+    print(f"selective accuracy @ {TARGET_COV:.0%} coverage : {sel:.4f}   (+{sel - reg:.4f} over baseline)")
     print(f"selective macro-F1 @ {TARGET_COV:.0%} coverage : {sel_f1:.4f}")
 
     grid = np.linspace(0.3, 1.0, 40)
@@ -360,22 +359,19 @@ else:
     print("no payoff-study runs loaded")
 '''
 
-OPTIMAL = '''# Best operating points. "Best learned" = highest learned selective accuracy at the
-# target coverage; also report where the learned reject most beats confidence.
-if len(df):
-    keep = df.dropna(subset=["learned_sel_acc"])
+OPTIMAL = '''# Best operating point for the CHOSEN config: the o with the highest learned selective
+# accuracy at its target coverage, next to that config's regular baseline (largest o).
+pay = PAY
+if len(pay):
+    keep = pay.dropna(subset=["learned_sel_acc"])
     if len(keep):
-        best = keep.loc[keep["learned_sel_acc"].idxmax()]
-        print("highest learned selective accuracy:")
-        print(f"  {best.run_id}  o={best.o}  sel_acc={best.learned_sel_acc:.4f} "
-              f"@ coverage={best.learned_cov:.3f}  (gain vs conf {best.gain_vs_conf:+.4f})")
-    g = df.dropna(subset=["gain_vs_conf"])
-    if len(g):
-        bg = g.loc[g["gain_vs_conf"].idxmax()]
-        print("largest gain of learned reject over confidence baseline:")
-        print(f"  {bg.run_id}  o={bg.o}  gain={bg.gain_vs_conf:+.4f}")
-        print(f"mean gain_vs_conf across all runs: {g.gain_vs_conf.mean():+.4f} "
-              f"(negative => confidence thresholding is as good or better)")
+        agg = seed_mean(keep, ["o"], ["learned_sel_acc", "learned_cov"])
+        best = agg.loc[agg["learned_sel_acc"].idxmax()]
+        print(f"best payoff o={best.o:g}: learned selective accuracy={best.learned_sel_acc:.4f} "
+              f"@ coverage={best.learned_cov:.3f}")
+    o_base = pay["o"].max()
+    b = float(pay[pay["o"] == o_base]["forced_acc"].mean())
+    print(f"regular baseline (o={o_base:g}) forced accuracy: {b:.4f}  (predicts on all rows)")
 else:
     print("no runs loaded")
 '''
@@ -383,22 +379,23 @@ else:
 SECTIONS = [
     ("## Load the sweep", LOAD),
     (None, STYLE),
-    ("## Forced (full-coverage) accuracy", FORCED),
-    ("## Payoff study: learned reject vs confidence baseline\\n\\n### Gain vs o (headline)\\n\\n"
-     "**Saved: `fig_maude_gain_vs_o`.**", GAIN_VS_O),
-    ("### Risk-coverage curves\\n\\nSelective accuracy vs coverage at the base payoff, learned "
-     "reject vs confidence baseline. **Saved: `fig_maude_risk_coverage`.**", RISK_COVERAGE),
+    ("## Select the best config\\n\\nRank every hyperparameter config (each swept over the full "
+     "`o` range) by forced macro-F1 in the plain-classifier regime, freeze the winner, and draw "
+     "every figure below from that one config's o-sweep -- so nothing changes models midway. Set "
+     "`PICK_CONFIG` to override.", SELECT),
+    ("## Regular baseline (no abstention)\\n\\nThe largest-`o` model, which never abstains -- the "
+     "plain classifier the abstention models are compared against.", BASELINE),
+    ("## Accuracy vs payoff o (headline)\\n\\nForced accuracy rises to the baseline and plateaus; "
+     "selective accuracy is read at each model's own chosen operating point (learned reject -- "
+     "coverage NOT held fixed), so it can peak in the middle. That peak is the best `o`. "
+     "**Saved: `fig_maude_accuracy_vs_o`.**", ACC_VS_O),
     ("## Choose the operating point\\n\\nSelective accuracy vs coverage for every `o`, plus a table "
      "of accuracy at fixed coverages -- so you can pick an `o` with good coverage AND accuracy. "
      "**Saved: `fig_maude_coverage_accuracy_by_o`.**", CHOOSER),
-    ("## Regular vs selective accuracy (paper comparison)\\n\\nAccuracy on ALL rows (regular) vs on "
-     "the non-abstained rows (selective) for the chosen model. Coverage-aware selection: set "
+    ("## Regular vs selective accuracy\\n\\nThe baseline (all rows) vs an abstention model that "
+     "declines the hard rows (selective, at `TARGET_COV`). Coverage-aware selection: set "
      "`TARGET_COV` (and optionally `PICK_O`) at the top of the cell. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
-    ("## Effect of the training payoff o\\n\\nHow `o` changes the MODEL (forced accuracy varies "
-     "because each `o` is a different model -- not the regular-vs-selective comparison above). "
-     "**Saved: `fig_maude_metrics_vs_o`.**", METRICS_VS_O),
-    ("## Hyperparameter studies\\n\\nCapacity / dropout / lr. **Saved: `fig_maude_studies`.**", STUDIES),
-    ("## Optimal configurations", OPTIMAL),
+    ("## Optimal operating point", OPTIMAL),
 ]
 
 

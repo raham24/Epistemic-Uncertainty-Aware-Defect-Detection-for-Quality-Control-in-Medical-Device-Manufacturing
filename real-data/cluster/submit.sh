@@ -19,13 +19,9 @@ mkdir -p "$RCA_CACHE" real-data/results/cluster real-data/cluster/logs
 n_runs=$(grep -c . real-data/cluster/runs.tsv)
 echo "matrix: 1 dataset (scrape), $n_runs training runs"
 
-if [ "$n_runs" -gt "${RCA_MAX_ARRAY:-1000}" ]; then
-  echo "ERROR: $n_runs runs exceeds RCA_MAX_ARRAY=${RCA_MAX_ARRAY:-1000}. Shrink the" \
-       "sweep in build_matrix.py or raise RCA_MAX_ARRAY." >&2
-  exit 1
-fi
+chunk="${RCA_MAX_ARRAY:-1000}"        # max tasks per array (Slurm array-size cap)
 throttle="%${RCA_MAX_PARALLEL:-16}"
-echo "concurrency: up to ${RCA_MAX_PARALLEL:-16} tasks at once"
+echo "concurrency: up to ${RCA_MAX_PARALLEL:-16} tasks per chunk (chunk size $chunk)"
 
 # optional placement flags (single tokens, no spaces -> word-split on purpose).
 # `extra` is shared (partition/account); QOS is applied PER-JOB below because the
@@ -52,11 +48,23 @@ else
   dep="--dependency=afterok:$prep_jid"
 fi
 
-# 2) train all models, after the scrape finishes OK (or immediately if SKIP_PREP)
-# shellcheck disable=SC2086
-train_jid=$(sbatch --parsable $extra $train_qos --time="${RCA_TRAIN_TIME:-00:20:00}" \
-  $dep --array=1-"$n_runs$throttle" real-data/cluster/train.slurm)
-echo "submitted training: array job $train_jid (1-$n_runs$throttle), time ${RCA_TRAIN_TIME:-00:20:00} ${dep:+after prep}"
+# 2) train all models, after the scrape finishes OK (or immediately if SKIP_PREP).
+# The matrix can exceed the Slurm array cap, so submit it in chunks of $chunk tasks:
+# each chunk is an array 1..size carrying RCA_LINE_OFFSET so train.slurm reads the
+# right slice of runs.tsv (line = offset + array index).
+offset=0
+chunk_idx=0
+while [ "$offset" -lt "$n_runs" ]; do
+  size=$(( n_runs - offset ))
+  [ "$size" -gt "$chunk" ] && size=$chunk
+  chunk_idx=$(( chunk_idx + 1 ))
+  # shellcheck disable=SC2086
+  jid=$(sbatch --parsable $extra $train_qos --time="${RCA_TRAIN_TIME:-00:20:00}" \
+    $dep --export=ALL,RCA_LINE_OFFSET=$offset \
+    --array=1-"$size$throttle" real-data/cluster/train.slurm)
+  echo "submitted training chunk $chunk_idx: job $jid  (runs.tsv lines $((offset+1))-$((offset+size)), time ${RCA_TRAIN_TIME:-00:20:00}) ${dep:+after prep}"
+  offset=$(( offset + size ))
+done
 
 echo
 echo "watch:   squeue -u \$USER"

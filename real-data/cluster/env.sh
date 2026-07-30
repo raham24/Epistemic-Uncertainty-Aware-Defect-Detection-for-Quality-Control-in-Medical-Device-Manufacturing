@@ -65,3 +65,7 @@ export RCA_MAX_ARRAY="${RCA_MAX_ARRAY:-1000}"
 
 # --- sweep shape: seeds every configuration is trained at (build_matrix.py reads this) ---
 export RCA_SEEDS="${RCA_SEEDS:-0,1,2,3,4}"
+
+# The matrix is every hyperparameter config x the full o-sweep, so it is large
+# (configs x 41 o x seeds). submit.sh auto-chunks the training array into groups of
+# RCA_MAX_ARRAY tasks to stay under the Slurm array-size cap.

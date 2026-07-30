@@ -16,8 +16,11 @@ cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
 source real-data/cluster/env.sh
 mkdir -p real-data/results/cluster real-data/cluster/logs
 
-# pick this task's line: run_id <TAB> train_from_cache args
-line=$(sed -n "${SLURM_ARRAY_TASK_ID}p" real-data/cluster/runs.tsv)
+# pick this task's line: run_id <TAB> train_from_cache args. The matrix can exceed the
+# Slurm array cap, so submit.sh chunks it: each chunk is an array 1..N with a distinct
+# RCA_LINE_OFFSET, and the true runs.tsv line is offset + array index.
+lineno=$(( ${RCA_LINE_OFFSET:-0} + SLURM_ARRAY_TASK_ID ))
+line=$(sed -n "${lineno}p" real-data/cluster/runs.tsv)
 run_id=$(printf '%s' "$line" | cut -f1)
 args=$(printf '%s' "$line" | cut -f2-)
 
