@@ -63,13 +63,13 @@ export RCA_TRAIN_TIME="${RCA_TRAIN_TIME:-00:20:00}"
 # RCA_MAX_PARALLEL : how many tasks RUN at once (array %throttle) -- does NOT reduce the
 #                    number of SUBMITTED jobs.
 # RCA_MAX_ARRAY    : tasks per submitted chunk. Every array task counts against the
-#                    account queue cap (MaxSubmitJobsPerAccount), so this MUST be <= that
-#                    cap or a chunk can never be accepted. submit.sh waits + retries when
-#                    the queue is full. 195 tasks submitted fine before, so 200 is a safe
-#                    start; raise it toward your cap (see `sacctmgr show qos`) for fewer,
-#                    larger waves.
+#                    account queue cap (normal QOS maxsubmitpa = 512, shared across the
+#                    account), so this MUST be <= that cap or a chunk can never be
+#                    accepted. submit.sh waits + retries when the queue is full. 500
+#                    leaves headroom under the 512 cap -> 5 waves for a ~2255-run sweep.
+#                    Lower it if the account is busy with other users' jobs.
 export RCA_MAX_PARALLEL="${RCA_MAX_PARALLEL:-16}"
-export RCA_MAX_ARRAY="${RCA_MAX_ARRAY:-200}"
+export RCA_MAX_ARRAY="${RCA_MAX_ARRAY:-500}"
 
 # --- sweep shape: seeds every configuration is trained at (build_matrix.py reads this) ---
 export RCA_SEEDS="${RCA_SEEDS:-0,1,2,3,4}"
