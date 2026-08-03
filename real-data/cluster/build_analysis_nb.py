@@ -36,9 +36,11 @@ Paper-ready figures write to `figs/fig_maude_*.{png,pdf}`:
 
 | figure | what it shows |
 |---|---|
+| `fig_maude_confusion_baseline` | per-class confusion for the baseline -- where the accuracy really comes from |
 | `fig_maude_accuracy_vs_o` | accuracy vs `o`: forced (monotone) + selective at each model's chosen operating point |
 | `fig_maude_coverage_accuracy_by_o` | selective accuracy vs coverage, one line per `o` (pick an operating point) |
 | `fig_maude_regular_vs_selective` | regular (baseline, all rows) vs selective (abstain on hard rows) |
+| `fig_maude_riskcoverage` | one model: accuracy vs macro-F1 as it abstains more |
 
 Prereq: run the sweep first (`bash real-data/cluster/submit.sh`), then run this
 notebook from the repo root.
@@ -359,6 +361,78 @@ else:
     print("no payoff-study runs loaded")
 '''
 
+PERCLASS = '''# PER-CLASS breakdown of the chosen config's plain-classifier baseline (largest o).
+# Accuracy is carried by the majority classes; this shows WHERE the model actually works.
+# Reads per_class_f1 + confusion_matrix already in each run's JSON (F1 averaged over
+# seeds, confusion counts summed). macro-F1 = mean of the per-class F1 -- the honest
+# number on the skewed classes. Watch the recall column and the off-diagonal: rare
+# classes (e.g. Death) crater and leak into the majority columns.
+LABELS = {4: ["Malfunction", "Basic injury", "Serious injury", "Death"],
+          3: ["Malfunction", "Injury", "Death"], 2: ["neg", "pos"]}
+base = PAY[PAY["o"] == PAY["o"].max()]
+mats, f1s, ncls = [], [], None
+for p in base["_metrics_path"]:
+    m = json.loads(Path(p).read_text()); ncls = m["n_classes"]
+    mats.append(np.array(m["forced"]["confusion_matrix"], dtype=float))
+    f1s.append(np.array(m["forced"]["per_class_f1"], dtype=float))
+if mats:
+    names = LABELS.get(ncls, [f"class {i}" for i in range(ncls)])
+    C = np.sum(mats, axis=0); support = C.sum(1)
+    recall = np.divide(np.diag(C), support, out=np.zeros(ncls), where=support > 0)
+    precision = np.divide(np.diag(C), C.sum(0), out=np.zeros(ncls), where=C.sum(0) > 0)
+    f1_mean, f1_std = np.mean(f1s, axis=0), np.std(f1s, axis=0)
+    tbl = pd.DataFrame({"class": names, "support": support.astype(int),
+                        "precision": precision.round(3), "recall": recall.round(3),
+                        "F1": f1_mean.round(3), "F1_std": f1_std.round(3)})
+    print(f"plain-classifier baseline (o={PAY['o'].max():g}), summed over {len(mats)} seeds:")
+    print(tbl.to_string(index=False))
+    print(f"\\nmacro-F1 = {f1_mean.mean():.3f}   accuracy = {np.diag(C).sum() / C.sum():.3f}")
+    Cn = C / support[:, None].clip(min=1)
+    fig, ax = plt.subplots(figsize=(1.6 * ncls + 1, 1.4 * ncls))
+    im = ax.imshow(Cn, cmap="Blues", vmin=0, vmax=1)
+    ax.set_xticks(range(ncls)); ax.set_xticklabels(names, rotation=30, ha="right")
+    ax.set_yticks(range(ncls)); ax.set_yticklabels(names)
+    ax.set_xlabel("predicted"); ax.set_ylabel("true")
+    ax.set_title(f"Confusion (row-normalized), o={PAY['o'].max():g} baseline")
+    for i in range(ncls):
+        for j in range(ncls):
+            ax.text(j, i, f"{Cn[i, j]:.2f}\\n({int(C[i, j])})", ha="center", va="center",
+                    color="white" if Cn[i, j] > 0.5 else "black", fontsize=9)
+    fig.colorbar(im, ax=ax, fraction=0.046); fig.tight_layout()
+    save(fig, "fig_maude_confusion_baseline"); plt.show()
+else:
+    print("no baseline runs loaded")
+'''
+
+RISKCOV = '''# RISK-COVERAGE for ONE fixed model: as it abstains MORE (coverage drops), what happens
+# to accuracy vs macro-F1? Accuracy is monotone -- abstaining keeps the confident rows,
+# so it only ever rises. macro-F1 is the real test: if it FALLS, abstention is dropping
+# the rare classes (Death) rather than majority-class errors. O_PICK must have an active
+# reject head (the largest o never abstains; very low o is under-trained).
+O_PICK = 2.0
+sub = PAY[np.isclose(PAY["o"], O_PICK)]
+grid = np.linspace(0.35, 1.0, 60)
+acc, f1 = [], []
+for p in sub["_metrics_path"]:
+    c = pd.DataFrame(json.loads(Path(p).read_text()).get("reject_curve") or [])
+    c = c.dropna(subset=["coverage", "selective_accuracy", "selective_f1"]).sort_values("coverage")
+    if len(c) < 2:
+        continue
+    acc.append(np.interp(grid, c["coverage"], c["selective_accuracy"], left=np.nan, right=np.nan))
+    f1.append(np.interp(grid, c["coverage"], c["selective_f1"], left=np.nan, right=np.nan))
+if acc:
+    acc, f1 = np.nanmean(acc, axis=0), np.nanmean(f1, axis=0)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.plot(grid, acc, color=C_LEARNED, lw=2, marker=".", label="selective accuracy")
+    ax.plot(grid, f1, color=C_CONF, lw=2, marker=".", label="selective macro-F1")
+    ax.set_xlabel("coverage   (right = no abstention, left = abstain more)")
+    ax.set_ylabel("score"); ax.invert_xaxis()
+    ax.set_title(f"Single model o={O_PICK}: accuracy vs macro-F1 as it abstains more")
+    ax.legend(); ax.grid(alpha=0.3); save(fig, "fig_maude_riskcoverage"); plt.show()
+else:
+    print(f"no reject curve for o={O_PICK} -- pick an o with an active reject head")
+'''
+
 OPTIMAL = '''# Best operating point for the CHOSEN config: the o with the highest learned selective
 # accuracy at its target coverage, next to that config's regular baseline (largest o).
 pay = PAY
@@ -385,6 +459,9 @@ SECTIONS = [
      "`PICK_CONFIG` to override.", SELECT),
     ("## Regular baseline (no abstention)\\n\\nThe largest-`o` model, which never abstains -- the "
      "plain classifier the abstention models are compared against.", BASELINE),
+    ("## Per-class breakdown\\n\\nWhere the accuracy actually comes from: per-class "
+     "precision/recall/F1 and the confusion matrix for the baseline. Accuracy hides the rare "
+     "classes; this exposes them. **Saved: `fig_maude_confusion_baseline`.**", PERCLASS),
     ("## Accuracy vs payoff o (headline)\\n\\nForced accuracy rises to the baseline and plateaus; "
      "selective accuracy is read at each model's own chosen operating point (learned reject -- "
      "coverage NOT held fixed), so it can peak in the middle. That peak is the best `o`. "
@@ -395,6 +472,9 @@ SECTIONS = [
     ("## Regular vs selective accuracy\\n\\nThe baseline (all rows) vs an abstention model that "
      "declines the hard rows (selective, at `TARGET_COV`). Coverage-aware selection: set "
      "`TARGET_COV` (and optionally `PICK_O`) at the top of the cell. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
+    ("## Accuracy vs macro-F1 as coverage drops\\n\\nOne fixed model (`O_PICK`): accuracy is "
+     "monotone as it abstains, but macro-F1 reveals whether abstention helps or hurts the rare "
+     "classes. **Saved: `fig_maude_riskcoverage`.**", RISKCOV),
     ("## Optimal operating point", OPTIMAL),
 ]
 

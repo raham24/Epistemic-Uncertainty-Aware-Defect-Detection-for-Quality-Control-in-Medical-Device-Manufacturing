@@ -415,6 +415,30 @@ def remove_boilerplate(text: str) -> str:
     return out
 
 
+# Fragments that leak the LABEL or DEVICE IDENTITY even inside the real mdr_text
+# narrative: openFDA embeds a manufacturer/patient contact block ("E1:NAME: ...
+# STREET: ... CITY: ...") and often states the reportability verdict outright.
+VERDICT_PATTERNS = [
+    r"\b(non[- ]?)?reportable (malfunction|injury|death|serious injury|event|adverse event)s?\b",
+    r"\bdeemed (to be )?(a |an )?(non[- ]?)?reportable\b",
+    r"\breportab(le|ility)\b",
+]
+_CONTACT_KEYS = (r"NAME|STREET|CITY|STATE|ZIP\s*CODE|COUNTRY|PATIENT CITY|PATIENT COUNTRY|"
+                 r"MANUFACTURER|MFR|LOT NUMBER|CATALOG|MODEL|SERIAL")
+CONTACT_KEY_PATTERNS = [
+    r"\bE\d\s*:",                                             # E1:/E2: block markers
+    # a "KEY: value" pair -- consume the value too, up to the next contact key, the next
+    # E-block marker, or a sentence end, so city/state/etc. values are stripped as well.
+    rf"\b(?:{_CONTACT_KEYS})\s*:\s*.*?(?=(?:\b(?:{_CONTACT_KEYS}|E\d)\b\s*:)|[.]|$)",
+]
+
+
+def redact_structured(text: str) -> str:
+    for pat in VERDICT_PATTERNS + CONTACT_KEY_PATTERNS:
+        text = re.sub(pat, " [REDACTED] ", text, flags=re.IGNORECASE)
+    return text
+
+
 def clean_text(text: str) -> str:
     text = flatten_text(text)
     text = text.replace("’", "'").replace("‘", "'")
@@ -422,6 +446,7 @@ def clean_text(text: str) -> str:
     text = text.replace(" ", " ")
     text = remove_boilerplate(text)
     text = redact_leaky_phrases(text)
+    text = redact_structured(text)
     text = re.sub(r"\b(B|b)\(\d+\)\b", " [REDACTED] ", text)
     text = re.sub(r"\b\d{2,}\b", " [NUM] ", text)
     text = normalize_ws(text)
@@ -439,11 +464,51 @@ def parse_flag(value: Any) -> Optional[int]:
     return None
 
 
+def extract_mdr_text(record: Dict[str, Any]) -> str:
+    """Join the REAL narrative segments from openFDA's mdr_text (a list of
+    {text_type_code, text} dicts). This is the adverse-event narrative -- NOT the
+    flatten_text(record) whole-record dump the old code fell back to, which leaks device
+    identity (510(k) number, product code, brand, manufacturer) that trivially predicts
+    event_type. Returns '' when the record carries no narrative (those rows are dropped
+    downstream), so device-only records never reach the model."""
+    segs = record.get("mdr_text")
+    if not isinstance(segs, list):
+        return ""
+    parts = [s.get("text", "") for s in segs
+             if isinstance(s, dict) and isinstance(s.get("text"), str)]
+    return " ".join(p.strip() for p in parts if p and p.strip())
+
+
+def _entity_strings(record: Dict[str, Any]) -> List[str]:
+    """Manufacturer + device identifier strings to scrub from the narrative by exact
+    match -- they leak WHICH device it is, and the device maps almost 1:1 to event_type."""
+    vals = [first_nonempty(record.get("manufacturer_name")),
+            first_nonempty(record.get("manufacturer"))]
+    devices = record.get("device")
+    if isinstance(devices, list):
+        for d in devices:
+            if isinstance(d, dict):
+                for k in ("brand_name", "generic_name", "model_number",
+                          "catalog_number", "device_report_product_code"):
+                    vals.append(first_nonempty(d.get(k)))
+    return [v for v in vals if isinstance(v, str) and len(v) > 2]
+
+
+def redact_entities(text: str, record: Dict[str, Any]) -> str:
+    for v in _entity_strings(record):
+        text = re.sub(re.escape(v), " [REDACTED] ", text, flags=re.IGNORECASE)
+    return text
+
+
 def parse_record(record: Dict[str, Any]) -> Dict[str, Any]:
     event_type = first_nonempty(record.get("event_type"))
-    text = first_nonempty(record.get("mdr_text"), record.get("text"), record.get("description"), record.get("device_problem_text"))
-    if not text:
-        text = flatten_text(record)
+    # REAL narrative ONLY (mdr_text). Never flatten_text(record): that dumps device
+    # identity (510(k)/product code/brand/manufacturer) that leaks event_type. Severity
+    # for the injury split is read on the raw narrative; then device/manufacturer strings
+    # are scrubbed out before the text reaches the model.
+    narrative = extract_mdr_text(record)
+    label = event_label(event_type, narrative)
+    narrative = redact_entities(narrative, record)
 
     # Column order is human-facing (dataset_all.csv): keep event_type_raw and its
     # derived `label` adjacent so the class is obvious. product_problem_flag is an
@@ -454,10 +519,9 @@ def parse_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "date_report": first_nonempty(record.get("date_report"), record.get("date_received"), record.get("date_of_event")),
         "manufacturer_name": first_nonempty(record.get("manufacturer_name"), record.get("manufacturer")),
         "event_type_raw": event_type,
-        # 4-class label from event_type + narrative severity (severity read on RAW text)
-        "label": event_label(event_type, text),
-        "text_raw": text,
-        "text": clean_text(text),
+        "label": label,
+        "text_raw": narrative,
+        "text": clean_text(narrative),
         "product_problem_flag": parse_flag(record.get("product_problem_flag")),  # provenance only
         "raw_json": json.dumps(record, ensure_ascii=False),
     }
@@ -538,6 +602,26 @@ def make_splits(
         stratify=trainval["label"],
     )
     return train.reset_index(drop=True), val.reset_index(drop=True), test.reset_index(drop=True)
+
+
+def dedup_narratives(df: pd.DataFrame, col: str = "text") -> pd.DataFrame:
+    """Drop rows whose cleaned narrative is an EXACT duplicate of an earlier row.
+
+    MAUDE emits several MDRs per event (initial + supplemental/follow-up reports) with
+    near-identical narratives but distinct report keys, so the report-key dedup in the
+    scraper does not catch them. Because `col` is the already-redacted, number-normalized
+    text, an exact match on it also collapses most of those near-duplicates. Removing
+    them BEFORE make_splits is what prevents the same narrative landing in both train and
+    test -- otherwise the model memorizes it and test accuracy is inflated (measured at
+    ~15% cross-split leakage on the 4-class scrape, concentrated in the majority classes).
+    keep='first' retains one copy so every distinct narrative still contributes once.
+    """
+    before = len(df)
+    out = df.drop_duplicates(subset=col, keep="first").reset_index(drop=True)
+    dropped = before - len(out)
+    print(f"  dedup        : dropped {dropped} duplicate narratives "
+          f"({100 * dropped / max(before, 1):.1f}%) -> {len(out)} unique rows")
+    return out
 
 
 @dataclass

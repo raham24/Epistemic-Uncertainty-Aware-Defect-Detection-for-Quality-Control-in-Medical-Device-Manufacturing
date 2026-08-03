@@ -50,6 +50,12 @@ def main() -> None:
     parser.add_argument("--pause", type=float, default=2.0,
                         help="seconds to wait between 25k date-windows")
     parser.add_argument("--api-key", type=str, default=os.getenv("OPENFDA_API_KEY", ""))
+    parser.add_argument("--from-csv", type=str, default=None,
+                        help="skip scraping: load an existing dataset_all.csv and just "
+                             "re-dedup / re-split / re-featurize (reuses a prior scrape)")
+    parser.add_argument("--no-dedup", action="store_true",
+                        help="keep exact-duplicate narratives (NOT recommended -- they "
+                             "leak across the train/test split and inflate accuracy)")
     parser.add_argument("--seed", type=int, default=pipe.DEFAULT_SEED)
     parser.add_argument("--tfidf-max-features", type=int, default=50000)
     parser.add_argument("--tfidf-ngram-min", type=int, default=1)
@@ -67,17 +73,47 @@ def main() -> None:
     print(f"  fetch budget : {args.max_records} records")
     print(f"  seed (split) : {args.seed}")
 
-    # --- MAUDE scrape: 4-class event_type labels, natural proportions ---
-    session = pipe.make_session()
-    df = pipe.build_dataset(
-        session=session,
-        api_key=args.api_key or None,
-        max_records=args.max_records,
-        page_size=args.page_size,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        pause_windows=args.pause,
-    )
+    # --- obtain the dataset: fresh MAUDE scrape, OR reuse a prior scrape's CSV ---
+    if args.from_csv:
+        import pandas as pd
+        src = Path(args.from_csv)
+        print(f"  source       : {src} (re-parse cached raw_json, NO scrape)")
+        raw = pd.read_csv(src)
+        if "raw_json" not in raw.columns:
+            raise SystemExit("--from-csv needs the raw_json column to re-extract narratives")
+        # re-run the FIXED parse_record on every cached record: pulls the real mdr_text
+        # narrative (not the device-identity field dump) and scrubs manufacturer/device
+        # strings. Rows with no narrative -> empty text -> dropped.
+        rows = []
+        for rj in raw["raw_json"].dropna():
+            try:
+                rec = json.loads(rj)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            row = pipe.parse_record(rec)
+            if row["label"] is not None and row["text"]:
+                rows.append(row)
+        if not rows:
+            raise SystemExit("no rows with a usable narrative after re-parsing -- check raw_json")
+        df = (pd.DataFrame(rows)
+              .sample(frac=1.0, random_state=pipe.DEFAULT_SEED).reset_index(drop=True))
+        print(f"  re-parsed    : {len(df)} rows with a real narrative "
+              f"(of {len(raw)} cached records)")
+    else:
+        session = pipe.make_session()
+        df = pipe.build_dataset(
+            session=session,
+            api_key=args.api_key or None,
+            max_records=args.max_records,
+            page_size=args.page_size,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            pause_windows=args.pause,
+        )
+
+    # --- drop duplicate narratives BEFORE the split (leak-free split; see dedup docstring) ---
+    if not args.no_dedup:
+        df = pipe.dedup_narratives(df)
 
     label_map = pipe.LABEL_NAMES
     counts = df["label"].value_counts().sort_index()
@@ -115,6 +151,8 @@ def main() -> None:
 
     meta = {
         "seed": args.seed,
+        "deduped": not args.no_dedup,
+        "source_csv": args.from_csv,
         "n_rows": int(len(df)),
         "n_train": int(len(train_df)),
         "n_val": int(len(val_df)),
