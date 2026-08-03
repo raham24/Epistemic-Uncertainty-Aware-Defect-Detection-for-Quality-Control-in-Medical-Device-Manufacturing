@@ -32,11 +32,14 @@ export RCA_DEVICE="${RCA_DEVICE:-cpu}"
 # --- MAUDE scrape knobs (prep.slurm) ---
 # Total records to fetch. The dataset is 4-class (Malfunction / Basic injury /
 # Serious injury / Death) at NATURAL proportions -- Malfunction dominates and Death
-# is rare, so fetch a large budget to get enough deaths for a stratified split. This
-# can exceed openFDA's 25k deep-paging cap: the scraper sweeps date-windows, pausing
-# RCA_SCRAPE_PAUSE seconds between 25k slices.
-export RCA_MAX_RECORDS="${RCA_MAX_RECORDS:-${RCA_MAX_PER_CLASS:-100000}}"
-export RCA_PAGE_SIZE="${RCA_PAGE_SIZE:-100}"
+# is rare, so fetch a LARGE budget to get enough deaths (~0.5% of records) for a
+# stratified split. This can exceed openFDA's 25k deep-paging cap: the scraper sweeps
+# date-windows newest->oldest, pausing RCA_SCRAPE_PAUSE seconds between 25k slices.
+# 500k records -> ~2.5k deaths raw (~1.5k after narrative filtering). Push higher if
+# the prep job has the memory (records + their raw_json are held in memory); watch
+# prep.slurm --mem. page_size 1000 is openFDA's max -> 10x fewer requests than 100.
+export RCA_MAX_RECORDS="${RCA_MAX_RECORDS:-${RCA_MAX_PER_CLASS:-500000}}"
+export RCA_PAGE_SIZE="${RCA_PAGE_SIZE:-1000}"
 export RCA_SCRAPE_PAUSE="${RCA_SCRAPE_PAUSE:-2.0}"    # sec between date-windows
 export RCA_START_DATE="${RCA_START_DATE:-19910101}"   # oldest date_received
 export RCA_END_DATE="${RCA_END_DATE:-20261231}"       # newest date_received
@@ -55,8 +58,8 @@ export RCA_PREP_QOS="${RCA_PREP_QOS:-long}"        # single 12h scrape job
 export RCA_TRAIN_QOS="${RCA_TRAIN_QOS:-}"          # empty -> default QOS (normal, 1h)
 
 # --- per-job walltime (submit.sh passes as --time). The scrape hits a rate-limited
-# API so give it hours; each train run is minutes. ---
-export RCA_PREP_TIME="${RCA_PREP_TIME:-12:00:00}"
+# API and now pulls ~500k records, so give it a full day; each train run is minutes. ---
+export RCA_PREP_TIME="${RCA_PREP_TIME:-24:00:00}"
 export RCA_TRAIN_TIME="${RCA_TRAIN_TIME:-00:20:00}"
 
 # --- array throttle + chunk size ---

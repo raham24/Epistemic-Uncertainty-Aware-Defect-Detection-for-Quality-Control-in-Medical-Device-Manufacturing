@@ -433,6 +433,70 @@ else:
     print(f"no reject curve for o={O_PICK} -- pick an o with an active reject head")
 '''
 
+RUNACC = '''# Forced vs selective accuracy vs o, and a no-abstention vs abstention accuracy/coverage
+# comparison, on the auto-picked best config. Self-contained: reloads the runs itself and
+# re-derives the chosen config (same rule as the Select cell). MIN_COV drops degenerate
+# low-coverage points where the model abstains on almost everything.
+MIN_COV = 0.60          # drop o where the model answers too few rows to be meaningful
+
+accdf_rows = []
+for r in manifest["runs"]:
+    p = root / r["metrics"]
+    if not p.exists():
+        continue
+    m = json.loads(p.read_text())
+    lr = m.get("learned_reject") or {}
+    accdf_rows.append({"o": r["o"], "class_weight": r["class_weight"], "hidden": r["hidden"],
+                       "dropout": r["dropout"], "lr": r["lr"], "seed": r["seed"],
+                       "forced_acc": m["forced"]["accuracy"],
+                       "sel_acc": lr.get("selective_accuracy"),
+                       "coverage": lr.get("coverage"),
+                       "macro_f1": m["forced"].get("macro_f1")})
+accdf = pd.DataFrame(accdf_rows)
+
+# auto-pick the best config (highest forced macro-F1 at the largest o), then average over seeds
+COLS = ["class_weight", "hidden", "dropout", "lr"]; om = accdf["o"].max()
+chosen = accdf[accdf["o"] == om].groupby(COLS)["macro_f1"].mean().idxmax()
+mask = np.ones(len(accdf), bool)
+for k, v in zip(COLS, chosen):
+    mask &= (accdf[k] == v)
+d = accdf[mask].groupby("o").mean(numeric_only=True).reset_index().sort_values("o")
+print("chosen config:", dict(zip(COLS, chosen)))
+
+# --- Diagram 1: o vs forced accuracy (abstention OFF, predict every row) ---
+fig1, ax = plt.subplots(figsize=(7, 4.5))
+ax.plot(d["o"], d["forced_acc"], marker="o", color="0.35", lw=2)
+ax.set_xlabel("payoff  o"); ax.set_ylabel("forced accuracy (all rows)")
+ax.set_title("Forced accuracy vs o")
+ax.grid(alpha=0.3); fig1.tight_layout(); save(fig1, "fig_maude_forced_vs_o"); plt.show()
+
+# --- Diagram 2: o vs selective accuracy (only where coverage is meaningful) ---
+d2 = d.dropna(subset=["sel_acc"])
+d2 = d2[d2["coverage"] >= MIN_COV]
+fig2, ax = plt.subplots(figsize=(7, 4.5))
+ax.plot(d2["o"], d2["sel_acc"], marker="o", color="#1f77b4", lw=2)
+ax.set_xlabel("payoff  o"); ax.set_ylabel("selective accuracy (kept rows)")
+ax.set_title(f"Selective accuracy vs o  (coverage >= {MIN_COV:.0%})")
+ax.grid(alpha=0.3); fig2.tight_layout(); save(fig2, "fig_maude_selective_vs_o"); plt.show()
+
+# --- Diagram 3: no-abstention vs abstention, accuracy vs coverage ---
+base_acc = float(d.loc[d["o"] == om, "forced_acc"].iloc[0])       # baseline: full coverage
+frontier = d.dropna(subset=["sel_acc"])
+frontier = frontier[frontier["coverage"] >= MIN_COV].sort_values("coverage")
+fig3, ax = plt.subplots(figsize=(7.5, 4.5))
+ax.plot(frontier["coverage"], frontier["sel_acc"], marker="o", color="#1f77b4", lw=2,
+        label="abstention model (operating points across o)")
+ax.scatter([1.0], [base_acc], color="#d62728", s=160, marker="*", zorder=5,
+           label=f"no abstention  (coverage 100%, acc {base_acc:.3f})")
+ax.axhline(base_acc, color="#d62728", ls="--", lw=1, alpha=0.6)
+ax.set_xlabel("coverage (fraction of reports answered)")
+ax.set_ylabel("accuracy on answered reports")
+ax.set_title("No-abstention vs abstention: accuracy vs coverage")
+ax.legend(); ax.grid(alpha=0.3); fig3.tight_layout(); save(fig3, "fig_maude_noabstain_vs_abstain"); plt.show()
+
+print(d[["o", "forced_acc", "sel_acc", "coverage"]].round(4).to_string(index=False))
+'''
+
 OPTIMAL = '''# Best operating point for the CHOSEN config: the o with the highest learned selective
 # accuracy at its target coverage, next to that config's regular baseline (largest o).
 pay = PAY
@@ -475,6 +539,10 @@ SECTIONS = [
     ("## Accuracy vs macro-F1 as coverage drops\\n\\nOne fixed model (`O_PICK`): accuracy is "
      "monotone as it abstains, but macro-F1 reveals whether abstention helps or hurts the rare "
      "classes. **Saved: `fig_maude_riskcoverage`.**", RISKCOV),
+    ("## Accuracy & coverage diagrams\\n\\nForced vs selective accuracy vs `o`, and the "
+     "no-abstention vs abstention accuracy/coverage comparison. `MIN_COV` drops degenerate "
+     "low-coverage points. **Saved: `fig_maude_forced_vs_o`, `fig_maude_selective_vs_o`, "
+     "`fig_maude_noabstain_vs_abstain`.**", RUNACC),
     ("## Optimal operating point", OPTIMAL),
 ]
 
