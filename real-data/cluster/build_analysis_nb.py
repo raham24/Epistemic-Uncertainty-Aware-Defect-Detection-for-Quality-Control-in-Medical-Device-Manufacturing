@@ -41,8 +41,8 @@ Paper-ready figures write to `figs/fig_maude_*.{png,pdf}`:
 | `fig_maude_noabstain_vs_abstain` | accuracy vs coverage: no-abstention baseline vs abstention model |
 | `fig_maude_confusion_baseline` | per-class confusion for the baseline -- where the accuracy really comes from |
 
-Prereq: run the sweep first. This notebook finds the repo automatically (the repo path
-is baked in at generation), so it works from the home dir too.
+Prereq: run the sweep first. Generated into the repo root next to
+`synthetic_analysis.ipynb`; it finds the sweep data automatically.
 """
 
 LOAD = '''from __future__ import annotations
@@ -547,9 +547,10 @@ def code(source):
 
 
 def main():
-    # bake the repo root into the notebook so it also runs from the home dir (the cwd
-    # walk-up fallback in the Load cell). real-data/cluster/build_analysis_nb.py -> repo.
-    repo_root = str(Path(__file__).resolve().parents[2])
+    # bake the repo root into the notebook as a fallback so it still finds the data if
+    # opened from elsewhere. real-data/cluster/build_analysis_nb.py -> repo root.
+    repo = Path(__file__).resolve().parents[2]
+    repo_root = str(repo)
     cells = [md(TITLE)]
     for header, src in SECTIONS:
         if header:
@@ -563,10 +564,9 @@ def main():
         },
         "nbformat": 4, "nbformat_minor": 5,
     }
-    out = Path.home() / "real_data_analysis.ipynb"
+    out = repo / "real_data_analysis.ipynb"          # repo root, next to synthetic_analysis.ipynb
     out.write_text(json.dumps(nb, indent=1) + "\n")
     print(f"wrote {out}  ({sum(1 for _, s in SECTIONS)} code cells)")
-    print(f"  repo baked in for home-dir runs: {repo_root}")
 
 
 if __name__ == "__main__":
