@@ -1,7 +1,7 @@
-"""Build cluster_analysis.ipynb (the sweep comparison notebook) from cell sources.
+"""Build synthetic_analysis.ipynb (the SMT sweep analysis notebook) from cell sources.
 
 Run from the repo root:  python3 cluster/build_analysis_nb.py
-Emits cluster_analysis.ipynb in the repo root. Stdlib only (json).
+Emits synthetic_analysis.ipynb in the repo root. Stdlib only (json).
 
 The notebook loads cluster/manifest.json + every results/cluster/<run>.json that
 training produced, then analyses the sweep in two layers:
@@ -18,24 +18,21 @@ PNG + PDF (fig_*.{png,pdf}) so they can drop straight into the paper.
 import json
 from pathlib import Path
 
-TITLE = """# Cluster sweep analysis
+TITLE = """# Synthetic (SMT) sweep analysis
 
-Compares every model trained by the cluster sweep (`cluster/`). The sweep is a
-**core grid** (both losses x all dataset variants, each vs its Bayes ceiling) plus
-focused **studies** that vary one hyperparameter at a time.
+Analyses the synthetic sweep (`cluster/`): a multi-head MLP trained on datasets of
+increasing difficulty, with and without the learned-abstention head. The focus is the
+abstention story -- why harder datasets are harder, and how much abstaining buys back.
 
 Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 
 | figure | what it shows |
 |---|---|
-| `fig_accuracy_vs_bayes` | defect accuracy vs the Bayes ceiling, per dataset (headline) |
-| `fig_gap_to_bayes` | how far each loss sits below optimal |
-| `fig_risk_coverage` | abstention's coverage/accuracy trade-off across `o` (one operating point per model) |
+| `fig_posterior_overlap` | why the hardest problem is harder: class posteriors / features overlap |
+| `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
 | `fig_metrics_vs_o` | accuracy + macro-F1 across the payoff `o` sweep |
-| `fig_selective_risk` | selective-risk curves (reject threshold swept) vs confidence baseline + Bayes floor |
-| `fig_abstention_gain_vs_difficulty` | does abstaining help more as the data gets harder? |
-| `fig_margin_hist` | rejected boards are more ambiguous (smaller margin) |
-| `fig_mechanism_risk`, `fig_capacity`, `fig_dropout_lr`, `fig_class_weight` | mechanism/risk + hyperparameter studies |
+| `fig_hardness_hist` | harder tasks -> lower accuracy AND bigger abstention gain (two histograms) |
+| `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 
 Prereq: run the sweep first (`bash cluster/submit.sh` on SLURM, or
 `bash cluster/run_local.sh` locally), then run this notebook from the repo root.
@@ -552,35 +549,96 @@ for name, axis, metric, maximize in [
         print(f"  {name:12s} [{ds:11s}] best {axis}={win[axis]!s:11s} -> {metric}={win[metric]:.4f}")
 '''
 
+OVERLAP = '''# WHY the hardest problem is harder: the exact class posteriors p(y|x) overlap more on
+# harder datasets, so even the Bayes-optimal classifier errs more. LEFT: the top class
+# posterior (max_y p(y|x)) for the easiest vs hardest dataset -- the hard one shifts
+# toward chance (1/K), i.e. the classes are less separable. RIGHT: two raw process
+# features colored by defect class on the hardest dataset -- the class clouds overlap.
+# Reads only the dataset CSVs (data/cluster/*.csv); no model needed.
+csvs = {d: root / "data" / "cluster" / f"{d}.csv" for d in manifest["datasets"]}
+csvs = {d: p for d, p in csvs.items() if p.exists()}
+if csvs:
+    def _bayes_err(path):
+        dd = pd.read_csv(path, usecols=lambda c: c.startswith("p_"))
+        post = dd.to_numpy()
+        return float((1 - post.max(1)).mean())
+    berr = {d: _bayes_err(p) for d, p in csvs.items()}
+    easy, hard = min(berr, key=berr.get), max(berr, key=berr.get)
+    de, dh = pd.read_csv(csvs[easy]), pd.read_csv(csvs[hard])
+    pc = [c for c in de.columns if c.startswith("p_")]
+    cols = de.columns.tolist(); feat = cols[:cols.index(pc[0])]   # raw features precede p_*
+    K = len(pc)
+
+    fig, (a0, a1) = plt.subplots(1, 2, figsize=(13, 5))
+    for dd, lab, col in [(de, f"easiest: {easy} (Bayes err {berr[easy]:.3f})", COLORS["cascade"]),
+                         (dh, f"hardest: {hard} (Bayes err {berr[hard]:.3f})", COLORS["abstention"])]:
+        top = dd[pc].to_numpy().max(1)
+        a0.hist(top, bins=40, range=(1.0 / K, 1.0), density=True, alpha=0.6, color=col, label=lab)
+    a0.axvline(1.0 / K, color="k", ls=":", lw=1, label=f"chance = 1/{K}")
+    a0.set_xlabel("top class posterior  max_y p(y|x)"); a0.set_ylabel("density")
+    a0.set_title("Class posteriors overlap more on harder data"); a0.legend(fontsize=9)
+
+    sc = dh.sample(min(len(dh), 4000), random_state=0)
+    for lab in sorted(sc["defect_label"].unique()):
+        m = sc["defect_label"] == lab
+        a1.scatter(sc.loc[m, feat[0]], sc.loc[m, feat[1]], s=7, alpha=0.4, label=lab)
+    a1.set_xlabel(feat[0]); a1.set_ylabel(feat[1])
+    a1.set_title(f"Features overlap by defect class ({hard})")
+    a1.legend(fontsize=8, markerscale=2)
+    fig.tight_layout(); save_fig(fig, "fig_posterior_overlap"); plt.show()
+else:
+    print("no dataset CSVs found (need data/cluster/*.csv on the cluster)")
+'''
+
+HARD_HIST = '''# TWO histograms tying difficulty together, datasets ordered easy -> hard by Bayes
+# error. LEFT: forced accuracy FALLS as the task gets harder. RIGHT: the accuracy
+# GAINED by abstaining RISES as the task gets harder -- so abstention earns its keep
+# exactly where the plain classifier struggles. (Needs the selective-compute cell for
+# `sel_table`.)
+if len(sel_table):
+    t = sel_table.sort_values("bayes_err").reset_index(drop=True)
+    core = study("core")
+    acc = {d: core[(core.dataset == d) & (core.loss == "cascade")]["defect_acc"].mean()
+           for d in t["dataset"]}
+    order = list(t["dataset"]); x = np.arange(len(order))
+    fig, (a0, a1) = plt.subplots(1, 2, figsize=(13, 5))
+    a0.bar(x, [acc[d] for d in order], color=COLORS["cascade"])
+    a0.set_xticks(x); a0.set_xticklabels(order, rotation=30, ha="right")
+    a0.set_ylabel("forced defect accuracy"); a0.grid(axis="x", alpha=0)
+    a0.set_ylim(max(0.0, min(acc.values()) - 0.05), 1.0)
+    a0.set_title("Accuracy falls as the task gets harder")
+    a1.bar(x, t["gain_vs_ce"], color=COLORS["abstention"])
+    a1.set_xticks(x); a1.set_xticklabels(order, rotation=30, ha="right")
+    a1.axhline(0, color="k", lw=0.8); a1.grid(axis="x", alpha=0)
+    a1.set_ylabel(f"accuracy gained by abstaining @ cov~{SEL_COVERAGE:.2f}")
+    a1.set_title("Abstention gains more as the task gets harder")
+    fig.tight_layout(); save_fig(fig, "fig_hardness_hist"); plt.show()
+else:
+    print("run the selective-compute cell first (needs sel_table)")
+'''
+
 # (markdown header, code) in notebook order
 SECTIONS = [
     ("## Load every run\\n\\nLoads the manifest + each run's metrics into one dataframe, with helpers to "
      "slice by study and average over seeds.", LOAD),
     ("## Plot style\\n\\nShared paper style + a `save_fig` helper that writes `figs/fig_*.{png,pdf}`.", STYLE),
-    ("## Core grid\\n\\nBoth losses across every dataset variant: full table, then averaged over seeds.",
-     CORE_TABLE),
-    (None, CORE_AGG),
-    ("### Defect accuracy vs the Bayes ceiling (headline)\\n\\nHorizontal dumbbell, zoomed to the real "
-     "accuracy range. **Saved: `fig_accuracy_vs_bayes`.**", ACC_DUMBBELL),
-    ("### Gap to the Bayes ceiling\\n\\n**Saved: `fig_gap_to_bayes`.**", GAP_PLOT),
-    ("### Mechanism accuracy and risk MAE\\n\\n**Saved: `fig_mechanism_risk`.**", RISK_MECH_PLOT),
-    ("## Payoff study (abstention)\\n\\n### Risk-coverage curve\\n\\nThe selective-classification figure: "
-     "coverage vs selective accuracy as `o` sweeps. **Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
-    ("### Classification quality across o\\n\\nForced accuracy + macro-F1 vs `o` (the o-sweep). "
+    ("## Why the hardest problem is harder\\n\\nClass posteriors / features overlap more on harder "
+     "datasets, so the Bayes-optimal ceiling itself is lower. **Saved: `fig_posterior_overlap`.**", OVERLAP),
+    ("## Risk vs coverage\\n\\nThe selective-classification figure: coverage vs selective accuracy as the "
+     "payoff `o` sweeps (one operating point per model); star = cascade at full coverage. "
+     "**Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
+    ("## Risk (accuracy) vs the payoff o\\n\\nForced accuracy + macro-F1 across the `o` sweep. "
      "**Saved: `fig_metrics_vs_o`.**", PAYOFF_CLS_PLOT),
-    ("## Selective-classification analysis (threshold-swept)\\n\\nReplicates the professor's "
-     "`toy_example`: loads the saved checkpoints and sweeps the **rejection threshold** on each "
-     "model (the standard selective-risk view), instead of fixing the threshold and sweeping `o`. "
-     "Runs on the cluster (needs `results/cluster/*.pt` + `data/cluster/*.csv`).", SEL_COMPUTE),
-    ("### Selective-risk curves\\n\\nAccepted error vs coverage, easy -> hard, vs the confidence "
-     "baseline / CE / Bayes floor. **Saved: `fig_selective_risk`.**", SEL_RISK_PLOT),
-    ("### Does abstaining help more as the problem gets harder?\\n\\n**Saved: "
-     "`fig_abstention_gain_vs_difficulty`.**", SEL_GAIN_PLOT),
-    ("### Rejected boards are more ambiguous\\n\\n**Saved: `fig_margin_hist`.**", SEL_MARGIN_PLOT),
-    ("## Capacity study\\n\\nTrunk width/depth (cascade). **Saved: `fig_capacity`.**", CAPACITY_PLOT),
-    ("## Dropout and learning-rate studies\\n\\n**Saved: `fig_dropout_lr`.**", REG_OPT_PLOT),
-    ("## Class-weight study\\n\\nDefect-head reweighting, where minority recall matters most. "
-     "**Saved: `fig_class_weight`.**", CW_PLOT),
+    ("## Selective-classification analysis (threshold-swept)\\n\\nLoads the saved checkpoints and sweeps "
+     "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
+     "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` for the cells below.",
+     SEL_COMPUTE),
+    ("## Harder tasks: lower accuracy, bigger abstention gain\\n\\nTwo histograms, datasets ordered "
+     "easy -> hard: accuracy falls, and the gain from abstaining rises. **Saved: `fig_hardness_hist`.**",
+     HARD_HIST),
+    ("## Comparing the datasets: selective-risk curves\\n\\nAccepted error vs coverage for every dataset, "
+     "easy -> hard, vs the confidence baseline / CE / Bayes floor. **Saved: `fig_selective_risk`.**",
+     SEL_RISK_PLOT),
     ("## Optimal configurations", OPTIMAL),
 ]
 
@@ -610,7 +668,7 @@ def main():
         },
         "nbformat": 4, "nbformat_minor": 5,
     }
-    out = Path(__file__).resolve().parent.parent / "cluster_analysis.ipynb"
+    out = Path(__file__).resolve().parent.parent / "synthetic_analysis.ipynb"
     out.write_text(json.dumps(nb, indent=1) + "\n")
     n_code = sum(1 for _, s in SECTIONS)
     print(f"wrote {out}  ({n_code} code cells)")

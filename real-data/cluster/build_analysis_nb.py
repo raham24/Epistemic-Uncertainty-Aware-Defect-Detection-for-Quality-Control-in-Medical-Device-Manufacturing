@@ -36,14 +36,13 @@ Paper-ready figures write to `figs/fig_maude_*.{png,pdf}`:
 
 | figure | what it shows |
 |---|---|
+| `fig_maude_forced_vs_o` | forced accuracy (all rows) vs `o` |
+| `fig_maude_selective_vs_o` | selective accuracy (kept rows) vs `o` |
+| `fig_maude_noabstain_vs_abstain` | accuracy vs coverage: no-abstention baseline vs abstention model |
 | `fig_maude_confusion_baseline` | per-class confusion for the baseline -- where the accuracy really comes from |
-| `fig_maude_accuracy_vs_o` | accuracy vs `o`: forced (monotone) + selective at each model's chosen operating point |
-| `fig_maude_coverage_accuracy_by_o` | selective accuracy vs coverage, one line per `o` (pick an operating point) |
-| `fig_maude_regular_vs_selective` | regular (baseline, all rows) vs selective (abstain on hard rows) |
-| `fig_maude_riskcoverage` | one model: accuracy vs macro-F1 as it abstains more |
 
-Prereq: run the sweep first (`bash real-data/cluster/submit.sh`), then run this
-notebook from the repo root.
+Prereq: run the sweep first. This notebook finds the repo automatically (the repo path
+is baked in at generation), so it works from the home dir too.
 """
 
 LOAD = '''from __future__ import annotations
@@ -56,10 +55,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# find the repo root by walking up until the manifest appears
+# find the repo root: walk up from the cwd; if that fails (e.g. the notebook was moved
+# to the home dir), fall back to the absolute repo path baked in at generation time.
 root = Path.cwd()
 while not (root / "real-data" / "cluster" / "manifest.json").exists() and root != root.parent:
     root = root.parent
+if not (root / "real-data" / "cluster" / "manifest.json").exists():
+    root = Path(r"__REPO_ROOT__")
 manifest = json.loads((root / "real-data" / "cluster" / "manifest.json").read_text())
 print("runs in matrix:", len(manifest["runs"]))
 print("base config    :", manifest["base"])
@@ -433,10 +435,9 @@ else:
     print(f"no reject curve for o={O_PICK} -- pick an o with an active reject head")
 '''
 
-RUNACC = '''# Forced vs selective accuracy vs o, and a no-abstention vs abstention accuracy/coverage
-# comparison, on the auto-picked best config. Self-contained: reloads the runs itself and
-# re-derives the chosen config (same rule as the Select cell). MIN_COV drops degenerate
-# low-coverage points where the model abstains on almost everything.
+RUNACC = '''# The two headline diagrams: accuracy vs o, and accuracy (risk) vs coverage. Re-derives
+# the chosen config (same rule as the Select cell). Uses `root`/`manifest` from the Load
+# cell. MIN_COV drops degenerate low-coverage points where the model abstains on ~all rows.
 MIN_COV = 0.60          # drop o where the model answers too few rows to be meaningful
 
 accdf_rows = []
@@ -523,26 +524,14 @@ SECTIONS = [
      "`PICK_CONFIG` to override.", SELECT),
     ("## Regular baseline (no abstention)\\n\\nThe largest-`o` model, which never abstains -- the "
      "plain classifier the abstention models are compared against.", BASELINE),
+    ("## Risk / accuracy vs coverage and vs o\\n\\nThe two headline diagrams: **accuracy vs `o`** "
+     "(forced, all rows, + selective, kept rows) and **accuracy (risk) vs coverage** "
+     "(no-abstention baseline vs the abstention model). `MIN_COV` drops degenerate low-coverage "
+     "points. **Saved: `fig_maude_forced_vs_o`, `fig_maude_selective_vs_o`, "
+     "`fig_maude_noabstain_vs_abstain`.**", RUNACC),
     ("## Per-class breakdown\\n\\nWhere the accuracy actually comes from: per-class "
      "precision/recall/F1 and the confusion matrix for the baseline. Accuracy hides the rare "
      "classes; this exposes them. **Saved: `fig_maude_confusion_baseline`.**", PERCLASS),
-    ("## Accuracy vs payoff o (headline)\\n\\nForced accuracy rises to the baseline and plateaus; "
-     "selective accuracy is read at each model's own chosen operating point (learned reject -- "
-     "coverage NOT held fixed), so it can peak in the middle. That peak is the best `o`. "
-     "**Saved: `fig_maude_accuracy_vs_o`.**", ACC_VS_O),
-    ("## Choose the operating point\\n\\nSelective accuracy vs coverage for every `o`, plus a table "
-     "of accuracy at fixed coverages -- so you can pick an `o` with good coverage AND accuracy. "
-     "**Saved: `fig_maude_coverage_accuracy_by_o`.**", CHOOSER),
-    ("## Regular vs selective accuracy\\n\\nThe baseline (all rows) vs an abstention model that "
-     "declines the hard rows (selective, at `TARGET_COV`). Coverage-aware selection: set "
-     "`TARGET_COV` (and optionally `PICK_O`) at the top of the cell. **Saved: `fig_maude_regular_vs_selective`.**", REG_VS_SEL),
-    ("## Accuracy vs macro-F1 as coverage drops\\n\\nOne fixed model (`O_PICK`): accuracy is "
-     "monotone as it abstains, but macro-F1 reveals whether abstention helps or hurts the rare "
-     "classes. **Saved: `fig_maude_riskcoverage`.**", RISKCOV),
-    ("## Accuracy & coverage diagrams\\n\\nForced vs selective accuracy vs `o`, and the "
-     "no-abstention vs abstention accuracy/coverage comparison. `MIN_COV` drops degenerate "
-     "low-coverage points. **Saved: `fig_maude_forced_vs_o`, `fig_maude_selective_vs_o`, "
-     "`fig_maude_noabstain_vs_abstain`.**", RUNACC),
     ("## Optimal operating point", OPTIMAL),
 ]
 
@@ -558,11 +547,14 @@ def code(source):
 
 
 def main():
+    # bake the repo root into the notebook so it also runs from the home dir (the cwd
+    # walk-up fallback in the Load cell). real-data/cluster/build_analysis_nb.py -> repo.
+    repo_root = str(Path(__file__).resolve().parents[2])
     cells = [md(TITLE)]
     for header, src in SECTIONS:
         if header:
             cells.append(md(header.replace("\\n", "\n")))
-        cells.append(code(src))
+        cells.append(code(src.replace("__REPO_ROOT__", repo_root)))
     nb = {
         "cells": cells,
         "metadata": {
@@ -571,9 +563,10 @@ def main():
         },
         "nbformat": 4, "nbformat_minor": 5,
     }
-    out = Path(__file__).resolve().parent.parent / "real_data_analysis.ipynb"
+    out = Path.home() / "real_data_analysis.ipynb"
     out.write_text(json.dumps(nb, indent=1) + "\n")
     print(f"wrote {out}  ({sum(1 for _, s in SECTIONS)} code cells)")
+    print(f"  repo baked in for home-dir runs: {repo_root}")
 
 
 if __name__ == "__main__":
