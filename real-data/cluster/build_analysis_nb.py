@@ -36,7 +36,6 @@ Paper-ready figures write to `figs/fig_maude_*.{png,pdf}`:
 
 | figure | what it shows |
 |---|---|
-| `fig_maude_forced_vs_o` | forced accuracy (all rows) vs `o` |
 | `fig_maude_selective_vs_o` | selective accuracy (kept rows) vs `o` |
 | `fig_maude_noabstain_vs_abstain` | accuracy vs coverage: no-abstention baseline vs abstention model |
 | `fig_maude_confusion_baseline` | per-class confusion for the baseline -- where the accuracy really comes from |
@@ -464,14 +463,7 @@ for k, v in zip(COLS, chosen):
 d = accdf[mask].groupby("o").mean(numeric_only=True).reset_index().sort_values("o")
 print("chosen config:", dict(zip(COLS, chosen)))
 
-# --- Diagram 1: o vs forced accuracy (abstention OFF, predict every row) ---
-fig1, ax = plt.subplots(figsize=(7, 4.5))
-ax.plot(d["o"], d["forced_acc"], marker="o", color="0.35", lw=2)
-ax.set_xlabel("payoff  o"); ax.set_ylabel("forced accuracy (all rows)")
-ax.set_title("Forced accuracy vs o")
-ax.grid(alpha=0.3); fig1.tight_layout(); save(fig1, "fig_maude_forced_vs_o"); plt.show()
-
-# --- Diagram 2: o vs selective accuracy (only where coverage is meaningful) ---
+# --- Diagram 1: o vs selective accuracy (only where coverage is meaningful) ---
 d2 = d.dropna(subset=["sel_acc"])
 d2 = d2[d2["coverage"] >= MIN_COV]
 fig2, ax = plt.subplots(figsize=(7, 4.5))
@@ -480,7 +472,7 @@ ax.set_xlabel("payoff  o"); ax.set_ylabel("selective accuracy (kept rows)")
 ax.set_title(f"Selective accuracy vs o  (coverage >= {MIN_COV:.0%})")
 ax.grid(alpha=0.3); fig2.tight_layout(); save(fig2, "fig_maude_selective_vs_o"); plt.show()
 
-# --- Diagram 3: no-abstention vs abstention, accuracy vs coverage ---
+# --- Diagram 2: no-abstention vs abstention, accuracy vs coverage ---
 base_acc = float(d.loc[d["o"] == om, "forced_acc"].iloc[0])       # baseline: full coverage
 frontier = d.dropna(subset=["sel_acc"])
 frontier = frontier[frontier["coverage"] >= MIN_COV].sort_values("coverage")
@@ -524,10 +516,9 @@ SECTIONS = [
      "`PICK_CONFIG` to override.", SELECT),
     ("## Regular baseline (no abstention)\\n\\nThe largest-`o` model, which never abstains -- the "
      "plain classifier the abstention models are compared against.", BASELINE),
-    ("## Risk / accuracy vs coverage and vs o\\n\\nThe two headline diagrams: **accuracy vs `o`** "
-     "(forced, all rows, + selective, kept rows) and **accuracy (risk) vs coverage** "
-     "(no-abstention baseline vs the abstention model). `MIN_COV` drops degenerate low-coverage "
-     "points. **Saved: `fig_maude_forced_vs_o`, `fig_maude_selective_vs_o`, "
+    ("## Risk / accuracy vs coverage and vs o\\n\\nThe two headline diagrams: **selective accuracy vs "
+     "`o`** (kept rows) and **accuracy (risk) vs coverage** (no-abstention baseline vs the abstention "
+     "model). `MIN_COV` drops degenerate low-coverage points. **Saved: `fig_maude_selective_vs_o`, "
      "`fig_maude_noabstain_vs_abstain`.**", RUNACC),
     ("## Per-class breakdown\\n\\nWhere the accuracy actually comes from: per-class "
      "precision/recall/F1 and the confusion matrix for the baseline. Accuracy hides the rare "

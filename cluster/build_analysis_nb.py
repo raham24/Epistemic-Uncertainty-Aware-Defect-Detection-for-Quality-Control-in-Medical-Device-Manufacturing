@@ -28,10 +28,10 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 
 | figure | what it shows |
 |---|---|
-| `fig_posterior_overlap` | why the hardest problem is harder: class posteriors / features overlap |
+| `fig_feature_separability` | why the hardest problem is harder: per-feature class-conditional densities + overlap |
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
 | `fig_metrics_vs_o` | accuracy + macro-F1 across the payoff `o` sweep |
-| `fig_hardness_hist` | harder tasks -> lower accuracy AND bigger abstention gain (two histograms) |
+| `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 
 Prereq: run the sweep first (`bash cluster/submit.sh` on SLURM, or
@@ -617,25 +617,120 @@ else:
     print("run the selective-compute cell first (needs sel_table)")
 '''
 
+FEATSEP = '''# FEATURE SEPARABILITY: per-feature class-conditional densities on the hardest dataset.
+# LOW overlap between open-circuit (blue) and solder-bridging (red) => that process
+# feature separates the defects; HIGH overlap => it carries little signal. Dashed lines
+# are the spec limits (lsl / usl). This is why the hardest problem is hard -- the
+# discriminative features still overlap. Reads only the dataset CSV + the spec YAML.
+DS_PICK = None          # None -> hardest dataset (highest Bayes error)
+csvs = {d: root / "data" / "cluster" / f"{d}.csv" for d in manifest["datasets"]}
+csvs = {d: p for d, p in csvs.items() if p.exists()}
+if csvs:
+    def _berr(p):
+        dd = pd.read_csv(p, usecols=lambda c: c.startswith("p_"))
+        return float((1 - dd.to_numpy().max(1)).mean())
+    ds = DS_PICK or max(csvs, key=lambda d: _berr(csvs[d]))
+    dh = pd.read_csv(csvs[ds])
+    pcs = [c for c in dh.columns if c.startswith("p_")]
+    feats = dh.columns.tolist()[:dh.columns.tolist().index(pcs[0])]
+
+    # spec limits (lsl/usl) from the YAML, no pyyaml dependency
+    lims, cur, in_p = {}, None, False
+    for line in (root / "domain" / "smt_paper.yaml").read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line[0].isspace():
+            in_p = line.strip().startswith("parameters:"); cur = None; continue
+        if not in_p:
+            continue
+        s = line.strip()
+        if s.startswith("- id:"):
+            cur = s.split("id:", 1)[1].split("#")[0].strip(); lims[cur] = []
+        elif cur and (s.startswith("lsl:") or s.startswith("usl:")):
+            lims[cur].append(float(s.split(":", 1)[1].split("#")[0]))
+
+    CLS = [("no_defect", "no defect", "#9e9e9e"),
+           ("open_circuit", "open circuit", COLORS["cascade"]),
+           ("solder_bridging", "solder bridging", COLORS["abstention"])]
+    ncol = 3; nrow = int(np.ceil(len(feats) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(5.2 * ncol, 3.6 * nrow), squeeze=False)
+    for k, f in enumerate(feats):
+        ax = axes[k // ncol][k % ncol]
+        bins = np.linspace(dh[f].min(), dh[f].max(), 60)
+        hists = {}
+        for key, lab, col in CLS:
+            v = dh.loc[dh["defect_label"] == key, f].to_numpy()
+            if len(v):
+                ax.hist(v, bins=bins, density=True, alpha=0.55, color=col, label=lab)
+                h, _ = np.histogram(v, bins=bins); hists[key] = h / max(h.sum(), 1)
+        if "open_circuit" in hists and "solder_bridging" in hists:
+            ov = float(np.minimum(hists["open_circuit"], hists["solder_bridging"]).sum())
+        else:
+            ov = float("nan")
+        for lim in lims.get(f, []):
+            ax.axvline(lim, ls="--", color="k", lw=1, alpha=0.7)
+        ax.set_title(f"{f}\\nopen/bridge overlap = {ov:.2f}", fontsize=10); ax.grid(alpha=0.2)
+    for k in range(len(feats), nrow * ncol):
+        axes[k // ncol][k % ncol].axis("off")
+    axes[0][0].legend(fontsize=9)
+    fig.suptitle(f"Feature values by defect class (density), hardest dataset ({ds})  --  "
+                 "low overlap = the class colors separate", fontweight="bold")
+    fig.tight_layout(); save_fig(fig, "fig_feature_separability"); plt.show()
+else:
+    print("no dataset CSVs found (need data/cluster/*.csv on the cluster)")
+'''
+
+CAS_VS_ABST = '''core = study("core")
+datasets = list(manifest["datasets"])
+cas = seed_mean(core[core.loss == "cascade"], ["dataset"], ["defect_acc"])
+ab  = seed_mean(core[core.loss == "abstention"], ["dataset"], ["selective_acc@0.5", "coverage@0.5"])
+
+def _g(frame, ds, col):
+    v = frame[frame.dataset == ds][col]
+    return float(v.iloc[0]) if len(v) else np.nan
+
+order = sorted(datasets, key=lambda d: _g(cas, d, "defect_acc"))
+x = np.arange(len(order)); w = 0.38
+cas_acc = [_g(cas, d, "defect_acc") for d in order]
+sel_acc = [_g(ab, d, "selective_acc@0.5") for d in order]
+cov     = [_g(ab, d, "coverage@0.5") for d in order]
+
+fig, ax = plt.subplots(figsize=(11, 6))
+ax.bar(x - w/2, cas_acc, w, color=COLORS["cascade"], label="cascade (full coverage)")
+ax.bar(x + w/2, sel_acc, w, color=COLORS["abstention"], label="abstention (selective, r<0.5)")
+for xi, s, c in zip(x, sel_acc, cov):
+    if not np.isnan(s):
+        ax.annotate(f"cov {c:.2f}", (xi + w/2, s), ha="center", va="bottom", fontsize=8)
+allv = [v for v in cas_acc + sel_acc if not np.isnan(v)]
+ax.set_ylim(max(0.0, min(allv) - 0.03), 1.0)
+ax.set_xticks(x); ax.set_xticklabels(order, rotation=25, ha="right")
+ax.set_ylabel("accuracy")
+ax.set_title("Cascade full-coverage accuracy vs abstention selective accuracy (answered boards, r<0.5)")
+ax.legend(loc="lower right"); ax.grid(axis="x", alpha=0)
+save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
+'''
+
 # (markdown header, code) in notebook order
 SECTIONS = [
     ("## Load every run\\n\\nLoads the manifest + each run's metrics into one dataframe, with helpers to "
      "slice by study and average over seeds.", LOAD),
     ("## Plot style\\n\\nShared paper style + a `save_fig` helper that writes `figs/fig_*.{png,pdf}`.", STYLE),
-    ("## Why the hardest problem is harder\\n\\nClass posteriors / features overlap more on harder "
-     "datasets, so the Bayes-optimal ceiling itself is lower. **Saved: `fig_posterior_overlap`.**", OVERLAP),
+    ("## Why the hardest problem is harder (feature separability)\\n\\nPer-feature class-conditional "
+     "densities on the hardest dataset. Low open/bridge overlap = the feature separates the defects; "
+     "high overlap = it carries little signal, which is what makes the task hard. **Saved: "
+     "`fig_feature_separability`.**", FEATSEP),
     ("## Risk vs coverage\\n\\nThe selective-classification figure: coverage vs selective accuracy as the "
      "payoff `o` sweeps (one operating point per model); star = cascade at full coverage. "
      "**Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
     ("## Risk (accuracy) vs the payoff o\\n\\nForced accuracy + macro-F1 across the `o` sweep. "
      "**Saved: `fig_metrics_vs_o`.**", PAYOFF_CLS_PLOT),
+    ("## Cascade vs abstention (selective accuracy)\\n\\nFull-coverage cascade accuracy vs abstention's "
+     "selective accuracy on the boards it answers (`r<0.5`), per dataset, coverage annotated. "
+     "**Saved: `fig_cascade_vs_abstention_selective`.**", CAS_VS_ABST),
     ("## Selective-classification analysis (threshold-swept)\\n\\nLoads the saved checkpoints and sweeps "
      "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
      "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` for the cells below.",
      SEL_COMPUTE),
-    ("## Harder tasks: lower accuracy, bigger abstention gain\\n\\nTwo histograms, datasets ordered "
-     "easy -> hard: accuracy falls, and the gain from abstaining rises. **Saved: `fig_hardness_hist`.**",
-     HARD_HIST),
     ("## Comparing the datasets: selective-risk curves\\n\\nAccepted error vs coverage for every dataset, "
      "easy -> hard, vs the confidence baseline / CE / Bayes floor. **Saved: `fig_selective_risk`.**",
      SEL_RISK_PLOT),
