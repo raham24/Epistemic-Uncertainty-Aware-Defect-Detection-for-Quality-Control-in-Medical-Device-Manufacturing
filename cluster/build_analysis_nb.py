@@ -266,31 +266,43 @@ else:
     print("no payoff-study runs with metrics yet")
 '''
 
-PAYOFF_CLS_PLOT = '''# The o-sweep on classification quality, per dataset. LEFT: SELECTIVE accuracy at the
-# h=0.5 accept threshold, dropping o where coverage < MIN_COV (there the model abstains on
-# ~everything, so the accuracy is off a tiny sample). Forced accuracy is monotone and
-# uninformative here, so we show answered-board accuracy instead. RIGHT: macro-F1 vs o --
-# it climbs toward o=4 (dashed line, where the abstention term reduces to cross-entropy).
-MIN_COV = 0.60          # drop o where the model answers too few boards to be meaningful
-pay = study("payoff")
-if len(pay):
-    sm = seed_mean(pay, ["dataset", "o"], ["selective_acc@0.5", "coverage@0.5", "defect_macrof1"])
+PAYOFF_CLS_PLOT = '''# SELECTIVE accuracy vs the payoff o, per dataset -- the analog of the real-data plot.
+# For each model we read its reject-threshold sweep (by_threshold h=0.3/0.5/0.7) and
+# INTERPOLATE the selective accuracy at a FIXED coverage TARGET_COV. Fixing coverage is
+# what removes the confound (each o abstains a different amount), so the curve can PEAK in
+# the middle: low o under-trains, high o stops abstaining. RIGHT: macro-F1 vs o.
+# NOTE: only 3 thresholds were stored, so the curve is coarser than real-data's.
+TARGET_COV = 0.65
+pay_runs = [r for r in manifest["runs"] if "payoff" in (r.get("studies") or [])]
+recs = []
+for r in pay_runs:
+    p = root / r["metrics"]
+    if not p.exists():
+        continue
+    m = json.loads(p.read_text())
+    bt = (m.get("abstention") or {}).get("by_threshold") or {}
+    pts = sorted((v["coverage"], v["selective_accuracy"]) for v in bt.values()
+                 if v.get("coverage") is not None and v.get("selective_accuracy") is not None)
+    sel = float(np.interp(TARGET_COV, [c for c, _ in pts], [a for _, a in pts])) if len(pts) >= 2 else np.nan
+    recs.append({"dataset": r["dataset"], "o": r["o"], "seed": r["seed"],
+                 "sel_at_cov": sel, "macro_f1": m["defect_head"]["macro_f1"]})
+pr = pd.DataFrame(recs)
+if len(pr) and pr["sel_at_cov"].notna().any():
+    sm = pr.groupby(["dataset", "o"], dropna=False)[["sel_at_cov", "macro_f1"]].mean().reset_index()
     cmap = plt.get_cmap("tab10")
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
-    for j, dset in enumerate(sorted(pay["dataset"].unique())):
+    for j, dset in enumerate(sorted(pr["dataset"].dropna().unique())):
         s = sm[sm.dataset == dset].sort_values("o")
-        ssel = s[s["coverage@0.5"] >= MIN_COV] if "coverage@0.5" in s.columns else s
-        axes[0].plot(ssel["o"], ssel["selective_acc@0.5"], "-o", ms=4, color=cmap(j), label=dset)
-        axes[1].plot(s["o"], s["defect_macrof1"], "-o", ms=4, color=cmap(j), label=dset)
-    axes[0].set_title(f"selective accuracy vs payoff o  (coverage >= {MIN_COV:.0%})")
+        axes[0].plot(s["o"], s["sel_at_cov"], "-o", ms=4, color=cmap(j), label=dset)
+        axes[1].plot(s["o"], s["macro_f1"], "-o", ms=4, color=cmap(j), label=dset)
+    axes[0].set_title(f"selective accuracy vs payoff o  (@ coverage {TARGET_COV:.0%})")
     axes[0].set_ylabel("selective accuracy (answered boards)")
     axes[1].set_title("macro-F1 (minority-sensitive) vs payoff o"); axes[1].set_ylabel("macro-F1")
     for a in axes:
-        a.set_xlabel("payoff o"); a.axvline(4.0, ls="--", color="k", alpha=0.5)
-        a.legend(title="dataset")
+        a.set_xlabel("payoff o"); a.axvline(4.0, ls="--", color="k", alpha=0.5); a.legend(title="dataset")
     save_fig(fig, "fig_metrics_vs_o"); plt.show()
 else:
-    print("no payoff-study runs with metrics yet")
+    print("no payoff-study abstention runs with by_threshold metrics yet")
 '''
 
 SEL_COMPUTE = '''# Selective-classification analysis (replicates the toy_example). Unlike the cells
