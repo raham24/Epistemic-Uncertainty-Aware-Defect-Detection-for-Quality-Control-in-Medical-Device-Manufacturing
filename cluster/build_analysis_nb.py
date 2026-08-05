@@ -28,9 +28,9 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 
 | figure | what it shows |
 |---|---|
-| `fig_feature_separability` | why the hardest problem is harder: per-feature class-conditional densities + overlap |
+| `fig_feature_separability_<dataset>` | per-feature class-conditional densities + overlap, baseline vs hardest |
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
-| `fig_metrics_vs_o` | accuracy + macro-F1 across the payoff `o` sweep |
+| `fig_metrics_vs_o` | selective accuracy + macro-F1 across the payoff `o` sweep |
 | `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 
@@ -266,20 +266,24 @@ else:
     print("no payoff-study runs with metrics yet")
 '''
 
-PAYOFF_CLS_PLOT = '''# The o-sweep on classification quality: FORCED defect accuracy and macro-F1 as the
-# payoff o goes 1.0 -> 4.0. macro-F1 climbing toward o=4 (dashed line, where the
-# abstention term reduces to cross-entropy for the 3-class head) shows the low-o
-# "collapse" is an operating-point choice, not a broken loss.
+PAYOFF_CLS_PLOT = '''# The o-sweep on classification quality, per dataset. LEFT: SELECTIVE accuracy at the
+# h=0.5 accept threshold, dropping o where coverage < MIN_COV (there the model abstains on
+# ~everything, so the accuracy is off a tiny sample). Forced accuracy is monotone and
+# uninformative here, so we show answered-board accuracy instead. RIGHT: macro-F1 vs o --
+# it climbs toward o=4 (dashed line, where the abstention term reduces to cross-entropy).
+MIN_COV = 0.60          # drop o where the model answers too few boards to be meaningful
 pay = study("payoff")
 if len(pay):
-    sm = seed_mean(pay, ["dataset", "o"], ["defect_acc", "defect_macrof1"])
+    sm = seed_mean(pay, ["dataset", "o"], ["selective_acc@0.5", "coverage@0.5", "defect_macrof1"])
     cmap = plt.get_cmap("tab10")
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
-    for j, d in enumerate(sorted(pay["dataset"].unique())):
-        s = sm[sm.dataset == d].sort_values("o")
-        axes[0].plot(s["o"], s["defect_acc"], "-o", ms=4, color=cmap(j), label=d)
-        axes[1].plot(s["o"], s["defect_macrof1"], "-o", ms=4, color=cmap(j), label=d)
-    axes[0].set_title("forced defect accuracy vs payoff o"); axes[0].set_ylabel("defect accuracy")
+    for j, dset in enumerate(sorted(pay["dataset"].unique())):
+        s = sm[sm.dataset == dset].sort_values("o")
+        ssel = s[s["coverage@0.5"] >= MIN_COV] if "coverage@0.5" in s.columns else s
+        axes[0].plot(ssel["o"], ssel["selective_acc@0.5"], "-o", ms=4, color=cmap(j), label=dset)
+        axes[1].plot(s["o"], s["defect_macrof1"], "-o", ms=4, color=cmap(j), label=dset)
+    axes[0].set_title(f"selective accuracy vs payoff o  (coverage >= {MIN_COV:.0%})")
+    axes[0].set_ylabel("selective accuracy (answered boards)")
     axes[1].set_title("macro-F1 (minority-sensitive) vs payoff o"); axes[1].set_ylabel("macro-F1")
     for a in axes:
         a.set_xlabel("payoff o"); a.axvline(4.0, ls="--", color="k", alpha=0.5)
@@ -617,22 +621,19 @@ else:
     print("run the selective-compute cell first (needs sel_table)")
 '''
 
-FEATSEP = '''# FEATURE SEPARABILITY: per-feature class-conditional densities on the hardest dataset.
-# LOW overlap between open-circuit (blue) and solder-bridging (red) => that process
-# feature separates the defects; HIGH overlap => it carries little signal. Dashed lines
-# are the spec limits (lsl / usl). This is why the hardest problem is hard -- the
-# discriminative features still overlap. Reads only the dataset CSV + the spec YAML.
-DS_PICK = None          # None -> hardest dataset (highest Bayes error)
+FEATSEP = '''# FEATURE SEPARABILITY: per-feature class-conditional densities, drawn for the BASELINE
+# (well-separated) and the HARDEST dataset (more overlap) so you can VISUALLY compare the
+# increased overlap. LOW open/bridge overlap => the feature separates the defects; HIGH
+# overlap => it carries little signal, which is what makes the task hard. Dashed lines are
+# the spec limits (lsl / usl). Reads only the dataset CSVs + the spec YAML.
 csvs = {d: root / "data" / "cluster" / f"{d}.csv" for d in manifest["datasets"]}
 csvs = {d: p for d, p in csvs.items() if p.exists()}
 if csvs:
     def _berr(p):
         dd = pd.read_csv(p, usecols=lambda c: c.startswith("p_"))
         return float((1 - dd.to_numpy().max(1)).mean())
-    ds = DS_PICK or max(csvs, key=lambda d: _berr(csvs[d]))
-    dh = pd.read_csv(csvs[ds])
 
-    # spec limits (lsl/usl) AND the monitored feature ids from the YAML (no pyyaml dep)
+    # spec limits (lsl/usl) + the monitored feature ids from the YAML (no pyyaml dep)
     lims, cur, in_p = {}, None, False
     for line in (root / "domain" / "smt_paper.yaml").read_text().splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -646,35 +647,42 @@ if csvs:
             cur = s.split("id:", 1)[1].split("#")[0].strip(); lims[cur] = []
         elif cur and (s.startswith("lsl:") or s.startswith("usl:")):
             lims[cur].append(float(s.split(":", 1)[1].split("#")[0]))
-    feats = [f for f in lims if f in dh.columns]     # exactly the 6 process features, spec order
-
     CLS = [("no_defect", "no defect", "#9e9e9e"),
            ("open_circuit", "open circuit", COLORS["cascade"]),
            ("solder_bridging", "solder bridging", COLORS["abstention"])]
-    ncol = 3; nrow = int(np.ceil(len(feats) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(5.2 * ncol, 3.6 * nrow), squeeze=False)
-    for k, f in enumerate(feats):
-        ax = axes[k // ncol][k % ncol]
-        bins = np.linspace(dh[f].min(), dh[f].max(), 60)
-        hists = {}
-        for key, lab, col in CLS:
-            v = dh.loc[dh["defect_label"] == key, f].to_numpy()
-            if len(v):
-                ax.hist(v, bins=bins, density=True, alpha=0.55, color=col, label=lab)
-                h, _ = np.histogram(v, bins=bins); hists[key] = h / max(h.sum(), 1)
-        if "open_circuit" in hists and "solder_bridging" in hists:
-            ov = float(np.minimum(hists["open_circuit"], hists["solder_bridging"]).sum())
-        else:
-            ov = float("nan")
-        for lim in lims.get(f, []):
-            ax.axvline(lim, ls="--", color="k", lw=1, alpha=0.7)
-        ax.set_title(f"{f}\\nopen/bridge overlap = {ov:.2f}", fontsize=10); ax.grid(alpha=0.2)
-    for k in range(len(feats), nrow * ncol):
-        axes[k // ncol][k % ncol].axis("off")
-    axes[0][0].legend(fontsize=9)
-    fig.suptitle(f"Feature values by defect class (density), hardest dataset ({ds})  --  "
-                 "low overlap = the class colors separate", fontweight="bold")
-    fig.tight_layout(); save_fig(fig, "fig_feature_separability"); plt.show()
+
+    def featsep(ds):
+        dh = pd.read_csv(csvs[ds])
+        feats = [f for f in lims if f in dh.columns]     # exactly the process features, spec order
+        ncol = 3; nrow = int(np.ceil(len(feats) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(5.2 * ncol, 3.6 * nrow), squeeze=False)
+        for k, f in enumerate(feats):
+            ax = axes[k // ncol][k % ncol]
+            bins = np.linspace(dh[f].min(), dh[f].max(), 60)
+            hists = {}
+            for key, lab, col in CLS:
+                v = dh.loc[dh["defect_label"] == key, f].to_numpy()
+                if len(v):
+                    ax.hist(v, bins=bins, density=True, alpha=0.55, color=col, label=lab)
+                    h, _ = np.histogram(v, bins=bins); hists[key] = h / max(h.sum(), 1)
+            if "open_circuit" in hists and "solder_bridging" in hists:
+                ov = float(np.minimum(hists["open_circuit"], hists["solder_bridging"]).sum())
+            else:
+                ov = float("nan")
+            for lim in lims.get(f, []):
+                ax.axvline(lim, ls="--", color="k", lw=1, alpha=0.7)
+            ax.set_title(f"{f}\\nopen/bridge overlap = {ov:.2f}", fontsize=10); ax.grid(alpha=0.2)
+        for k in range(len(feats), nrow * ncol):
+            axes[k // ncol][k % ncol].axis("off")
+        axes[0][0].legend(fontsize=9)
+        fig.suptitle(f"Feature values by defect class (density) -- {ds} (Bayes err {_berr(csvs[ds]):.3f})"
+                     "  --  low overlap = the class colors separate", fontweight="bold")
+        fig.tight_layout(); save_fig(fig, f"fig_feature_separability_{ds}"); plt.show()
+
+    hardest = max(csvs, key=lambda d: _berr(csvs[d]))
+    baseline = "baseline" if "baseline" in csvs else min(csvs, key=lambda d: _berr(csvs[d]))
+    for ds in dict.fromkeys([baseline, hardest]):        # baseline first, dedup if same
+        featsep(ds)
 else:
     print("no dataset CSVs found (need data/cluster/*.csv on the cluster)")
 '''
@@ -715,9 +723,10 @@ SECTIONS = [
      "slice by study and average over seeds.", LOAD),
     ("## Plot style\\n\\nShared paper style + a `save_fig` helper that writes `figs/fig_*.{png,pdf}`.", STYLE),
     ("## Why the hardest problem is harder (feature separability)\\n\\nPer-feature class-conditional "
-     "densities on the hardest dataset. Low open/bridge overlap = the feature separates the defects; "
-     "high overlap = it carries little signal, which is what makes the task hard. **Saved: "
-     "`fig_feature_separability`.**", FEATSEP),
+     "densities for the **baseline** vs the **hardest** dataset -- visually compare the increased "
+     "overlap. Low open/bridge overlap = the feature separates the defects; high overlap = it carries "
+     "little signal, which is what makes the task hard. **Saved: `fig_feature_separability_<dataset>`.**",
+     FEATSEP),
     ("## Risk vs coverage\\n\\nThe selective-classification figure: coverage vs selective accuracy as the "
      "payoff `o` sweeps (one operating point per model); star = cascade at full coverage. "
      "**Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
