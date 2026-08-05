@@ -631,10 +631,8 @@ if csvs:
         return float((1 - dd.to_numpy().max(1)).mean())
     ds = DS_PICK or max(csvs, key=lambda d: _berr(csvs[d]))
     dh = pd.read_csv(csvs[ds])
-    pcs = [c for c in dh.columns if c.startswith("p_")]
-    feats = dh.columns.tolist()[:dh.columns.tolist().index(pcs[0])]
 
-    # spec limits (lsl/usl) from the YAML, no pyyaml dependency
+    # spec limits (lsl/usl) AND the monitored feature ids from the YAML (no pyyaml dep)
     lims, cur, in_p = {}, None, False
     for line in (root / "domain" / "smt_paper.yaml").read_text().splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -648,6 +646,7 @@ if csvs:
             cur = s.split("id:", 1)[1].split("#")[0].strip(); lims[cur] = []
         elif cur and (s.startswith("lsl:") or s.startswith("usl:")):
             lims[cur].append(float(s.split(":", 1)[1].split("#")[0]))
+    feats = [f for f in lims if f in dh.columns]     # exactly the 6 process features, spec order
 
     CLS = [("no_defect", "no defect", "#9e9e9e"),
            ("open_circuit", "open circuit", COLORS["cascade"]),

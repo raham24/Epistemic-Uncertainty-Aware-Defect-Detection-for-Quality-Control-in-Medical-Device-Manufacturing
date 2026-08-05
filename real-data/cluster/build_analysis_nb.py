@@ -47,6 +47,7 @@ Prereq: run the sweep first. Generated into the repo root next to
 LOAD = '''from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -67,31 +68,38 @@ print("base config    :", manifest["base"])
 print("seeds          :", manifest["seeds"])
 
 
-def load_rows():
-    """One flat row per run that produced a metrics file. Hyperparameters + study
-    tags from the manifest; scores from the run's metrics JSON."""
-    rows, missing = [], []
-    for r in manifest["runs"]:
-        p = root / r["metrics"]
-        if not p.exists():
-            missing.append(r["run_id"]); continue
+def _load_one(r):
+    """Read one run's metrics JSON into a flat row (or mark it missing)."""
+    p = root / r["metrics"]
+    try:
         m = json.loads(p.read_text())
-        lr_ = m.get("learned_reject") or {}        # None if a run had no abstain column
-        cb = m.get("confidence_baseline") or {}    # legacy field; unused in the main story
-        f = m["forced"]
-        rows.append({
-            "run_id": r["run_id"], "loss": r.get("loss"), "o": r["o"],
-            "class_weight": r.get("class_weight"), "seed": r["seed"],
-            "hidden": r.get("hidden"), "dropout": r.get("dropout"), "lr": r.get("lr"),
-            "studies": r.get("studies", []),
-            "forced_acc": f["accuracy"], "forced_f1": f.get("f1"),
-            "forced_macro_f1": f.get("macro_f1"), "forced_auc": f.get("roc_auc"),
-            "mean_abstain": m["mean_abstain_prob"],
-            "learned_cov": lr_.get("coverage"), "learned_sel_acc": lr_.get("selective_accuracy"),
-            "conf_cov": cb.get("coverage"), "conf_sel_acc": cb.get("selective_accuracy"),
-            "gain_vs_conf": m.get("gain_vs_conf"),
-            "_metrics_path": str(p),
-        })
+    except FileNotFoundError:
+        return ("missing", r["run_id"])
+    lr_ = m.get("learned_reject") or {}        # None if a run had no abstain column
+    cb = m.get("confidence_baseline") or {}    # legacy field; unused in the main story
+    f = m["forced"]
+    return ("ok", {
+        "run_id": r["run_id"], "loss": r.get("loss"), "o": r["o"],
+        "class_weight": r.get("class_weight"), "seed": r["seed"],
+        "hidden": r.get("hidden"), "dropout": r.get("dropout"), "lr": r.get("lr"),
+        "studies": r.get("studies", []),
+        "forced_acc": f["accuracy"], "forced_f1": f.get("f1"),
+        "forced_macro_f1": f.get("macro_f1"), "forced_auc": f.get("roc_auc"),
+        "mean_abstain": m["mean_abstain_prob"],
+        "learned_cov": lr_.get("coverage"), "learned_sel_acc": lr_.get("selective_accuracy"),
+        "conf_cov": cb.get("coverage"), "conf_sel_acc": cb.get("selective_accuracy"),
+        "gain_vs_conf": m.get("gain_vs_conf"),
+        "_metrics_path": str(p),
+    })
+
+
+def load_rows():
+    """One flat row per run. Reads the ~thousands of metrics JSONs CONCURRENTLY --
+    reading them one-at-a-time is I/O-bound and crawls on a shared cluster filesystem."""
+    rows, missing = [], []
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        for kind, val in ex.map(_load_one, manifest["runs"]):
+            (rows if kind == "ok" else missing).append(val)
     if missing:
         print(f"WARNING: {len(missing)} runs have no metrics yet (still training?):")
         print("  " + ", ".join(missing[:12]) + (" ..." if len(missing) > 12 else ""))
