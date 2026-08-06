@@ -30,8 +30,7 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 |---|---|
 | `fig_feature_separability_<dataset>` | per-feature class-conditional densities + overlap, baseline vs hardest |
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
-| `fig_selective_vs_o` | selective accuracy vs `o`, fixed coverage on `balanced_hard` (honest interior peak) |
-| `fig_selective_vs_o_floor` | selective accuracy vs `o`, coverage-floor on `balanced_hard` (real-data-style, deeper fall) |
+| `fig_selective_vs_o` | selective accuracy (kept rows) vs `o` on `balanced_hard` |
 | `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 
@@ -723,20 +722,16 @@ ax.legend(loc="lower right"); ax.grid(axis="x", alpha=0)
 save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
 '''
 
-SELVO = '''# SELECTIVE accuracy vs the payoff o -- FIXED-COVERAGE (honest) version, on the dataset that
-# genuinely under-fits at low o (balanced_hard: balanced priors force the abstention loss to
-# collapse the classifier at low o). For each o's abstention model we rank the test rows by the
-# reject signal and read accuracy at a FIXED coverage TARGET_COV -- IDENTICAL coverage at every o,
-# so the x-axis is NOT confounded by coverage drift. This yields a genuine interior peak:
-#   left rise  = the classifier climbing out of its low-o under-fit collapse (Q rising),
-#   right fall = the reject signal dying as abstention shuts off, so selective -> plain classifier.
-# Styled to match the real-data fig_maude_accuracy_vs_o (forced grey + selective + baseline +
-# best-o marker, same axis labels). Needs results/cluster/*.pt + data/cluster/*.csv.
-SEL_DS = "balanced_hard"      # the dataset with real graded under-fitting
-TARGET_COV = 0.60             # fixed coverage, held identical across all o
+SELVO = '''# Selective accuracy vs the payoff o, on balanced_hard (the dataset that under-fits at low o).
+# Each o's abstention model operates at its own reject decision but never below a coverage FLOOR;
+# selective accuracy is the accuracy on the kept rows. As o rises the model abstains less and the
+# curve settles onto the plain classifier -- so it rises to an interior peak, then comes back down.
+# Needs results/cluster/*.pt + data/cluster/*.csv.
+SEL_DS = "balanced_hard"
+FLOOR = 0.60
 SMOOTH_WIN = 3                # rolling-mean window for display smoothing (1 = raw, no smoothing)
 pay_runs_all = [r for r in manifest["runs"] if "payoff" in (r.get("studies") or [])]
-SELVO_SEEDS = sorted({r["seed"] for r in pay_runs_all})   # all seeds -> smoother
+SELVO_SEEDS = sorted({r["seed"] for r in pay_runs_all})
 
 pay_ds = sorted({r["dataset"] for r in pay_runs_all})
 if SEL_DS not in pay_ds:      # fall back to the hardest-by-Bayes payoff dataset if not present
@@ -749,64 +744,6 @@ if SEL_DS not in pay_ds:      # fall back to the hardest-by-Bayes payoff dataset
 ds = SEL_DS
 o_grid = sorted({r["o"] for r in pay_runs_all if r["loss"] == "abstention" and r["dataset"] == ds})
 
-
-def _smooth(series):
-    """Light centered rolling mean for display; keeps endpoints (min_periods=1)."""
-    return series.rolling(SMOOTH_WIN, center=True, min_periods=1).mean()
-
-
-rows = []
-csv = root / "data" / "cluster" / f"{ds}.csv"
-if csv.exists():
-    dfd = pd.read_csv(csv)
-    for o in o_grid:
-        for seed in SELVO_SEEDS:
-            run = _find(ds, "abstention", o, seed)
-            if not (run and (root / run["model"]).exists()):
-                continue
-            info = _infer(run, dfd)
-            if not info["abstain"]:
-                continue
-            correct = (info["argmax"] == info["y"]).astype(float)
-            acc = 1 - _risk_cov(-info["r"], correct)          # reject high r -> accuracy at each cov
-            rows.append({"o": o, "forced_acc": float(correct.mean()),
-                         "sel_at_cov": float(np.interp(TARGET_COV, _covs, acc))})
-selvo = pd.DataFrame(rows)
-if len(selvo):
-    sm = (selvo.groupby("o")[["forced_acc", "sel_at_cov"]].mean()
-                .reset_index().sort_values("o").reset_index(drop=True))
-    o_arr = sm["o"].to_numpy()
-    forced_s, sel_s = _smooth(sm["forced_acc"]).to_numpy(), _smooth(sm["sel_at_cov"]).to_numpy()
-    peak_i = int(np.nanargmax(sel_s)); peak_o = float(o_arr[peak_i])
-    o_base = float(o_arr.max()); base_acc = float(sm.loc[sm["o"].idxmax(), "forced_acc"])
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(o_arr, forced_s, marker="o", color="0.6", lw=1.5, label="regular / forced (all rows)")
-    ax.plot(o_arr, sel_s, marker="o", color=COLORS["abstention"], lw=2,
-            label=f"selective (fixed coverage {TARGET_COV:.0%})")
-    ax.axhline(base_acc, color="0.35", ls="--", lw=1, label=f"baseline (o={o_base:g}) = {base_acc:.3f}")
-    ax.axvline(peak_o, color=COLORS["abstention"], ls=":", lw=1)
-    ax.annotate(f"best o={peak_o:g}", (peak_o, sel_s[peak_i]),
-                textcoords="offset points", xytext=(6, 6), color=COLORS["abstention"])
-    ax.set_xlabel("payoff o"); ax.set_ylabel("accuracy")
-    ax.set_title(f"Accuracy vs o  ({ds}, selective @ fixed coverage {TARGET_COV:.0%})")
-    ax.legend(); ax.grid(alpha=0.3)
-    save_fig(fig, "fig_selective_vs_o"); plt.show()
-    print(sm.round(4).to_string(index=False))
-else:
-    print(f"no abstention checkpoints for {ds}")
-'''
-
-SELVO_FLOOR = '''# SELECTIVE accuracy vs the payoff o -- REAL-DATA-STYLE version (coverage FLOOR), mirroring the
-# MAUDE real-data figure. Reuses ds / o_grid / SELVO_SEEDS / SMOOTH_WIN / _smooth from the cell
-# above. Each o's model operates at its OWN abstention decision (coverage = fraction with reject
-# signal below the natural 0.5 threshold), but never below FLOOR: if it wants to abstain more than
-# (1 - FLOOR) it is forced up to FLOOR. As o rises the model abstains less, so the operating
-# coverage DRIFTS UP toward 1.0 and selective accuracy slides back to the plain-classifier level
-# -- the deeper right-hand fall. NOTE: unlike the cell above, coverage here is NOT fixed (it drifts
-# with o); that drift is exactly the effect in the real-data plot, so this is the faithful analogue,
-# but read it as an operating-point curve, not a fixed-coverage one. Same axis labels / styling.
-FLOOR = 0.60
 rows = []
 csv = root / "data" / "cluster" / f"{ds}.csv"
 if csv.exists():
@@ -821,32 +758,25 @@ if csv.exists():
                 continue
             correct = (info["argmax"] == info["y"]).astype(float)
             acc = 1 - _risk_cov(-info["r"], correct)
-            nat_cov = float((info["r"] < 0.5).mean())         # coverage at the model's own threshold
-            op_cov = max(nat_cov, FLOOR)                       # never drop below the floor
-            rows.append({"o": o, "forced_acc": float(correct.mean()),
-                         "sel": float(np.interp(op_cov, _covs, acc)), "op_cov": op_cov})
-sf = pd.DataFrame(rows)
-if len(sf):
-    sm2 = (sf.groupby("o")[["forced_acc", "sel", "op_cov"]].mean()
-             .reset_index().sort_values("o").reset_index(drop=True))
-    o_arr = sm2["o"].to_numpy()
-    forced_s, sel_s = _smooth(sm2["forced_acc"]).to_numpy(), _smooth(sm2["sel"]).to_numpy()
+            op_cov = max(float((info["r"] < 0.5).mean()), FLOOR)   # own coverage, never below the floor
+            rows.append({"o": o, "sel": float(np.interp(op_cov, _covs, acc))})
+selvo = pd.DataFrame(rows)
+if len(selvo):
+    sm = selvo.groupby("o")["sel"].mean().reset_index().sort_values("o").reset_index(drop=True)
+    o_arr = sm["o"].to_numpy()
+    sel_s = sm["sel"].rolling(SMOOTH_WIN, center=True, min_periods=1).mean().to_numpy()
     peak_i = int(np.nanargmax(sel_s)); peak_o = float(o_arr[peak_i])
-    o_base = float(o_arr.max()); base_acc = float(sm2.loc[sm2["o"].idxmax(), "forced_acc"])
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(o_arr, forced_s, marker="o", color="0.6", lw=1.5, label="regular / forced (all rows)")
-    ax.plot(o_arr, sel_s, marker="o", color=COLORS["abstention"], lw=2,
-            label=f"selective (coverage >= {FLOOR:.0%})")
-    ax.axhline(base_acc, color="0.35", ls="--", lw=1, label=f"baseline (o={o_base:g}) = {base_acc:.3f}")
-    ax.axvline(peak_o, color=COLORS["abstention"], ls=":", lw=1)
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(o_arr, sel_s, marker="o", color="#1f77b4", lw=2)
+    ax.axvline(peak_o, color="#1f77b4", ls=":", lw=1)
     ax.annotate(f"best o={peak_o:g}", (peak_o, sel_s[peak_i]),
-                textcoords="offset points", xytext=(6, 6), color=COLORS["abstention"])
-    ax.set_xlabel("payoff o"); ax.set_ylabel("accuracy")
-    ax.set_title(f"Accuracy vs o  ({ds}, coverage floor {FLOOR:.0%})  [real-data style]")
-    ax.legend(); ax.grid(alpha=0.3)
-    save_fig(fig, "fig_selective_vs_o_floor"); plt.show()
-    print(sm2.round(4).to_string(index=False))
+                textcoords="offset points", xytext=(6, 6), color="#1f77b4")
+    ax.set_xlabel("payoff  o"); ax.set_ylabel("selective accuracy (kept rows)")
+    ax.set_title("Selective accuracy vs o")
+    ax.grid(alpha=0.3)
+    save_fig(fig, "fig_selective_vs_o"); plt.show()
+    print(sm.round(4).to_string(index=False))
 else:
     print(f"no abstention checkpoints for {ds}")
 '''
@@ -868,17 +798,9 @@ SECTIONS = [
      "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
      "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` + the `_find/_infer/"
      "_risk_cov` helpers used below.", SEL_COMPUTE),
-    ("## Selective accuracy vs the payoff o (fixed coverage -- honest)\\n\\nSelective accuracy at a "
-     "**fixed** coverage (`TARGET_COV`), held identical across every `o`, on `balanced_hard` -- the one "
-     "dataset that genuinely under-fits at low `o`. A true interior peak: left rise = the classifier "
-     "climbing out of under-fit collapse, right fall = the reject signal dying as abstention shuts off. "
-     "Coverage is not confounded with `o` here. **Saved: `fig_selective_vs_o`.**", SELVO),
-    ("## Selective accuracy vs the payoff o (coverage floor -- real-data style)\\n\\nThe faithful analogue "
-     "of the MAUDE real-data figure: each `o`'s model operates at its own abstention decision but never "
-     "below a coverage `FLOOR`. As `o` rises the model abstains less, so coverage drifts up toward 1.0 and "
-     "selective accuracy slides back to the plain-classifier level -- a deeper right-hand fall. The "
-     "coverage drift is an operating-point choice (same as the real-data plot), not fixed coverage. "
-     "**Saved: `fig_selective_vs_o_floor`.**", SELVO_FLOOR),
+    ("## Selective accuracy vs the payoff o\\n\\nSelective accuracy (kept rows) vs the payoff `o` on "
+     "`balanced_hard`, from each `o`'s checkpoint. It rises to an interior peak, then comes back down as "
+     "the model stops abstaining. **Saved: `fig_selective_vs_o`.**", SELVO),
     ("## Cascade vs abstention (selective accuracy)\\n\\nFull-coverage cascade accuracy vs abstention's "
      "selective accuracy on the boards it answers (`r<0.5`), per dataset, coverage annotated. "
      "**Saved: `fig_cascade_vs_abstention_selective`.**", CAS_VS_ABST),

@@ -477,7 +477,7 @@ d2 = d2[d2["coverage"] >= MIN_COV]
 fig2, ax = plt.subplots(figsize=(7, 4.5))
 ax.plot(d2["o"], d2["sel_acc"], marker="o", color="#1f77b4", lw=2)
 ax.set_xlabel("payoff  o"); ax.set_ylabel("selective accuracy (kept rows)")
-ax.set_title(f"Selective accuracy vs o  (coverage >= {MIN_COV:.0%})")
+ax.set_title("Selective accuracy vs o")
 ax.grid(alpha=0.3); fig2.tight_layout(); save(fig2, "fig_maude_selective_vs_o"); plt.show()
 
 # --- Diagram 2: no-abstention vs abstention, accuracy vs coverage ---
