@@ -30,7 +30,7 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 |---|---|
 | `fig_feature_separability_<dataset>` | per-feature class-conditional densities + overlap, baseline vs hardest |
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
-| `fig_metrics_vs_o` | selective accuracy + macro-F1 across the payoff `o` sweep |
+| `fig_selective_vs_o` | selective accuracy at fixed coverage across the payoff `o` sweep (from checkpoints) |
 | `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 
@@ -266,12 +266,9 @@ else:
     print("no payoff-study runs with metrics yet")
 '''
 
-PAYOFF_CLS_PLOT = '''# SELECTIVE accuracy vs the payoff o, per dataset -- the analog of the real-data plot.
-# For each model we read its reject-threshold sweep (by_threshold h=0.3/0.5/0.7) and
-# INTERPOLATE the selective accuracy at a FIXED coverage TARGET_COV. Fixing coverage is
-# what removes the confound (each o abstains a different amount), so the curve can PEAK in
-# the middle: low o under-trains, high o stops abstaining. RIGHT: macro-F1 vs o.
-# NOTE: only 3 thresholds were stored, so the curve is coarser than real-data's.
+PAYOFF_CLS_PLOT = '''# SELECTIVE accuracy vs the payoff o, per dataset -- selective accuracy interpolated at a
+# FIXED coverage TARGET_COV from each model's stored threshold sweep (by_threshold), so the
+# curve is not confounded by how much each o abstains.
 TARGET_COV = 0.65
 pay_runs = [r for r in manifest["runs"] if "payoff" in (r.get("studies") or [])]
 recs = []
@@ -284,22 +281,18 @@ for r in pay_runs:
     pts = sorted((v["coverage"], v["selective_accuracy"]) for v in bt.values()
                  if v.get("coverage") is not None and v.get("selective_accuracy") is not None)
     sel = float(np.interp(TARGET_COV, [c for c, _ in pts], [a for _, a in pts])) if len(pts) >= 2 else np.nan
-    recs.append({"dataset": r["dataset"], "o": r["o"], "seed": r["seed"],
-                 "sel_at_cov": sel, "macro_f1": m["defect_head"]["macro_f1"]})
+    recs.append({"dataset": r["dataset"], "o": r["o"], "seed": r["seed"], "sel_at_cov": sel})
 pr = pd.DataFrame(recs)
 if len(pr) and pr["sel_at_cov"].notna().any():
-    sm = pr.groupby(["dataset", "o"], dropna=False)[["sel_at_cov", "macro_f1"]].mean().reset_index()
+    sm = pr.groupby(["dataset", "o"], dropna=False)["sel_at_cov"].mean().reset_index()
     cmap = plt.get_cmap("tab10")
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
+    fig, ax = plt.subplots(figsize=(8.5, 5.5))
     for j, dset in enumerate(sorted(pr["dataset"].dropna().unique())):
         s = sm[sm.dataset == dset].sort_values("o")
-        axes[0].plot(s["o"], s["sel_at_cov"], "-o", ms=4, color=cmap(j), label=dset)
-        axes[1].plot(s["o"], s["macro_f1"], "-o", ms=4, color=cmap(j), label=dset)
-    axes[0].set_title(f"selective accuracy vs payoff o  (@ coverage {TARGET_COV:.0%})")
-    axes[0].set_ylabel("selective accuracy (answered boards)")
-    axes[1].set_title("macro-F1 (minority-sensitive) vs payoff o"); axes[1].set_ylabel("macro-F1")
-    for a in axes:
-        a.set_xlabel("payoff o"); a.axvline(4.0, ls="--", color="k", alpha=0.5); a.legend(title="dataset")
+        ax.plot(s["o"], s["sel_at_cov"], "-o", ms=4, color=cmap(j), label=dset)
+    ax.set_xlabel("payoff o"); ax.set_ylabel("selective accuracy (answered boards)")
+    ax.set_title(f"selective accuracy vs payoff o  (@ coverage {TARGET_COV:.0%})")
+    ax.axvline(4.0, ls="--", color="k", alpha=0.5); ax.legend(title="dataset")
     save_fig(fig, "fig_metrics_vs_o"); plt.show()
 else:
     print("no payoff-study abstention runs with by_threshold metrics yet")
@@ -729,6 +722,52 @@ ax.legend(loc="lower right"); ax.grid(axis="x", alpha=0)
 save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
 '''
 
+SELVO = '''# SELECTIVE accuracy at a FIXED coverage vs the payoff o -- the fine-grained analog of
+# the real-data peak plot, computed from the SAVED checkpoints (new evaluation on the same
+# models, no retraining). For each o's abstention model we build the full reject curve
+# (sweep the reject threshold over 40 coverage points) and read the accuracy at TARGET_COV,
+# so it is coverage-controlled (unlike the 3-point JSON metric). If the model under-trains
+# at low o this PEAKS; if not (easy data) it declines. Reuses _find/_infer/_risk_cov/_covs
+# from the selective-compute cell -- needs results/cluster/*.pt + data/cluster/*.csv.
+TARGET_COV = 0.65
+SELVO_SEEDS = [SEL_SEED]        # add seeds for smoother curves (one inference per o x seed -> slower)
+pay_ds = sorted({r["dataset"] for r in manifest["runs"] if "payoff" in (r.get("studies") or [])})
+o_grid = sorted({r["o"] for r in manifest["runs"]
+                 if r["loss"] == "abstention" and "payoff" in (r.get("studies") or [])})
+rows = []
+for ds in pay_ds:
+    csv = root / "data" / "cluster" / f"{ds}.csv"
+    if not csv.exists():
+        continue
+    dfd = pd.read_csv(csv)
+    for o in o_grid:
+        for seed in SELVO_SEEDS:
+            run = _find(ds, "abstention", o, seed)
+            if not (run and (root / run["model"]).exists()):
+                continue
+            info = _infer(run, dfd)
+            if not info["abstain"]:
+                continue
+            correct = (info["argmax"] == info["y"]).astype(float)
+            acc = 1 - _risk_cov(-info["r"], correct)          # reject high r -> accuracy at each cov
+            rows.append({"dataset": ds, "o": o,
+                         "sel_at_cov": float(np.interp(TARGET_COV, _covs, acc))})
+selvo = pd.DataFrame(rows)
+if len(selvo):
+    sm = selvo.groupby(["dataset", "o"])["sel_at_cov"].mean().reset_index()
+    cmap = plt.get_cmap("tab10")
+    fig, ax = plt.subplots(figsize=(8.5, 5.5))
+    for j, ds in enumerate(sorted(selvo["dataset"].unique())):
+        s = sm[sm.dataset == ds].sort_values("o")
+        ax.plot(s["o"], s["sel_at_cov"], "-o", ms=4, color=cmap(j), label=ds)
+    ax.set_xlabel("payoff o"); ax.set_ylabel(f"selective accuracy @ coverage {TARGET_COV:.0%}")
+    ax.set_title("Selective accuracy vs o at fixed coverage (from checkpoints)")
+    ax.axvline(4.0, ls="--", color="k", alpha=0.5); ax.legend(title="dataset")
+    save_fig(fig, "fig_selective_vs_o"); plt.show()
+else:
+    print("no abstention checkpoints found (run on the cluster with results/cluster/*.pt + data/cluster/*.csv)")
+'''
+
 # (markdown header, code) in notebook order
 SECTIONS = [
     ("## Load every run\\n\\nLoads the manifest + each run's metrics into one dataframe, with helpers to "
@@ -742,15 +781,17 @@ SECTIONS = [
     ("## Risk vs coverage\\n\\nThe selective-classification figure: coverage vs selective accuracy as the "
      "payoff `o` sweeps (one operating point per model); star = cascade at full coverage. "
      "**Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
-    ("## Risk (accuracy) vs the payoff o\\n\\nForced accuracy + macro-F1 across the `o` sweep. "
-     "**Saved: `fig_metrics_vs_o`.**", PAYOFF_CLS_PLOT),
+    ("## Selective-classification analysis (threshold-swept)\\n\\nLoads the saved checkpoints and sweeps "
+     "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
+     "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` + the `_find/_infer/"
+     "_risk_cov` helpers used below.", SEL_COMPUTE),
+    ("## Selective accuracy vs the payoff o (fixed coverage, from checkpoints)\\n\\nRe-evaluates each `o`'s "
+     "abstention checkpoint at a fixed coverage (the fine reject curve) -- the direct analog of the "
+     "real-data plot. Peaks only if the model under-trains at low `o`. **Saved: `fig_selective_vs_o`.**",
+     SELVO),
     ("## Cascade vs abstention (selective accuracy)\\n\\nFull-coverage cascade accuracy vs abstention's "
      "selective accuracy on the boards it answers (`r<0.5`), per dataset, coverage annotated. "
      "**Saved: `fig_cascade_vs_abstention_selective`.**", CAS_VS_ABST),
-    ("## Selective-classification analysis (threshold-swept)\\n\\nLoads the saved checkpoints and sweeps "
-     "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
-     "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` for the cells below.",
-     SEL_COMPUTE),
     ("## Comparing the datasets: selective-risk curves\\n\\nAccepted error vs coverage for every dataset, "
      "easy -> hard, vs the confidence baseline / CE / Bayes floor. **Saved: `fig_selective_risk`.**",
      SEL_RISK_PLOT),
