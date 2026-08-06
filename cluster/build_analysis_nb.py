@@ -730,7 +730,9 @@ SELVO = '''# SELECTIVE accuracy at a FIXED coverage vs the payoff o -- the fine-
 # at low o this PEAKS; if not (easy data) it declines. Reuses _find/_infer/_risk_cov/_covs
 # from the selective-compute cell -- needs results/cluster/*.pt + data/cluster/*.csv.
 TARGET_COV = 0.65
-SELVO_SEEDS = [SEL_SEED]        # add seeds for smoother curves (one inference per o x seed -> slower)
+SELVO_SEEDS = list(manifest["seeds"])   # average all seeds -> smoother (one inference per o x seed;
+#                                       # slower: ~datasets x len(o_grid) x seeds checkpoint loads).
+#                                       # Set to [SEL_SEED] for a quick single-seed preview.
 pay_ds = sorted({r["dataset"] for r in manifest["runs"] if "payoff" in (r.get("studies") or [])})
 o_grid = sorted({r["o"] for r in manifest["runs"]
                  if r["loss"] == "abstention" and "payoff" in (r.get("studies") or [])})
