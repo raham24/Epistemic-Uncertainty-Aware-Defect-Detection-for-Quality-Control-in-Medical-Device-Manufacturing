@@ -244,12 +244,13 @@ RISK_COVERAGE = '''# PAPER FIGURE: risk-coverage curve. Each abstention model (o
 # o = 1 -> 4 traces the frontier. The star marks cascade at full coverage (it never
 # abstains). Points up-and-left of a star => abstaining buys accuracy on the boards
 # the model chooses to answer.
+RC_DATASETS = ["baseline", "hard", "imbalanced"]      # the original three
 pay = study("payoff"); core = study("core")
 if len(pay):
     sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
     cmap = plt.get_cmap("tab10")
     fig, ax = plt.subplots(figsize=(8.5, 6))
-    for j, d in enumerate(sorted(pay["dataset"].unique())):
+    for j, d in enumerate([d for d in RC_DATASETS if d in set(pay["dataset"])]):
         s = sm[sm.dataset == d].sort_values("coverage@0.5")
         ax.plot(s["coverage@0.5"], s["selective_acc@0.5"], "-o", ms=4,
                 color=cmap(j), label=d)
