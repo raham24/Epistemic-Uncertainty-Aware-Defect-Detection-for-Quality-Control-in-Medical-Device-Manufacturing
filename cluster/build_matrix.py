@@ -81,7 +81,7 @@ BASE = {
 }
 
 # probe datasets each study sweeps over (every name must be a key in DATASETS)
-PROBE_PAYOFF = ["baseline", "hard", "imbalanced", "harder"]
+PROBE_PAYOFF = ["baseline", "hard", "imbalanced", "harder", "balanced", "balanced_hard"]
 PROBE_TUNING = ["baseline", "hard"]            # capacity / dropout / lr
 PROBE_CW = ["imbalanced", "baseline"]          # class weighting matters most when skewed
 
