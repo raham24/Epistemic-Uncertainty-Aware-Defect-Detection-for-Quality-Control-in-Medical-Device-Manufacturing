@@ -30,7 +30,7 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 |---|---|
 | `fig_feature_separability_<dataset>` | per-feature class-conditional densities + overlap, baseline vs hardest |
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
-| `fig_selective_vs_o` | selective accuracy at fixed coverage across the payoff `o` sweep (from checkpoints) |
+| `fig_selective_vs_o` | selective accuracy vs `o` (hardest dataset, high fixed coverage) |
 | `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 
@@ -722,25 +722,27 @@ ax.legend(loc="lower right"); ax.grid(axis="x", alpha=0)
 save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
 '''
 
-SELVO = '''# SELECTIVE accuracy at a FIXED coverage vs the payoff o -- the fine-grained analog of
-# the real-data peak plot, computed from the SAVED checkpoints (new evaluation on the same
-# models, no retraining). For each o's abstention model we build the full reject curve
-# (sweep the reject threshold over 40 coverage points) and read the accuracy at TARGET_COV,
-# so it is coverage-controlled (unlike the 3-point JSON metric). If the model under-trains
-# at low o this PEAKS; if not (easy data) it declines. Reuses _find/_infer/_risk_cov/_covs
-# from the selective-compute cell -- needs results/cluster/*.pt + data/cluster/*.csv.
-TARGET_COV = 0.65
-SELVO_SEEDS = list(manifest["seeds"])   # average all seeds -> smoother (one inference per o x seed;
-#                                       # slower: ~datasets x len(o_grid) x seeds checkpoint loads).
-#                                       # Set to [SEL_SEED] for a quick single-seed preview.
-pay_ds = sorted({r["dataset"] for r in manifest["runs"] if "payoff" in (r.get("studies") or [])})
-o_grid = sorted({r["o"] for r in manifest["runs"]
-                 if r["loss"] == "abstention" and "payoff" in (r.get("studies") or [])})
+SELVO = '''# SELECTIVE accuracy vs the payoff o, on the HARDEST payoff dataset only, at a HIGH fixed
+# coverage. Computed from the SAVED checkpoints: for each o's abstention model we build the
+# full reject curve (40 coverage points) and read the accuracy at TARGET_COV. High coverage
+# forces the model to answer boards it wanted to abstain on, which de-masks any low-o
+# under-training (the left dip). Needs results/cluster/*.pt + data/cluster/*.csv.
+TARGET_COV = 0.85       # high coverage: answer most boards, not just the few easy ones
+pay_runs_all = [r for r in manifest["runs"] if "payoff" in (r.get("studies") or [])]
+SELVO_SEEDS = sorted({r["seed"] for r in pay_runs_all})   # all seeds -> smoother
+
+# hardest payoff dataset = lowest Bayes-optimal accuracy (read from any of its run metrics)
+def _bayes_acc(ds):
+    for r in pay_runs_all:
+        if r["dataset"] == ds and (root / r["metrics"]).exists():
+            return json.loads((root / r["metrics"]).read_text()).get("bayes_optimal_accuracy", 1.0)
+    return 1.0
+ds = min(sorted({r["dataset"] for r in pay_runs_all}), key=_bayes_acc)
+o_grid = sorted({r["o"] for r in pay_runs_all if r["loss"] == "abstention" and r["dataset"] == ds})
+
 rows = []
-for ds in pay_ds:
-    csv = root / "data" / "cluster" / f"{ds}.csv"
-    if not csv.exists():
-        continue
+csv = root / "data" / "cluster" / f"{ds}.csv"
+if csv.exists():
     dfd = pd.read_csv(csv)
     for o in o_grid:
         for seed in SELVO_SEEDS:
@@ -752,22 +754,19 @@ for ds in pay_ds:
                 continue
             correct = (info["argmax"] == info["y"]).astype(float)
             acc = 1 - _risk_cov(-info["r"], correct)          # reject high r -> accuracy at each cov
-            rows.append({"dataset": ds, "o": o,
-                         "sel_at_cov": float(np.interp(TARGET_COV, _covs, acc))})
+            rows.append({"o": o, "sel_at_cov": float(np.interp(TARGET_COV, _covs, acc))})
 selvo = pd.DataFrame(rows)
 if len(selvo):
-    sm = selvo.groupby(["dataset", "o"])["sel_at_cov"].mean().reset_index()
-    cmap = plt.get_cmap("tab10")
-    fig, ax = plt.subplots(figsize=(8.5, 5.5))
-    for j, ds in enumerate(sorted(selvo["dataset"].unique())):
-        s = sm[sm.dataset == ds].sort_values("o")
-        ax.plot(s["o"], s["sel_at_cov"], "-o", ms=4, color=cmap(j), label=ds)
+    sm = selvo.groupby("o")["sel_at_cov"].mean().reset_index().sort_values("o")
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(sm["o"], sm["sel_at_cov"], "-o", color=COLORS["abstention"], lw=2)
     ax.set_xlabel("payoff o"); ax.set_ylabel(f"selective accuracy @ coverage {TARGET_COV:.0%}")
-    ax.set_title("Selective accuracy vs o at fixed coverage (from checkpoints)")
-    ax.axvline(4.0, ls="--", color="k", alpha=0.5); ax.legend(title="dataset")
+    ax.set_title(f"Selective accuracy vs o  ({ds}, @ coverage {TARGET_COV:.0%})")
+    ax.axvline(4.0, ls="--", color="k", alpha=0.5); ax.grid(alpha=0.3)
     save_fig(fig, "fig_selective_vs_o"); plt.show()
+    print(sm.round(4).to_string(index=False))
 else:
-    print("no abstention checkpoints found (run on the cluster with results/cluster/*.pt + data/cluster/*.csv)")
+    print(f"no abstention checkpoints for the hardest payoff dataset ({ds})")
 '''
 
 # (markdown header, code) in notebook order
@@ -787,10 +786,10 @@ SECTIONS = [
      "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
      "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` + the `_find/_infer/"
      "_risk_cov` helpers used below.", SEL_COMPUTE),
-    ("## Selective accuracy vs the payoff o (fixed coverage, from checkpoints)\\n\\nRe-evaluates each `o`'s "
-     "abstention checkpoint at a fixed coverage (the fine reject curve) -- the direct analog of the "
-     "real-data plot. Peaks only if the model under-trains at low `o`. **Saved: `fig_selective_vs_o`.**",
-     SELVO),
+    ("## Selective accuracy vs the payoff o (hardest dataset, high coverage)\\n\\nSelective accuracy at a "
+     "high fixed coverage (`TARGET_COV`) on the hardest payoff dataset, from each `o`'s checkpoint. High "
+     "coverage forces the model to answer boards it wanted to abstain on, de-masking any low-`o` "
+     "under-training. **Saved: `fig_selective_vs_o`.**", SELVO),
     ("## Cascade vs abstention (selective accuracy)\\n\\nFull-coverage cascade accuracy vs abstention's "
      "selective accuracy on the boards it answers (`r<0.5`), per dataset, coverage annotated. "
      "**Saved: `fig_cascade_vs_abstention_selective`.**", CAS_VS_ABST),
