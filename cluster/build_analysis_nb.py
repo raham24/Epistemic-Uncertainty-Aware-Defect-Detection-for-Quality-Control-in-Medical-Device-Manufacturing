@@ -33,6 +33,7 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 | `fig_selective_vs_o` | selective accuracy (kept rows) vs `o` on `balanced_hard` |
 | `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
+| `fig_selective_accuracy` | selective-accuracy curves per dataset (= 1 - the risk plot) |
 
 Prereq: run the sweep first (`bash cluster/submit.sh` on SLURM, or
 `bash cluster/run_local.sh` locally), then run this notebook from the repo root.
@@ -405,6 +406,31 @@ if len(sel):
         axes[k // ncol][k % ncol].axis("off")
     axes[0][0].legend(fontsize=8)
     fig.tight_layout(); save_fig(fig, "fig_selective_risk"); plt.show()
+else:
+    print("no checkpoints loaded (see the compute cell above)")
+'''
+
+SEL_ACC_PLOT = '''# Selective-ACCURACY curves (reject threshold swept) per dataset, ordered easy -> hard.
+# Exactly the risk plot above with accuracy = 1 - accepted error on the y-axis. abstention
+# (reject high reservation) vs cascade confidence thresholding vs the CE full-coverage accuracy
+# and the Bayes ceiling. Abstention rising above CE as coverage drops = it is helping; above the
+# blue line = it beats plain confidence.
+if len(sel):
+    order = list(sel_table["dataset"])
+    ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.4 * ncol, 3.0 * nrow), squeeze=False)
+    for k, ds in enumerate(order):
+        ax = axes[k // ncol][k % ncol]; d = sel[ds]
+        ax.plot(_covs, 1 - d["abst_err"], "-", color=COLORS["abstention"], lw=2, label="abstention")
+        ax.plot(_covs, 1 - d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="cascade confidence")
+        ax.axhline(1 - d["ce_err"], color="#999", ls=":", lw=1.4, label="CE full coverage")
+        ax.axhline(1 - d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes ceiling")
+        ax.set_title(f"{ds} (Bayes {1 - d['bayes']:.3f})", fontsize=10)
+        ax.set_xlabel("coverage"); ax.set_ylabel("selective accuracy"); ax.grid(alpha=0.25)
+    for k in range(len(order), nrow * ncol):
+        axes[k // ncol][k % ncol].axis("off")
+    axes[0][0].legend(fontsize=8)
+    fig.tight_layout(); save_fig(fig, "fig_selective_accuracy"); plt.show()
 else:
     print("no checkpoints loaded (see the compute cell above)")
 '''
@@ -808,6 +834,10 @@ SECTIONS = [
     ("## Comparing the datasets: selective-risk curves\\n\\nAccepted error vs coverage for every dataset, "
      "easy -> hard, vs the confidence baseline / CE / Bayes floor. **Saved: `fig_selective_risk`.**",
      SEL_RISK_PLOT),
+    ("## Comparing the datasets: selective-accuracy curves\\n\\nThe same plot with selective accuracy "
+     "(= 1 - accepted error) on the y-axis: accuracy on the answered boards vs coverage, easy -> hard, "
+     "vs the confidence baseline / CE full-coverage accuracy / Bayes ceiling. "
+     "**Saved: `fig_selective_accuracy`.**", SEL_ACC_PLOT),
     ("## Optimal configurations", OPTIMAL),
 ]
 
