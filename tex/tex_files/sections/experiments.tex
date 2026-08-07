@@ -1,0 +1,40 @@
+In this section we report our numerical results. We start by showing how the baseline data benchmark presented in \cite{shenoy2026uncertainty} is affected by epistemic uncertainty, and how our proposed approach can mitigate its impact. Furthermore, we propose a more nuanced version of their benchmark, where the detection task at end is more challenging, further highlighting the validity of our mitigation approach in less ad-hoc settings. Finally, we present a real-world case study of a medical device, introducing a benchmark easily downloadable through Proto-OKN, demonstrating the practical applicability and benefits of our proposed method in a high-stakes setting.
+
+\subsection{Synthetic Benchmark}
+\label{subsec:synthetic-benchmark}
+\begin{enumerate}
+    \item \marco{Description of the data, in particular the fact the original synthetic data had very simple feature to separate the classes, and why we propose a more challegning benchmark.}
+    \item \raham{We need a pseudocode of the benchmark generation, and a description of the parameters that can be tuned to make the benchmark more or less challenging. This will go in the appendix, but it will be referenced here.}
+    \item \raham{Description of the model used for the experiments, and the training procedure.}
+\end{enumerate}
+
+% \begin{figure*}
+%     \centering
+%     \includegraphics[scale=0.4]{../tex/img/fig_feature_separability_baseline.png}
+% \end{figure*}
+
+\begin{figure*}[t]
+    \centering
+
+    \begin{subfigure}{\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../tex/img/fig_feature_separability_baseline.png}
+        \caption{Baseline.}
+        \label{fig:baseline}
+    \end{subfigure}
+
+    \vspace{0.5em}
+
+    \begin{subfigure}{\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../tex/img/fig_feature_separability_harder.png}
+        \caption{Increased class posterior overlap.}
+        \label{fig:overlap}
+    \end{subfigure}
+
+    \caption{Feature distributions under different levels of class posterior overlap.}
+    \label{fig:feature-separability}
+\end{figure*}
+
+\subsection{Experiment on real medical devices data}
+\label{subsec:real-medical-devices-data}
