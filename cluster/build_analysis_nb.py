@@ -30,7 +30,7 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 |---|---|
 | `fig_feature_separability_<dataset>` | per-feature class-conditional densities + overlap, baseline vs hardest |
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
-| `fig_selective_vs_o` | selective accuracy (kept rows) vs `o` on `balanced_hard` |
+| `fig_selective_vs_o` | selective accuracy + coverage vs `o` (natural h=0.5 point, same selection as risk-coverage) |
 | `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 
@@ -723,63 +723,34 @@ ax.legend(loc="lower right"); ax.grid(axis="x", alpha=0)
 save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
 '''
 
-SELVO = '''# Selective accuracy vs the payoff o, on balanced_hard (the dataset that under-fits at low o).
-# Each o's abstention model operates at its own reject decision but never below a coverage FLOOR;
-# selective accuracy is the accuracy on the kept rows. As o rises the model abstains less and the
-# curve settles onto the plain classifier -- so it rises to an interior peak, then comes back down.
-# Needs results/cluster/*.pt + data/cluster/*.csv.
-SEL_DS = "balanced_hard"
-FLOOR = 0.60
-SMOOTH_WIN = 3                # rolling-mean window for display smoothing (1 = raw, no smoothing)
-pay_runs_all = [r for r in manifest["runs"] if "payoff" in (r.get("studies") or [])]
-SELVO_SEEDS = sorted({r["seed"] for r in pay_runs_all})
-
-pay_ds = sorted({r["dataset"] for r in pay_runs_all})
-if SEL_DS not in pay_ds:      # fall back to the hardest-by-Bayes payoff dataset if not present
-    def _bayes_acc(d):
-        for r in pay_runs_all:
-            if r["dataset"] == d and (root / r["metrics"]).exists():
-                return json.loads((root / r["metrics"]).read_text()).get("bayes_optimal_accuracy", 1.0)
-        return 1.0
-    SEL_DS = min(pay_ds, key=_bayes_acc)
-ds = SEL_DS
-o_grid = sorted({r["o"] for r in pay_runs_all if r["loss"] == "abstention" and r["dataset"] == ds})
-
-rows = []
-csv = root / "data" / "cluster" / f"{ds}.csv"
-if csv.exists():
-    dfd = pd.read_csv(csv)
-    for o in o_grid:
-        for seed in SELVO_SEEDS:
-            run = _find(ds, "abstention", o, seed)
-            if not (run and (root / run["model"]).exists()):
-                continue
-            info = _infer(run, dfd)
-            if not info["abstain"]:
-                continue
-            correct = (info["argmax"] == info["y"]).astype(float)
-            acc = 1 - _risk_cov(-info["r"], correct)
-            op_cov = max(float((info["r"] < 0.5).mean()), FLOOR)   # own coverage, never below the floor
-            rows.append({"o": o, "sel": float(np.interp(op_cov, _covs, acc))})
-selvo = pd.DataFrame(rows)
-if len(selvo):
-    sm = selvo.groupby("o")["sel"].mean().reset_index().sort_values("o").reset_index(drop=True)
-    o_arr = sm["o"].to_numpy()
-    sel_s = sm["sel"].rolling(SMOOTH_WIN, center=True, min_periods=1).mean().to_numpy()
-    peak_i = int(np.nanargmax(sel_s)); peak_o = float(o_arr[peak_i])
-
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.plot(o_arr, sel_s, marker="o", color="#1f77b4", lw=2)
-    ax.axvline(peak_o, color="#1f77b4", ls=":", lw=1)
-    ax.annotate(f"best o={peak_o:g}", (peak_o, sel_s[peak_i]),
-                textcoords="offset points", xytext=(6, 6), color="#1f77b4")
-    ax.set_xlabel("payoff  o"); ax.set_ylabel("selective accuracy (kept rows)")
-    ax.set_title("Selective accuracy vs o")
-    ax.grid(alpha=0.3)
-    save_fig(fig, "fig_selective_vs_o"); plt.show()
-    print(sm.round(4).to_string(index=False))
+SELVO = '''# Selective accuracy AND coverage vs the payoff o, at each model's NATURAL reject point (h=0.5).
+# This uses the SAME model selection as the risk-coverage figure above: the same payoff sweep, the
+# same stored h=0.5 operating point (coverage@0.5 / selective_acc@0.5), the same seed averaging --
+# no checkpoints, no fixed-coverage trick. Two panels make the relationship explicit: as o rises the
+# model abstains less, so coverage climbs (right panel) and selective accuracy falls (left panel).
+# The two are therefore the same story reparametrised -- accuracy = 1 - risk, and o is monotone in
+# coverage. There is no interior peak here; the earlier peak came from decoupling coverage from o
+# (a fixed-coverage floor), i.e. a DIFFERENT selection than the risk-coverage plot -- removed.
+RC_DATASETS = ["baseline", "hard", "imbalanced"]      # identical selection to fig_risk_coverage
+pay = study("payoff")
+if len(pay):
+    sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
+    cmap = plt.get_cmap("tab10")
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+    for j, d in enumerate([d for d in RC_DATASETS if d in set(pay["dataset"])]):
+        s = sm[sm.dataset == d].sort_values("o")
+        axes[0].plot(s["o"], s["selective_acc@0.5"], "-o", ms=4, color=cmap(j), label=d)
+        axes[1].plot(s["o"], s["coverage@0.5"], "-o", ms=4, color=cmap(j), label=d)
+    axes[0].set_xlabel("payoff  o"); axes[0].set_ylabel("selective accuracy (kept rows)")
+    axes[0].set_title("Selective accuracy vs o")
+    axes[1].set_xlabel("payoff  o"); axes[1].set_ylabel("coverage (fraction answered)")
+    axes[1].set_title("Coverage vs o  (o is monotone in coverage)")
+    for a in axes:
+        a.grid(alpha=0.3); a.legend(title="dataset")
+    fig.tight_layout(); save_fig(fig, "fig_selective_vs_o"); plt.show()
+    print(sm.sort_values(["dataset", "o"]).round(4).to_string(index=False))
 else:
-    print(f"no abstention checkpoints for {ds}")
+    print("no payoff-study runs with metrics yet")
 '''
 
 # (markdown header, code) in notebook order
@@ -799,9 +770,11 @@ SECTIONS = [
      "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
      "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` + the `_find/_infer/"
      "_risk_cov` helpers used below.", SEL_COMPUTE),
-    ("## Selective accuracy vs the payoff o\\n\\nSelective accuracy (kept rows) vs the payoff `o` on "
-     "`balanced_hard`, from each `o`'s checkpoint. It rises to an interior peak, then comes back down as "
-     "the model stops abstaining. **Saved: `fig_selective_vs_o`.**", SELVO),
+    ("## Selective accuracy vs the payoff o\\n\\nSelective accuracy and coverage vs `o` at each model's "
+     "natural reject point (h=0.5) -- the **same model selection** as the risk-coverage figure above "
+     "(same sweep, same operating point, same seeds). As `o` rises the model abstains less, so coverage "
+     "climbs and selective accuracy falls: the same story as risk-vs-coverage, reparametrised, with "
+     "`o` monotone in coverage. **Saved: `fig_selective_vs_o`.**", SELVO),
     ("## Cascade vs abstention (selective accuracy)\\n\\nFull-coverage cascade accuracy vs abstention's "
      "selective accuracy on the boards it answers (`r<0.5`), per dataset, coverage annotated. "
      "**Saved: `fig_cascade_vs_abstention_selective`.**", CAS_VS_ABST),
