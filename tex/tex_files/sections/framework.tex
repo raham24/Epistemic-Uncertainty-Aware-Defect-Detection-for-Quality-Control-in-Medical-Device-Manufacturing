@@ -13,6 +13,34 @@ and tries to approximate the optimal (Bayes) decision rule
 \]
 Notice that $\PYXhat$ can be interpreted as the prediction of the class (label) posterior probability given a sample (e.g., \(\PYXhat(y~|\x)\equiv \fun{softmax}(\mathbf{\x})_y\)), while \(\PYX\) is the true (unknown)  probability.
 
+\begin{figure*}[t]
+    \centering
+
+    \begin{subfigure}{0.32\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
+        \caption{First case.}
+        \label{fig:case1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
+        \caption{Second case.}
+        \label{fig:case2}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
+        \caption{Third case.}
+        \label{fig:case3}
+    \end{subfigure}
+
+    \caption{Overall caption describing the three cases.}
+    \label{fig:three_cases}
+\end{figure*}
+
 In general, during training, the cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a neural network. The cross-entropy loss is defined as
 \begin{align}
     \label{eq:cross_entropy}
