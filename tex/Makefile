@@ -3,7 +3,7 @@ TEX  = $(MAIN).tex
 PDF  = $(MAIN).pdf
 
 LATEXMK = latexmk
-LATEXMK_FLAGS = -pdf -interaction=nonstopmode -halt-on-error
+LATEXMK_FLAGS = -pdf -interaction=nonstopmode -halt-on-error -synctex=1 
 
 .PHONY: all clean cleanall watch
 
