@@ -11,30 +11,42 @@ f^\star(\x)  \triangleq   \argmax_{y\in\calY}~\PYX(y|\x).
 \)
 Notice that $\PYXhat$ can be interpreted as the prediction of the class (label) posterior probability given a sample (e.g., \(\PYXhat(y~|\x)\equiv \fun{softmax}(\mathbf{\x})_y\)), while \(\PYX\) is the true (unknown)  probability.
 
-In general, during training, the cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a neural network. The cross-entropy loss is defined as
-
+In general, during training, the cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a model. The cross-entropy loss \(\mathcal{L}_{\mathrm{CE}}(\calD_n)\) is defined as
 % \begin{align}
 %     \label{eq:cross_entropy_long}
 %     \mathcal{L}_{\text{CE}}(\calD_n) = -\frac{1}{n}\sum_{i=1}^{n}\sum_{j=1}^{C} p_{i,j}\log\left(\PYXhat(y_j|\x_i;\calD_n)\right),
 % \end{align}
 % where \(p_{i,j}\) is the element of the one-hot encoded label vector for the \(i\)-th sample and the \(j\)-th class. If \(p_{i,j} = 1\), then \(p_{i,k} = 0\) for \(k \neq j\).  
-
 \begin{align}
     \label{eq:cross_entropy}
     \mathcal{L}_{\mathrm{CE}}(\calD_n)
     = -\frac{1}{n}\sum_{i=1}^{n}
-    \log \PYXhat(y_i \mid \x_i;\calD_n).
+    \log \PYXhat(y_i \mid \x_i;\calD_n),
 \end{align}
-
+where \(y_i\) is the true label for the \(i\)-th sample.
 % The cross-entropy loss can be interpreted as the negative log-likelihood of the true labels given the predicted probabilities. 
 Minimizing \cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes.
 % For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\sum_{j=1}^{C} p_{i,j}\log \PYXhat(y_j|\x_i;\calD_n)\) as
-For each \(\x_i\), \cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities \(\phat_{j}\) for the true class \(j\), i.e.,
-
+For each sample \(\x\), \cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities, i.e.,
 \begin{align}
     \label{eq:cross_entropy_internal}
-    \W=\sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right).
+    \W=\sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right),
 \end{align}
+where \(\phat=\PYXhat(\cdot|\x;\calD_n)\) represents the predicted class probabilities for the input \(\x\) and \(p\) is the one-hot encoded true label vector for the sample.
+
+Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explicitly account for uncertainty by modifying the training objective in \cref{eq:cross_entropy}, to enable the model to learn when to abstain. Specifically, we introduce a reservation variable represented as an additional class label, allowing the model to defer predictions when uncertainty is high. In particular, the term in \cref{eq:cross_entropy_internal} is replaced by
+\begin{align}
+    \label{eq:reject_cross_entropy_internal}
+    \W{r}=\sum_{j=1}^{C} p_{j}\log\left(\costmult\cdot\phat_{j}+\phat_{C+1}\right),
+\end{align}
+where \(\phat_{C+1}\) is the reservation variable for a given input \(\x\), subject to the constraints
+\[
+    \sum_{j=1}^{C} p_{j}+p_{C+1}=1,\ \text{and}\
+    p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
+\]
+and \(\costmult\in\R_{+}\) is a positive hyperparameter that controls the trade-off between making a prediction and abstaining. Higher values of \(\costmult\) encourages the model to make predictions, while lower values promote abstention.
+While neural networks provide a practical means of obtaining generally suboptimal solutions that can be applied to arbitrary inputs, as noted in \cite{liu2019deep}, a principled reformulation and analysis of the underlying optimization problem (cf. \cite{boyd2004convex}) can yield further theoretical insights. In particular, such an analysis allows us to characterize the uncertainty threshold for abstention and identify previously unrecognized degenerate cases. These findings provide further insight into the principled management of epistemic uncertainty in high-stakes applications, such as fault detection in medical devices.
+ 
 
 \clearpage
 
@@ -43,21 +55,7 @@ page left intentionally blank
 \clearpage
 
 \marco{this must be reorganized to contain the math part and make it shorter in the main paper}
-Due to the importance of detecting defects in medical devices, and trying to lower the costs of false positives and false negatives, inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep} we embed uncertainty into our model, modifying the training objective to learn how to abstain.
-
-In particular, we allow for the model to predict \(\card{\calY} + 1\) classes, where the additional class represents the option to abstain. The loss function includes a reservation variable, represented by an additional class label, which allows the model to abstain from making a prediction when it is uncertain. The modified loss function replaces the term in \cref{eq:cross_entropy_internal} with
-
-\begin{align}
-    \label{eq:reject_cross_entropy_internal}
-    \W{r}=\sum_{j=1}^{C} p_{j}\log\left(\costmult\cdot\phat_{j}+\phat_{C+1}\right),
-\end{align}
-
-where \(\phat_{i,C+1}\) is the reservation variable for the \(i\)-th sample, subject to the constraints
-\[
-    \sum_{j=1}^{C} p_{i,j}+p_{i,C+1}=1,\ \text{and}\
-    p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
-\]
-and parameter \(\costmult>0\) is a hyperparameter that controls the trade-off between making a prediction and abstaining. A higher value of \(\costmult\) encourages the model to make predictions, while a lower value encourages abstention.
+Due to the importance of detecting defects in medical devices, and trying to lower the costs of false positives and false negatives.
 
 In particular, with respect to \cite{liu2019deep}, we propose a new analysis based on \gls*{cmp} (cf. \cite{boyd2004convex})\footnote{While this approach provides a closed-form solution to the optimization problem, we retain the neural network framework of state-of-the-art approaches \cite{shenoy2026uncertainty}}, which allows for a principled analysis and reveals a previously unidentified degenerate boundary case.
 
