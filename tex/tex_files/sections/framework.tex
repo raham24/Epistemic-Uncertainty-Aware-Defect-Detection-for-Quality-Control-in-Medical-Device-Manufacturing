@@ -40,11 +40,16 @@ Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explic
     \W{r}=\sum_{j=1}^{C} p_{j}\log\left(\costmult\cdot\phat_{j}+\phat_{C+1}\right),
 \end{align}
 where \(\phat_{C+1}\) is the reservation variable for a given input \(\x\), subject to the constraints
-\[
-    \sum_{j=1}^{C} p_{j}+p_{C+1}=1,\ \text{and}\
+\begin{align}
+    \label{eq:reject_cross_entropy_sum}
+    \sum_{j=1}^{C} p_{j}+p_{C+1}=1,
+\end{align}
+and
+\begin{align}
+    \label{eq:reject_cross_entropy_nonneg}
     p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
-\]
-and \(\costmult\in\R_{+}\) is a positive hyperparameter that controls the trade-off between making a prediction and abstaining. Higher values of \(\costmult\) encourages the model to make predictions, while lower values promote abstention.
+\end{align}
+where \(\costmult\in\R_{+}\) is a positive hyperparameter that controls the trade-off between making a prediction and abstaining. Higher values of \(\costmult\) encourages the model to make predictions, while lower values promote abstention.
 While neural networks provide a practical means of obtaining generally suboptimal solutions that can be applied to arbitrary inputs, as noted in \cite{liu2019deep}, a principled reformulation and analysis of the underlying optimization problem (cf. \cite{boyd2004convex}) can yield further theoretical insights. In particular, such an analysis allows us to characterize the uncertainty threshold for abstention and identify previously unrecognized degenerate cases. These findings provide further insight into the principled management of epistemic uncertainty in high-stakes applications, such as fault detection in medical devices.
 
 \subsection{Illustrative example}
@@ -87,58 +92,32 @@ Finally, \cref{fig:margin_histogram} provides further insight into the mechanism
 \subsection{Optimization problem with the reservation variable}
 \label{subsec:optimization_problem}
 
-\clearpage
-
-page left intentionally blank
-
-\clearpage
-
-\marco{this must be reorganized to contain the math part and make it shorter in the main paper}
-
-
+We now present the main theoretical results of this work, providing a principled characterization of the role of the reservation variable in managing epistemic uncertainty. Proofs based on the \gls*{kkt} optimality conditions, together with the necessary auxiliary results, are provided in \cref{sec:appendix}.
 
 
 \begin{restatable}{theorem}{theoremKKT}
     \label{theorem:kkt}
-    Let $\hat{\mathbf p}^\star$ be a KKT point of the optimization problem in
-    \eqref{eq:cmp_problem}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists
-    a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
+    Let $\hat{\mathbf p}^\star$ be a \gls*{kkt} optimal point for the maximization of \cref{eq:reject_cross_entropy_internal} with constraints \cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
     \begin{align}
-        \hat p_i^\star
-        =
-        \max\left\{
-        \frac{p_i}{\lambda}
-        -
-        \frac{\hat p_{C+1}^\star}{\costmult},
-        \,0
-        \right\}.
+        \label{eq:kkt_conditions_solution}
+        \hat p_i^\star = \max\left\{\frac{p_i}{\lambda} - \frac{\hat p_{C+1}^\star}{\costmult}, \,0 \right\}.
     \end{align}
-    Consequently, every active class satisfies
+    Moreover, the quantity
     \begin{align}
-        p_i>\lambda\frac{\hat p_{C+1}^\star}{\costmult},
-    \end{align}
-    whereas every inactive class satisfies
-    \begin{align}
-        p_i\le
-        \lambda\frac{\hat p_{C+1}^\star}{\costmult}.
-    \end{align}
-    Hence, the quantity
-    \[
+        \label{eq:threshold}
         \frac{\hat p_{C+1}^\star}{\costmult}
-    \]
+    \end{align}
     acts as an adaptive threshold that determines which class probabilities remain active in the optimal solution.
 \end{restatable}
 
-\cref{theorem:kkt} shows that the reserve output induces an adaptive confidence threshold. As the reserve output increases (or the cost multiplier decreases), the threshold rises, causing more classes to become inactive. This provides a principled optimization-based interpretation of the reserve output as a learned uncertainty score.
+\marco{Rephrase \Cref{theorem:kkt} shows that the reserve output induces an adaptive confidence threshold. As the reserve output increases (or the cost multiplier decreases), the threshold rises, causing more classes to become inactive. This provides a principled optimization-based interpretation of the reserve output as a learned uncertainty score. The proof is provided in \dots}
 
 \begin{restatable}{theorem}{theoremThreshold}
     \label{theorem:threshold}
     Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
-    \in \{1, \dots, C\}\). Then necessarily \[ 1<\costmult<C.\]
+    \in \{1, \dots, C\}\). Then necessarily \(1<\costmult<C\) (cf. \cite{liu2019deep}). Moreover, for \(k<1\) abstaining is the optimal strategy, while for \(k>C\) the optimal solution is to always make a prediction. Finally, \(k=1\) and \(k=C\) are degenerate cases, where there may be multiple optimal solutions.
 \end{restatable}
 
-\clearpage
+\marco{Explain \Cref{theorem:threshold} and its implications. The proof is provided in \dots}
 
-Page left intentionally blank
 
-\clearpage

@@ -1,6 +1,7 @@
-\marco{In this section\dots}
+In this section we present the proofs for the main theoretical results in \cref{sec:framework}. We first present some auxiliary results that will be used in the proofs of \cref{theorem:kkt,theorem:threshold}.
 
 \subsection{Auxiliary results}
+\label{subsec:auxiliary_results}
 We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
 \[
     \Delta^{C}
@@ -55,7 +56,7 @@ It is easy to see that the following holds:
     The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
 \end{restatable}
 \subsection{Proof of \cref{prop:simplex_properties}}
-\label{sec:proof_simplex_properties}
+\label{subsec:proof_simplex_properties}
 \propSimplex*
 \begin{proof}
     Let $\placeholderdist,\placeholderdist^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
@@ -128,7 +129,7 @@ It is easy to see that the following holds:
 \end{proof}
 
 \subsection{Proof of \cref{prop:concavity}}
-\label{sec:proof_concavity}
+\label{subsec:proof_concavity}
 \propConcavity*
 To show that $\W{r}$ is concave, it suffices to show that $-\W{r}$ is convex. Observe that
 \begin{align*}
@@ -177,7 +178,7 @@ Hence each $g_j$ is convex. Since $p_j\ge0$ for all $j$, the weighted sum
 is convex. Therefore, $\W{r}$ is concave on $\Delta^C$.
 
 \subsection{Proof of \cref{prop:equivalence}}
-\label{sec:proof_equivalence}
+\label{subsec:proof_equivalence}
 \propEquivalence*
 
 Let $\phat\in\Delta^C$ with $\phat_{C+1}=0$. Then
@@ -199,7 +200,15 @@ where $H(p)$ is the Shannon entropy of $p$ and $D_{\text{KL}}(p\| \phat)$ is the
 \subsection{Proof of \cref{theorem:kkt}}
 \label{sec:proof_kkt_conditions}
 \theoremKKT*
-
+Consequently, every active class satisfies
+    \begin{align}
+        p_i>\lambda\frac{\hat p_{C+1}^\star}{\costmult},
+    \end{align}
+    whereas every inactive class satisfies
+    \begin{align}
+        p_i\le
+        \lambda\frac{\hat p_{C+1}^\star}{\costmult}.
+    \end{align}
 The optimization problem in Eq.~\eqref{eq:cmp_problem} can be analyzed using the \gls*{kkt} conditions. The corresponding Lagrangian is given by
 \begin{align*}
     \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu})
