@@ -29,13 +29,20 @@ In general, during training, the cross-entropy loss is minimized to learn the mo
 % The cross-entropy loss can be interpreted as the negative log-likelihood of the true labels given the predicted probabilities. 
 Minimizing \cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes.
 % For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\sum_{j=1}^{C} p_{i,j}\log \PYXhat(y_j|\x_i;\calD_n)\) as
-For each \(\x_i\), \cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities \(\phat_{j}\) for the true class \(j\), i.e., 
+For each \(\x_i\), \cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities \(\phat_{j}\) for the true class \(j\), i.e.,
 
 \begin{align}
     \label{eq:cross_entropy_internal}
     \W=\sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right).
 \end{align}
 
+\clearpage
+
+page left intentionally blank
+
+\clearpage
+
+\marco{this must be reorganized to contain the math part and make it shorter in the main paper}
 Due to the importance of detecting defects in medical devices, and trying to lower the costs of false positives and false negatives, inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep} we embed uncertainty into our model, modifying the training objective to learn how to abstain.
 
 In particular, we allow for the model to predict \(\card{\calY} + 1\) classes, where the additional class represents the option to abstain. The loss function includes a reservation variable, represented by an additional class label, which allows the model to abstain from making a prediction when it is uncertain. The modified loss function replaces the term in \cref{eq:cross_entropy_internal} with
@@ -93,3 +100,104 @@ In particular, with respect to \cite{liu2019deep}, we propose a new analysis bas
     \caption{Overall caption describing the three cases.}
     \label{fig:three_cases}
 \end{figure*}
+\subsection{Optimization problem with the reservation variable}
+We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
+\[
+    \Delta^{C}
+    =
+    \left\{
+    \placeholderdist \in \mathbb{R}^{C+1}
+    :\;
+    \placeholderdist_i \ge 0 \;\forall i,
+    \quad
+    \sum_{i=1}^{C+1} \placeholderdist_i = 1
+    \right\}.
+\]
+
+\begin{restatable}{proposition}{propSimplex}
+    \label{prop:simplex_properties}
+    The probability simplex
+    \[
+        \Delta^{C}
+        =
+        \left\{
+        \placeholderdist \in \mathbb{R}^{C+1}
+        :\;
+        \placeholderdist_i \ge 0 \;\forall i,
+        \quad
+        \sum_{i=1}^{C+1} \placeholderdist_i = 1
+        \right\}
+    \]
+    is convex, closed, and bounded.
+\end{restatable}
+Moreover, the following holds:
+\begin{restatable}{proposition}{propConcavity}
+    \label{prop:concavity}
+    The function \(\W{r}\) in \cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
+\end{restatable}
+Therefore, the following can be concluded:
+\begin{restatable}{remark}{remarkadmissible}
+    \label{remark:admissible}
+    The optimization problem of maximizing \(\W{r}\) over the probability simplex \(\Delta^{C}\) involves the maximization over a convex, closed, and bounded set of a concave function. Hence, the problem is a \gls*{cmp} problem, and for the continuity of \(\W{r}\) over the compact set \(\Delta^{C}\), it admits a global maximum.
+\end{restatable}
+
+\subsection{Optimization problem with the reservation variable}
+Due to the nature of the problem analyzed, we can build the following \gls*{cmp} problem, which is equivalent to the maximization of \(\W{r}\) over the probability simplex \(\Delta^{C}\):
+\begin{align}
+    \label{eq:cmp_problem}
+    \begin{aligned}
+        \text{maximize}\quad   & \W{r}                               \\
+        \text{subject to}\quad & \sum_{i=1}^{C+1} \phat_i = 1,       \\
+                               & \phat_i \ge 0, \quad i=1,\dots,C+1.
+    \end{aligned}
+\end{align}
+It is easy to see that the following holds:
+\begin{restatable}{proposition}{propEquivalence}
+    \label{prop:equivalence}
+    The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
+\end{restatable}
+
+\begin{restatable}{theorem}{theoremKKT}
+    \label{theorem:kkt}
+    Let $\hat{\mathbf p}^\star$ be a KKT point of the optimization problem in
+    \eqref{eq:cmp_problem}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists
+    a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
+    \begin{align}
+        \hat p_i^\star
+        =
+        \max\left\{
+        \frac{p_i}{\lambda}
+        -
+        \frac{\hat p_{C+1}^\star}{\costmult},
+        \,0
+        \right\}.
+    \end{align}
+    Consequently, every active class satisfies
+    \begin{align}
+        p_i>\lambda\frac{\hat p_{C+1}^\star}{\costmult},
+    \end{align}
+    whereas every inactive class satisfies
+    \begin{align}
+        p_i\le
+        \lambda\frac{\hat p_{C+1}^\star}{\costmult}.
+    \end{align}
+    Hence, the quantity
+    \[
+        \frac{\hat p_{C+1}^\star}{\costmult}
+    \]
+    acts as an adaptive threshold that determines which class probabilities remain active in the optimal solution.
+\end{restatable}
+
+\cref{theorem:kkt} shows that the reserve output induces an adaptive confidence threshold. As the reserve output increases (or the cost multiplier decreases), the threshold rises, causing more classes to become inactive. This provides a principled optimization-based interpretation of the reserve output as a learned uncertainty score.
+
+\begin{restatable}{theorem}{theoremThreshold}
+    \label{theorem:threshold}
+    Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
+    \in \{1, \dots, C\}\). Then necessarily \[ 1<\costmult<C.\]
+\end{restatable}
+
+\clearpage
+
+Page left intentionally blank
+
+\clearpage
