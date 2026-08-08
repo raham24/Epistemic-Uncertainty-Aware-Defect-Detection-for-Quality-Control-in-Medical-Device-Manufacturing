@@ -94,67 +94,9 @@ page left intentionally blank
 \clearpage
 
 \marco{this must be reorganized to contain the math part and make it shorter in the main paper}
-Due to the importance of detecting defects in medical devices, and trying to lower the costs of false positives and false negatives.
-
-In particular, with respect to \cite{liu2019deep}, we propose a new analysis based on \gls*{cmp} (cf. \cite{boyd2004convex})\footnote{While this approach provides a closed-form solution to the optimization problem, we retain the neural network framework of state-of-the-art approaches \cite{shenoy2026uncertainty}}, which allows for a principled analysis and reveals a previously unidentified degenerate boundary case.
 
 
-\subsection{Optimization problem with the reservation variable}
-We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
-\[
-    \Delta^{C}
-    =
-    \left\{
-    \placeholderdist \in \mathbb{R}^{C+1}
-    :\;
-    \placeholderdist_i \ge 0 \;\forall i,
-    \quad
-    \sum_{i=1}^{C+1} \placeholderdist_i = 1
-    \right\}.
-\]
 
-\begin{restatable}{proposition}{propSimplex}
-    \label{prop:simplex_properties}
-    The probability simplex
-    \[
-        \Delta^{C}
-        =
-        \left\{
-        \placeholderdist \in \mathbb{R}^{C+1}
-        :\;
-        \placeholderdist_i \ge 0 \;\forall i,
-        \quad
-        \sum_{i=1}^{C+1} \placeholderdist_i = 1
-        \right\}
-    \]
-    is convex, closed, and bounded.
-\end{restatable}
-Moreover, the following holds:
-\begin{restatable}{proposition}{propConcavity}
-    \label{prop:concavity}
-    The function \(\W{r}\) in \cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
-\end{restatable}
-Therefore, the following can be concluded:
-\begin{restatable}{remark}{remarkadmissible}
-    \label{remark:admissible}
-    The optimization problem of maximizing \(\W{r}\) over the probability simplex \(\Delta^{C}\) involves the maximization over a convex, closed, and bounded set of a concave function. Hence, the problem is a \gls*{cmp} problem, and for the continuity of \(\W{r}\) over the compact set \(\Delta^{C}\), it admits a global maximum.
-\end{restatable}
-
-\subsection{Optimization problem with the reservation variable}
-Due to the nature of the problem analyzed, we can build the following \gls*{cmp} problem, which is equivalent to the maximization of \(\W{r}\) over the probability simplex \(\Delta^{C}\):
-\begin{align}
-    \label{eq:cmp_problem}
-    \begin{aligned}
-        \text{maximize}\quad   & \W{r}                               \\
-        \text{subject to}\quad & \sum_{i=1}^{C+1} \phat_i = 1,       \\
-                               & \phat_i \ge 0, \quad i=1,\dots,C+1.
-    \end{aligned}
-\end{align}
-It is easy to see that the following holds:
-\begin{restatable}{proposition}{propEquivalence}
-    \label{prop:equivalence}
-    The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
-\end{restatable}
 
 \begin{restatable}{theorem}{theoremKKT}
     \label{theorem:kkt}
