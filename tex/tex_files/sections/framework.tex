@@ -1,4 +1,3 @@
-\marco{add the toy example here where convenient}
 We focus on the classification problem related to the head \(\h{1}\). Indeed, a classification error in this head will contribute either a wrong defect alarm or a missed defect alarm, leading to higher production cost/risk. It goes without saying that this can be extended to the other heads performing similar classification tasks.
 Thus, we formalize the classification problem for \(\h{1}\) as a multi-class classification problem.
 
@@ -12,43 +11,6 @@ and tries to approximate the optimal (Bayes) decision rule
     f^\star(\x)  \triangleq   \argmax_{y\in\calY}~\PYX(y|\x).
 \]
 Notice that $\PYXhat$ can be interpreted as the prediction of the class (label) posterior probability given a sample (e.g., \(\PYXhat(y~|\x)\equiv \fun{softmax}(\mathbf{\x})_y\)), while \(\PYX\) is the true (unknown)  probability.
-
-\begin{figure*}[t]
-    \centering
-
-    % Large figure on the left
-    \begin{subfigure}[c]{0.55\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
-        \caption{First case.}
-        \label{fig:case1}
-    \end{subfigure}
-    \hspace{0.01\textwidth}
-    % Two stacked figures on the right
-    \begin{minipage}[c]{0.3\textwidth}
-        \centering
-
-        \begin{subfigure}{\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
-            \caption{Second case.}
-            \label{fig:case2}
-        \end{subfigure}
-
-        \vspace{0.5em}
-
-        \begin{subfigure}{\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
-            \caption{Third case.}
-            \label{fig:case3}
-        \end{subfigure}
-
-    \end{minipage}
-
-    \caption{Overall caption describing the three cases.}
-    \label{fig:three_cases}
-\end{figure*}F
 
 In general, during training, the cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a neural network. The cross-entropy loss is defined as
 \begin{align}
@@ -177,6 +139,42 @@ It is easy to see that the following holds:
     \in \{1, \dots, C\}\). Then necessarily \[ 1<\costmult<C.\]
 \end{restatable}
 
-% [Threshold structure of mixed solutions] 
+\subsection{Illustrative example}
+\label{subsec:illustrative_example}
 
+\begin{figure*}[!htp]
+    \centering
 
+    % Large figure on the left
+    \begin{subfigure}[c]{0.55\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
+        \caption{First case.}
+        \label{fig:case1}
+    \end{subfigure}
+    \hspace{0.01\textwidth}
+    % Two stacked figures on the right
+    \begin{minipage}[c]{0.3\textwidth}
+        \centering
+
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
+            \caption{Second case.}
+            \label{fig:case2}
+        \end{subfigure}
+
+        \vspace{0.5em}
+
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
+            \caption{Third case.}
+            \label{fig:case3}
+        \end{subfigure}
+
+    \end{minipage}
+
+    \caption{Overall caption describing the three cases.}
+    \label{fig:three_cases}
+\end{figure*}
