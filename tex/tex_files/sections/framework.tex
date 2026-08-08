@@ -46,7 +46,45 @@ where \(\phat_{C+1}\) is the reservation variable for a given input \(\x\), subj
 \]
 and \(\costmult\in\R_{+}\) is a positive hyperparameter that controls the trade-off between making a prediction and abstaining. Higher values of \(\costmult\) encourages the model to make predictions, while lower values promote abstention.
 While neural networks provide a practical means of obtaining generally suboptimal solutions that can be applied to arbitrary inputs, as noted in \cite{liu2019deep}, a principled reformulation and analysis of the underlying optimization problem (cf. \cite{boyd2004convex}) can yield further theoretical insights. In particular, such an analysis allows us to characterize the uncertainty threshold for abstention and identify previously unrecognized degenerate cases. These findings provide further insight into the principled management of epistemic uncertainty in high-stakes applications, such as fault detection in medical devices.
- 
+
+\subsection{Illustrative example}
+\label{subsec:illustrative_example}
+\subsection{Effect of the Reservation Variable}
+We first illustrate the effect of the reservation variable on a toy classification problem with two-dimensional features and (C=3) classes in \cref{fig:illustrative_example}. As shown in \cref{fig:decision_regions}, introducing the reservation variable allows the model to identify and reject observations concentrated around the decision boundaries. These regions correspond to inputs for which the classifier has difficulty distinguishing between competing classes and are therefore associated with greater predictive uncertainty.
+
+This behavior translates directly into improved performance on the retained predictions. The selective risk curve in \cref{fig:risk_curve} shows that reducing the coverage to approximately \(81\%\) results in a reduction in classification risk of approximately \(50\%\). Thus, by abstaining on a relatively small fraction of uncertain observations, the model can substantially reduce the error rate among the predictions it retains.
+
+Finally, \cref{fig:margin_histogram} provides further insight into the mechanism underlying this behavior. Rejected observations are predominantly associated with smaller classification margins, indicating weaker separation between the most likely competing classes. Together, these results illustrate how the reservation mechanism enables the model to identify uncertain predictions and trade coverage for lower classification risk.
+
+\begin{figure*}[!htp]
+    \centering
+    \begin{subfigure}[c]{0.55\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
+        \caption{Decision regions and rejected points.}
+        \label{fig:decision_regions}
+    \end{subfigure}
+    \hspace{0.01\textwidth}
+    \begin{minipage}[c]{0.3\textwidth}
+        \centering
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
+            \caption{Selective risk curve.}
+            \label{fig:risk_curve}
+        \end{subfigure}
+        \vspace{0.5em}
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
+            \caption{Classification margin histogram.}
+            \label{fig:margin_histogram}
+        \end{subfigure}
+    \end{minipage}
+    \caption{The impact of the reservation variable on the decision regions, selective risk curve, and classification margin histogram for a toy dataset with bidimensional features and \(C=3\), illustrating how the model can achieve lower classification risk by abstaining on a small fraction of uncertain predictions.}
+    \label{fig:illustrative_example}
+\end{figure*}
+
 
 \clearpage
 
@@ -59,45 +97,7 @@ Due to the importance of detecting defects in medical devices, and trying to low
 
 In particular, with respect to \cite{liu2019deep}, we propose a new analysis based on \gls*{cmp} (cf. \cite{boyd2004convex})\footnote{While this approach provides a closed-form solution to the optimization problem, we retain the neural network framework of state-of-the-art approaches \cite{shenoy2026uncertainty}}, which allows for a principled analysis and reveals a previously unidentified degenerate boundary case.
 
-\subsection{Illustrative example}
-\label{subsec:illustrative_example}
 
-\begin{figure*}[!htp]
-    \centering
-
-    % Large figure on the left
-    \begin{subfigure}[c]{0.55\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
-        \caption{First case.}
-        \label{fig:case1}
-    \end{subfigure}
-    \hspace{0.01\textwidth}
-    % Two stacked figures on the right
-    \begin{minipage}[c]{0.3\textwidth}
-        \centering
-
-        \begin{subfigure}{\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
-            \caption{Second case.}
-            \label{fig:case2}
-        \end{subfigure}
-
-        \vspace{0.5em}
-
-        \begin{subfigure}{\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
-            \caption{Third case.}
-            \label{fig:case3}
-        \end{subfigure}
-
-    \end{minipage}
-
-    \caption{Overall caption describing the three cases.}
-    \label{fig:three_cases}
-\end{figure*}
 \subsection{Optimization problem with the reservation variable}
 We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
 \[
