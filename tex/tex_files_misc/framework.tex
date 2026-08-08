@@ -1,0 +1,203 @@
+We focus on the classification task associated with head \(\h{1}\), where errors can result in either false or missed defect alarms, increasing production costs and risk. The same analysis extends naturally to other classification heads. We therefore formulate the task for \(\h{1}\) as a multi-class classification problem.
+
+Let \(\calX\subseteq\R^d\) be the (possibly continuous) feature space and let  \(\calY=\{1,\dots,C\}\) be the label space for the classification task, thus \(\card{\calY}=C\). Moreover, let \(\pXY\) be the underlying (unknown) \gls*{pdf} over \(\calX\times\calY\).
+Let \(\calD_{n} = \!\left\{( \x_1, y_1),\dots,( \x_n, y_n)\right\}\sim \pXY\) be a random realization of $n$ i.i.d. samples according to \(\pXY\)  denoting the \textit{training set}, where \(\x_i \in \calX\) is the input (feature), \(y_i \in \calY\) is the output class among $C$ possible classes and $n$ denotes the size of the training set. A predictor \({f}_{\calD_{n}}: \calX\rightarrow\calY\), i.e.,
+\(
+f_{\calD_{n}}(\x) \triangleq \argmax_{y\in\calY}~\PYXhat(y|\x;\calD_{n}),
+\)
+uses the inferred model \(\PYXhat\equiv \PYXhat(y|\x;\calD_{n})\) to approximate the optimal (Bayes) decision rule
+\(
+f^\star(\x)  \triangleq   \argmax_{y\in\calY}~\PYX(y|\x).
+\)
+Notice that $\PYXhat$ can be interpreted as the prediction of the class (label) posterior probability given a sample (e.g., \(\PYXhat(y~|\x)\equiv \fun{softmax}(\mathbf{\x})_y\)), while \(\PYX\) is the true (unknown)  probability.
+
+In general, during training, the cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a model. The cross-entropy loss \(\mathcal{L}_{\mathrm{CE}}(\calD_n)\) is defined as
+% \begin{align}
+%     \label{eq:cross_entropy_long}
+%     \mathcal{L}_{\text{CE}}(\calD_n) = -\frac{1}{n}\sum_{i=1}^{n}\sum_{j=1}^{C} p_{i,j}\log\left(\PYXhat(y_j|\x_i;\calD_n)\right),
+% \end{align}
+% where \(p_{i,j}\) is the element of the one-hot encoded label vector for the \(i\)-th sample and the \(j\)-th class. If \(p_{i,j} = 1\), then \(p_{i,k} = 0\) for \(k \neq j\).  
+\begin{align}
+    \label{eq:cross_entropy}
+    \mathcal{L}_{\mathrm{CE}}(\calD_n)
+    = -\frac{1}{n}\sum_{i=1}^{n}
+    \log \PYXhat(y_i \mid \x_i;\calD_n),
+\end{align}
+where \(y_i\) is the true label for the \(i\)-th sample.
+% The cross-entropy loss can be interpreted as the negative log-likelihood of the true labels given the predicted probabilities. 
+Minimizing \cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes.
+% For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\sum_{j=1}^{C} p_{i,j}\log \PYXhat(y_j|\x_i;\calD_n)\) as
+For each sample \(\x\), \cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities, i.e.,
+\begin{align}
+    \label{eq:cross_entropy_internal}
+    \W=\sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right),
+\end{align}
+where \(\phat=\PYXhat(\cdot|\x;\calD_n)\) represents the predicted class probabilities for the input \(\x\) and \(p\) is the one-hot encoded true label vector for the sample.
+
+Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explicitly account for uncertainty by modifying the training objective in \cref{eq:cross_entropy}, to enable the model to learn when to abstain. Specifically, we introduce a reservation variable represented as an additional class label, allowing the model to defer predictions when uncertainty is high.
+
+\clearpage
+
+page left intentionally blank
+
+\clearpage
+
+\marco{this must be reorganized to contain the math part and make it shorter in the main paper}
+Due to the importance of detecting defects in medical devices, and trying to lower the costs of false positives and false negatives,
+
+In particular, we allow for the model to predict \(\card{\calY} + 1\) classes, where the additional class represents the option to abstain. The loss function includes a reservation variable, represented by an additional class label, which allows the model to abstain from making a prediction when it is uncertain. The modified loss function replaces the term in \cref{eq:cross_entropy_internal} with
+
+\begin{align}
+    \label{eq:reject_cross_entropy_internal}
+    \W{r}=\sum_{j=1}^{C} p_{j}\log\left(\costmult\cdot\phat_{j}+\phat_{C+1}\right),
+\end{align}
+
+where \(\phat_{i,C+1}\) is the reservation variable for the \(i\)-th sample, subject to the constraints
+\[
+    \sum_{j=1}^{C} p_{i,j}+p_{i,C+1}=1,\ \text{and}\
+    p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
+\]
+and parameter \(\costmult>0\) is a hyperparameter that controls the trade-off between making a prediction and abstaining. A higher value of \(\costmult\) encourages the model to make predictions, while a lower value encourages abstention.
+
+In particular, with respect to \cite{liu2019deep}, we propose a new analysis based on \gls*{cmp} (cf. \cite{boyd2004convex})\footnote{While this approach provides a closed-form solution to the optimization problem, we retain the neural network framework of state-of-the-art approaches \cite{shenoy2026uncertainty}}, which allows for a principled analysis and reveals a previously unidentified degenerate boundary case.
+
+\subsection{Illustrative example}
+\label{subsec:illustrative_example}
+
+\begin{figure*}[!htp]
+    \centering
+
+    % Large figure on the left
+    \begin{subfigure}[c]{0.55\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
+        \caption{First case.}
+        \label{fig:case1}
+    \end{subfigure}
+    \hspace{0.01\textwidth}
+    % Two stacked figures on the right
+    \begin{minipage}[c]{0.3\textwidth}
+        \centering
+
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
+            \caption{Second case.}
+            \label{fig:case2}
+        \end{subfigure}
+
+        \vspace{0.5em}
+
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
+            \caption{Third case.}
+            \label{fig:case3}
+        \end{subfigure}
+
+    \end{minipage}
+
+    \caption{Overall caption describing the three cases.}
+    \label{fig:three_cases}
+\end{figure*}
+\subsection{Optimization problem with the reservation variable}
+We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
+\[
+    \Delta^{C}
+    =
+    \left\{
+    \placeholderdist \in \mathbb{R}^{C+1}
+    :\;
+    \placeholderdist_i \ge 0 \;\forall i,
+    \quad
+    \sum_{i=1}^{C+1} \placeholderdist_i = 1
+    \right\}.
+\]
+
+\begin{restatable}{proposition}{propSimplex}
+    \label{prop:simplex_properties}
+    The probability simplex
+    \[
+        \Delta^{C}
+        =
+        \left\{
+        \placeholderdist \in \mathbb{R}^{C+1}
+        :\;
+        \placeholderdist_i \ge 0 \;\forall i,
+        \quad
+        \sum_{i=1}^{C+1} \placeholderdist_i = 1
+        \right\}
+    \]
+    is convex, closed, and bounded.
+\end{restatable}
+Moreover, the following holds:
+\begin{restatable}{proposition}{propConcavity}
+    \label{prop:concavity}
+    The function \(\W{r}\) in \cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
+\end{restatable}
+Therefore, the following can be concluded:
+\begin{restatable}{remark}{remarkadmissible}
+    \label{remark:admissible}
+    The optimization problem of maximizing \(\W{r}\) over the probability simplex \(\Delta^{C}\) involves the maximization over a convex, closed, and bounded set of a concave function. Hence, the problem is a \gls*{cmp} problem, and for the continuity of \(\W{r}\) over the compact set \(\Delta^{C}\), it admits a global maximum.
+\end{restatable}
+
+\subsection{Optimization problem with the reservation variable}
+Due to the nature of the problem analyzed, we can build the following \gls*{cmp} problem, which is equivalent to the maximization of \(\W{r}\) over the probability simplex \(\Delta^{C}\):
+\begin{align}
+    \label{eq:cmp_problem}
+    \begin{aligned}
+        \text{maximize}\quad   & \W{r}                               \\
+        \text{subject to}\quad & \sum_{i=1}^{C+1} \phat_i = 1,       \\
+                               & \phat_i \ge 0, \quad i=1,\dots,C+1.
+    \end{aligned}
+\end{align}
+It is easy to see that the following holds:
+\begin{restatable}{proposition}{propEquivalence}
+    \label{prop:equivalence}
+    The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
+\end{restatable}
+
+\begin{restatable}{theorem}{theoremKKT}
+    \label{theorem:kkt}
+    Let $\hat{\mathbf p}^\star$ be a KKT point of the optimization problem in
+    \eqref{eq:cmp_problem}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists
+    a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
+    \begin{align}
+        \hat p_i^\star
+        =
+        \max\left\{
+        \frac{p_i}{\lambda}
+        -
+        \frac{\hat p_{C+1}^\star}{\costmult},
+        \,0
+        \right\}.
+    \end{align}
+    Consequently, every active class satisfies
+    \begin{align}
+        p_i>\lambda\frac{\hat p_{C+1}^\star}{\costmult},
+    \end{align}
+    whereas every inactive class satisfies
+    \begin{align}
+        p_i\le
+        \lambda\frac{\hat p_{C+1}^\star}{\costmult}.
+    \end{align}
+    Hence, the quantity
+    \[
+        \frac{\hat p_{C+1}^\star}{\costmult}
+    \]
+    acts as an adaptive threshold that determines which class probabilities remain active in the optimal solution.
+\end{restatable}
+
+\cref{theorem:kkt} shows that the reserve output induces an adaptive confidence threshold. As the reserve output increases (or the cost multiplier decreases), the threshold rises, causing more classes to become inactive. This provides a principled optimization-based interpretation of the reserve output as a learned uncertainty score.
+
+\begin{restatable}{theorem}{theoremThreshold}
+    \label{theorem:threshold}
+    Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
+    \in \{1, \dots, C\}\). Then necessarily \[ 1<\costmult<C.\]
+\end{restatable}
+
+\clearpage
+
+Page left intentionally blank
+
+\clearpage

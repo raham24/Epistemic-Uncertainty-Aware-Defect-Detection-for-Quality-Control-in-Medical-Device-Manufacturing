@@ -2,205 +2,206 @@ In this section we present the proofs for the main theoretical results in \cref{
 
 \subsection{Auxiliary results}
 \label{subsec:auxiliary_results}
-We now consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
-\[
-    \Delta^{C}
-    =
-    \left\{
-    \placeholderdist \in \mathbb{R}^{C+1}
-    :\;
-    \placeholderdist_i \ge 0 \;\forall i,
-    \quad
-    \sum_{i=1}^{C+1} \placeholderdist_i = 1
-    \right\}.
-\]
-
-\begin{restatable}{proposition}{propSimplex}
-    \label{prop:simplex_properties}
-    The probability simplex
-    \[
-        \Delta^{C}
-        =
-        \left\{
-        \placeholderdist \in \mathbb{R}^{C+1}
-        :\;
-        \placeholderdist_i \ge 0 \;\forall i,
-        \quad
-        \sum_{i=1}^{C+1} \placeholderdist_i = 1
-        \right\}
-    \]
-    is convex, closed, and bounded.
-\end{restatable}
-Moreover, the following holds:
-\begin{restatable}{proposition}{propConcavity}
-    \label{prop:concavity}
-    The function \(\W{r}\) in \cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
-\end{restatable}
-Therefore, the following can be concluded:
-\begin{restatable}{remark}{remarkadmissible}
-    \label{remark:admissible}
-    The optimization problem of maximizing \(\W{r}\) over the probability simplex \(\Delta^{C}\) involves the maximization over a convex, closed, and bounded set of a concave function. Hence, the problem is a \gls*{cmp} problem, and for the continuity of \(\W{r}\) over the compact set \(\Delta^{C}\), it admits a global maximum.
-\end{restatable}
-Due to the nature of the problem analyzed, we can build the following \gls*{cmp} problem, which is equivalent to the maximization of \(\W{r}\) over the probability simplex \(\Delta^{C}\):
+First, let us consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
 \begin{align}
-    \label{eq:cmp_problem}
-    \begin{aligned}
-        \text{maximize}\quad   & \W{r}                               \\
-        \text{subject to}\quad & \sum_{i=1}^{C+1} \phat_i = 1,       \\
-                               & \phat_i \ge 0, \quad i=1,\dots,C+1.
-    \end{aligned}
+    \label{eq:probability_simplex}
+    \Delta^{C} = \left\{ \placeholderdist \in \mathbb{R}^{C+1}:\; \placeholderdist_i \ge 0 \; \forall i, \quad \sum_{i=1}^{C+1} \placeholderdist_i = 1 \right\}
 \end{align}
-It is easy to see that the following holds:
-\begin{restatable}{proposition}{propEquivalence}
-    \label{prop:equivalence}
-    The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
+
+\begin{restatable}{lemma}{lemmaSimplex}
+    \label{lemma:simplex_properties}
+    The probability simplex \(\Delta^{C}\) defined in \cref{eq:probability_simplex} is convex, closed, and bounded.
 \end{restatable}
-\subsection{Proof of \cref{prop:simplex_properties}}
-\label{subsec:proof_simplex_properties}
-\propSimplex*
-\begin{proof}
-    Let $\placeholderdist,\placeholderdist^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
-    \begin{align*}
-        \placeholderdist^{\prime\prime} = \gamma \placeholderdist + (1-\gamma)\placeholderdist^{\prime}.
-    \end{align*}
-    For every coordinate $i$,
-    \begin{align*}
-        \placeholderdist^{\prime\prime}_i = \gamma \placeholderdist_i + (1-\gamma)\placeholderdist^{\prime}_i \ge 0,
-    \end{align*}
-    since $\placeholderdist_i,\placeholderdist^{\prime}_i\ge 0$ and $\gamma,1-\gamma\ge 0$. Moreover,
-    \begin{align*}
-        \sum_{i=1}^{C+1} \placeholderdist^{\prime\prime}_i = & \sum_{i=1}^{C+1}\bigl(\gamma \placeholderdist_i+(1-\gamma)\placeholderdist^{\prime}_i\bigr)        \\
-        =                                                    & \gamma\sum_{i=1}^{C+1} \placeholderdist_i + (1-\gamma)\sum_{i=1}^{C+1} \placeholderdist^{\prime}_i \\
-        =                                                    & \gamma+(1-\gamma)                                                                                  \\
-        =                                                    & 1.
-    \end{align*}
-    Hence $\placeholderdist^{\prime\prime}\in\Delta^C$, proving that $\Delta^C$ is convex.
 
-    Next, observe that
-    \begin{align*}
-        \Delta^C = & \left(\bigcap_{i=1}^{C+1}\{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}\right) \\
-                   & \cap
-        \left\{\placeholderdist\in\mathbb R^{C+1}:\sum_{i=1}^{C+1} \placeholderdist_i = 1\right\}.
-    \end{align*}
-    Each set
-    \begin{align*}
-        \{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}
-    \end{align*}
-    is closed, as it is the preimage of the closed interval
-    $[0,\infty)$ under the continuous projection map
-    $\placeholderdist\mapsto \placeholderdist_i$. Likewise,
-    \begin{align*}
-        \left\{
-        \placeholderdist\in\mathbb R^{C+1}:
-        \sum_{i=1}^{C+1} \placeholderdist_i = 1
-        \right\}
-    \end{align*}
-    is closed, being the preimage of the closed set $\{1\}$
-    under the continuous map
-    $\placeholderdist\mapsto \sum_{i=1}^{C+1} \placeholderdist_i$.
-    Since an intersection of closed sets is closed,
-    $\Delta^C$ is closed.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%% These are only temporarily commented while cleaning up the proofs section. %%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    Finally, let $\placeholderdist\in\Delta^C$. Since $\placeholderdist_i\ge 0$ and
+\begin{comment}
+
+    Moreover, the following holds:
+    \begin{restatable}{proposition}{propConcavity}
+        \label{prop:concavity}
+        The function \(\W{r}\) in \cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
+    \end{restatable}
+    Therefore, the following can be concluded:
+    \begin{restatable}{remark}{remarkadmissible}
+        \label{remark:admissible}
+        The optimization problem of maximizing \(\W{r}\) over the probability simplex \(\Delta^{C}\) involves the maximization over a convex, closed, and bounded set of a concave function. Hence, the problem is a \gls*{cmp} problem, and for the continuity of \(\W{r}\) over the compact set \(\Delta^{C}\), it admits a global maximum.
+    \end{restatable}
+    Due to the nature of the problem analyzed, we can build the following \gls*{cmp} problem, which is equivalent to the maximization of \(\W{r}\) over the probability simplex \(\Delta^{C}\):
+    \begin{align}
+        \label{eq:cmp_problem}
+        \begin{aligned}
+            \text{maximize}\quad   & \W{r}                               \\
+            \text{subject to}\quad & \sum_{i=1}^{C+1} \phat_i = 1,       \\
+                                   & \phat_i \ge 0, \quad i=1,\dots,C+1.
+        \end{aligned}
+    \end{align}
+    It is easy to see that the following holds:
+    \begin{restatable}{proposition}{propEquivalence}
+        \label{prop:equivalence}
+        The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
+    \end{restatable}
+    \subsection{Proof of \cref{lemma:simplex_properties}}
+    \label{subsec:proof_simplex_properties}
+    \lemmaSimplex*
+    \begin{proof}
+        Let $\placeholderdist,\placeholderdist^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
+        \begin{align*}
+            \placeholderdist^{\prime\prime} = \gamma \placeholderdist + (1-\gamma)\placeholderdist^{\prime}.
+        \end{align*}
+        For every coordinate $i$,
+        \begin{align*}
+            \placeholderdist^{\prime\prime}_i = \gamma \placeholderdist_i + (1-\gamma)\placeholderdist^{\prime}_i \ge 0,
+        \end{align*}
+        since $\placeholderdist_i,\placeholderdist^{\prime}_i\ge 0$ and $\gamma,1-\gamma\ge 0$. Moreover,
+        \begin{align*}
+            \sum_{i=1}^{C+1} \placeholderdist^{\prime\prime}_i = & \sum_{i=1}^{C+1}\bigl(\gamma \placeholderdist_i+(1-\gamma)\placeholderdist^{\prime}_i\bigr)        \\
+            =                                                    & \gamma\sum_{i=1}^{C+1} \placeholderdist_i + (1-\gamma)\sum_{i=1}^{C+1} \placeholderdist^{\prime}_i \\
+            =                                                    & \gamma+(1-\gamma)                                                                                  \\
+            =                                                    & 1.
+        \end{align*}
+        Hence $\placeholderdist^{\prime\prime}\in\Delta^C$, proving that $\Delta^C$ is convex.
+
+        Next, observe that
+        \begin{align*}
+            \Delta^C = & \left(\bigcap_{i=1}^{C+1}\{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}\right) \\
+                       & \cap
+            \left\{\placeholderdist\in\mathbb R^{C+1}:\sum_{i=1}^{C+1} \placeholderdist_i = 1\right\}.
+        \end{align*}
+        Each set
+        \begin{align*}
+            \{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}
+        \end{align*}
+        is closed, as it is the preimage of the closed interval
+        $[0,\infty)$ under the continuous projection map
+        $\placeholderdist\mapsto \placeholderdist_i$. Likewise,
+        \begin{align*}
+            \left\{
+            \placeholderdist\in\mathbb R^{C+1}:
+            \sum_{i=1}^{C+1} \placeholderdist_i = 1
+            \right\}
+        \end{align*}
+        is closed, being the preimage of the closed set $\{1\}$
+        under the continuous map
+        $\placeholderdist\mapsto \sum_{i=1}^{C+1} \placeholderdist_i$.
+        Since an intersection of closed sets is closed,
+        $\Delta^C$ is closed.
+
+        Finally, let $\placeholderdist\in\Delta^C$. Since $\placeholderdist_i\ge 0$ and
+        \begin{align*}
+            \sum_{i=1}^{C+1} \placeholderdist_i = 1,
+        \end{align*}
+        it follows that
+        \begin{align*}
+            0 \le \placeholderdist_i \le 1,
+            \qquad i=1,\dots,C+1.
+        \end{align*}
+        Therefore,
+        \begin{align*}
+            \|\placeholderdist\|_2^2
+            =
+            \sum_{i=1}^{C+1} \placeholderdist_i^2
+            \le
+            \sum_{i=1}^{C+1} \placeholderdist_i
+            =
+            1,
+        \end{align*}
+        where the inequality follows from $0\le \placeholderdist_i\le 1$ implying
+        $\placeholderdist_i^2\le \placeholderdist_i$. Consequently,
+        \begin{align*}
+            \|\placeholderdist\|_2 \le 1,
+        \end{align*}
+        and thus $\Delta^C$ is bounded.
+    \end{proof}
+
+    \subsection{Proof of \cref{prop:concavity}}
+    \label{subsec:proof_concavity}
+    \propConcavity*
+    To show that $\W{r}$ is concave, it suffices to show that $-\W{r}$ is convex. Observe that
     \begin{align*}
-        \sum_{i=1}^{C+1} \placeholderdist_i = 1,
-    \end{align*}
-    it follows that
-    \begin{align*}
-        0 \le \placeholderdist_i \le 1,
-        \qquad i=1,\dots,C+1.
-    \end{align*}
-    Therefore,
-    \begin{align*}
-        \|\placeholderdist\|_2^2
+        -\W{r}
         =
-        \sum_{i=1}^{C+1} \placeholderdist_i^2
-        \le
-        \sum_{i=1}^{C+1} \placeholderdist_i
-        =
-        1,
+        \sum_{j=1}^{C}
+        p_j
+        \left[
+            -\log\!\left(
+            \costmult\cdot\phat_j+\phat_{C+1}
+            \right)
+            \right].
     \end{align*}
-    where the inequality follows from $0\le \placeholderdist_i\le 1$ implying
-    $\placeholderdist_i^2\le \placeholderdist_i$. Consequently,
+    For each $j$, define
     \begin{align*}
-        \|\placeholderdist\|_2 \le 1,
-    \end{align*}
-    and thus $\Delta^C$ is bounded.
-\end{proof}
-
-\subsection{Proof of \cref{prop:concavity}}
-\label{subsec:proof_concavity}
-\propConcavity*
-To show that $\W{r}$ is concave, it suffices to show that $-\W{r}$ is convex. Observe that
-\begin{align*}
-    -\W{r}
-    =
-    \sum_{j=1}^{C}
-    p_j
-    \left[
+        g_j(\phat)
+        =
         -\log\!\left(
         \costmult\cdot\phat_j+\phat_{C+1}
-        \right)
-        \right].
-\end{align*}
-For each $j$, define
-\begin{align*}
-    g_j(\phat)
-    =
-    -\log\!\left(
-    \costmult\cdot\phat_j+\phat_{C+1}
-    \right).
-\end{align*}
-Since $\costmult>0$ and $\phat\in\Delta^C$, we have
-\begin{align*}
-    \costmult\cdot\phat_j+\phat_{C+1}>0,
-\end{align*}
-so the logarithm is well defined. The function
-\begin{align*}
-    x\mapsto-\log x
-\end{align*}
-is convex on $(0,\infty)$ since
-\begin{align*}
-    \frac{d^2}{dx^2}(-\log x)
-    =
-    \frac{1}{x^2}
-    >
-    0,
-    \qquad x>0.
-\end{align*}
+        \right).
+    \end{align*}
+    Since $\costmult>0$ and $\phat\in\Delta^C$, we have
+    \begin{align*}
+        \costmult\cdot\phat_j+\phat_{C+1}>0,
+    \end{align*}
+    so the logarithm is well defined. The function
+    \begin{align*}
+        x\mapsto-\log x
+    \end{align*}
+    is convex on $(0,\infty)$ since
+    \begin{align*}
+        \frac{d^2}{dx^2}(-\log x)
+        =
+        \frac{1}{x^2}
+        >
+        0,
+        \qquad x>0.
+    \end{align*}
 
-Hence each $g_j$ is convex. Since $p_j\ge0$ for all $j$, the weighted sum
-\begin{align*}
-    -\W{r}
-    =
-    \sum_{j=1}^{C}p_j g_j
-\end{align*}
-is convex. Therefore, $\W{r}$ is concave on $\Delta^C$.
+    Hence each $g_j$ is convex. Since $p_j\ge0$ for all $j$, the weighted sum
+    \begin{align*}
+        -\W{r}
+        =
+        \sum_{j=1}^{C}p_j g_j
+    \end{align*}
+    is convex. Therefore, $\W{r}$ is concave on $\Delta^C$.
 
-\subsection{Proof of \cref{prop:equivalence}}
-\label{subsec:proof_equivalence}
-\propEquivalence*
+    \subsection{Proof of \cref{prop:equivalence}}
+    \label{subsec:proof_equivalence}
+    \propEquivalence*
 
-Let $\phat\in\Delta^C$ with $\phat_{C+1}=0$. Then
-\begin{align*}
-    \W{r}
-     & =
-    \sum_{j=1}^{C}p_j\log\!\left(\costmult\cdot\phat_j+\phat_{C+1}\right)             \\
-     & =
-    \sum_{j=1}^{C}p_j\log\!\left(\costmult\cdot\phat_j\cdot\frac{p_j}{\phat_j}\right) \\
-     & =
-    \log\!\left(\costmult\right)
-    -
-    H(p)
-    -
-    D_{\text{KL}}(p\| \phat),
-\end{align*}
-where $H(p)$ is the Shannon entropy of $p$ and $D_{\text{KL}}(p\| \phat)$ is the Kullback-Leibler divergence between $p$ and $\phat$. Since $\log\!\left(\costmult\right)$ and $H(p)$ are constants with respect to $\phat$, maximizing $\W{r}$ is equivalent to minimizing $D_{\text{KL}}(p\| \phat)$, which is equivalent to minimizing the cross-entropy loss.
+    Let $\phat\in\Delta^C$ with $\phat_{C+1}=0$. Then
+    \begin{align*}
+        \W{r}
+         & =
+        \sum_{j=1}^{C}p_j\log\!\left(\costmult\cdot\phat_j+\phat_{C+1}\right)             \\
+         & =
+        \sum_{j=1}^{C}p_j\log\!\left(\costmult\cdot\phat_j\cdot\frac{p_j}{\phat_j}\right) \\
+         & =
+        \log\!\left(\costmult\right)
+        -
+        H(p)
+        -
+        D_{\text{KL}}(p\| \phat),
+    \end{align*}
+    where $H(p)$ is the Shannon entropy of $p$ and $D_{\text{KL}}(p\| \phat)$ is the Kullback-Leibler divergence between $p$ and $\phat$. Since $\log\!\left(\costmult\right)$ and $H(p)$ are constants with respect to $\phat$, maximizing $\W{r}$ is equivalent to minimizing $D_{\text{KL}}(p\| \phat)$, which is equivalent to minimizing the cross-entropy loss.
 
-\subsection{Proof of \cref{theorem:kkt}}
-\label{sec:proof_kkt_conditions}
-\theoremKKT*
-Consequently, every active class satisfies
+    \subsection{Proof of \cref{theorem:kkt}}
+    \label{sec:proof_kkt_conditions}
+    \theoremKKT*
+    Consequently, every active class satisfies
     \begin{align}
         p_i>\lambda\frac{\hat p_{C+1}^\star}{\costmult},
     \end{align}
@@ -209,457 +210,626 @@ Consequently, every active class satisfies
         p_i\le
         \lambda\frac{\hat p_{C+1}^\star}{\costmult}.
     \end{align}
-The optimization problem in Eq.~\eqref{eq:cmp_problem} can be analyzed using the \gls*{kkt} conditions. The corresponding Lagrangian is given by
-\begin{align*}
-    \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu})
-     & =
-    \W{r}                                          \\
-     &
-    +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\
-     &
-    +\sum_{i=1}^{C+1}\mu_i\phat_i,
-\end{align*}
-where $\lambda\in\mathbb{R}$ is the Lagrange multiplier associated with the equality constraint and $\mu_i\ge0$ are the multipliers corresponding to the non-negativity constraints.
-
-The \gls*{kkt} conditions are
-\begin{align*}
-    \left\{
-    \begin{aligned}
-         & \frac{\partial \mathcal{L}}{\partial \phat_i}
-        = \frac{\partial \W{r}}{\partial \phat_i}
-        - \lambda + \mu_i = 0,
-         &                                               & i=1,\ldots,C+1, \\
-         & \sum_{i=1}^{C+1} \phat_i = 1,                                   \\
-         & \phat_i                   \ge 0,
-         &                                               & i=1,\ldots,C+1, \\
-         & \mu_i                       \ge 0,
-         &                                               & i=1,\ldots,C+1, \\
-         & \mu_i \phat_i             = 0,
-         &                                               & i=1,\ldots,C+1.
-    \end{aligned}
-    \right.
-\end{align*}
-
-For the gambler's objective in \cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
-\begin{align*}
-    \frac{\partial\mathcal{L}}{\partial\phat_i}
-     & =
-    \frac{p_i}
-    {\costmult\cdot\phat_i+\phat_{C+1}}
-    -\lambda+\mu_i
-    =0,
-\end{align*}
-for \(i = 1, \ldots, C\), and,
-\begin{align*}
-    \frac{\partial\mathcal{L}}{\partial\phat_{C+1}}
-     & =
-    \sum_{i=1}^{C}
-    \frac{p_i}
-    {\costmult\cdot\phat_i+\phat_{C+1}}
-    -\lambda+\mu_{C+1}
-    =0.
-\end{align*}
-
-The complementary slackness condition naturally leads to two cases for each class output.
-
-\paragraph{Case 1: $\phat_i>0$.}
-In this case, complementary slackness implies $\mu_i=0$, yielding
-\begin{align*}
-    \frac{\costmult\cdot p_i}
-    {\costmult\cdot\phat_i+\phat_{C+1}}
-    =
-    \lambda,
-\end{align*}
-or equivalently,
-\begin{align*}
-    \phat_i
-    =
-    \frac{p_i}{\lambda}-\frac{\phat_{C+1}}{\costmult}.
-\end{align*}
-Notice how the requirement $\phat_i>0$ implies that $p_i>\lambda\phat_{C+1}$, which means that a class becomes inactive whenever its probability falls below the threshold \(\lambda\frac{\phat_{C+1}}{\costmult}\) where \(\frac{\phat_{C+1}}{\costmult}\) is the ratio of the reserve output to the cost multiplier associated with betting on the class prediction.
-% Conversely, if $p_i\le\lambda\frac{\phat_{C+1}}{\costmult}$, then $\phat_i=0$ and the class becomes inactive.
-
-\paragraph{Case 2: $\phat_i=0$.}
-In this case, complementary slackness only implies that $\mu_i\ge0$. The stationarity condition becomes
-\begin{align*}
-    \frac{\costmult\,p_i}
-    {\phat_{C+1}}
-    -\lambda+\mu_i
-    =0,
-\end{align*}
-provided that $\phat_{C+1}>0$. Since $\mu_i\ge0$, it follows that
-\begin{align*}
-    \frac{\costmult\,p_i}{\phat_{C+1}}
-    \le
-    \lambda,
-\end{align*}
-or equivalently,
-\begin{align*}
-    p_i
-    \le
-    \lambda\frac{\phat_{C+1}}{\costmult}.
-\end{align*}
-Therefore, for the branch $\phat_{C+1}>0$, any inactive class must satisfy
-\[
-    p_i \le \lambda\frac{\phat_{C+1}}{\costmult}.
-\]
-
-\paragraph{Case 3: $\phat_{C+1}>0$.}
-Since $\phat_{C+1}>0$, complementary slackness implies
-$\mu_{C+1}=0$. The stationarity condition therefore becomes
-\begin{align*}
-    \sum_{i=1}^{C}
-    \frac{p_i}
-    {\costmult\phat_i+\phat_{C+1}}
-    =
-    \lambda.
-\end{align*}
-
-\paragraph{Case 4: $\phat_{C+1}=0$.}
-In this case, complementary slackness only implies
-$\mu_{C+1}\ge0$. The stationarity condition becomes
-\begin{align*}
-    \sum_{i=1}^{C}
-    \frac{p_i}
-    {\costmult\phat_i}
-    -\lambda+\mu_{C+1}
-    =0,
-\end{align*}
-or equivalently,
-\begin{align*}
-    \mu_{C+1}
-    =
-    \lambda
-    -
-    \sum_{i=1}^{C}
-    \frac{p_i}
-    {\costmult\phat_i}.
-\end{align*}
-Since $\mu_{C+1}\ge0$, it follows that
-\begin{align*}
-    \sum_{i=1}^{C}
-    \frac{p_i}
-    {\costmult\phat_i}
-    \le
-    \lambda.
-\end{align*}
-
-Furthermore, if $p_i>0$ for every class, any feasible solution satisfying
-$\phat_{C+1}=0$ and $\phat_i=0$ for some $i$ yields
-\[
-    \W{r}=-\infty,
-\]
-since the objective contains the term
-$p_i\log(\costmult\phat_i+\phat_{C+1})=p_i\log(0)$.
-Consequently, whenever $\phat_{C+1}=0$, all classes with $p_i>0$ must satisfy
-$\phat_i>0$.
-
-
-
-\vspace{5\baselineskip}
-
-
-
-
-\subsection{Proof of \cref{theorem:threshold}}
-\label{sec:proof_threshold}
-\theoremThreshold*
-
-Let
-\[ S=\{j:b_j>0\},\]
-\[a=|S|,\]
-\[P_S=\sum_{j\in S}p_j,\]
-and
-\[P_{\bar{S}}=\sum_{j\notin S}p_j=1-P_S. \]
-We first analyze the nontrivial mixed case, where $r>0$ and at least one class is inactive with positive posterior mass.
-
-\begin{proof}
-    For active coordinates $j\in S$, we know that the stationarity condition holds:
+    The optimization problem in Eq.~\eqref{eq:cmp_problem} can be analyzed using the \gls*{kkt} conditions. The corresponding Lagrangian is given by
     \begin{align*}
-        \phat^{\star}_j
+        \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu})
+         & =
+        \W{r}                                          \\
+         &
+        +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\
+         &
+        +\sum_{i=1}^{C+1}\mu_i\phat_i,
+    \end{align*}
+    where $\lambda\in\mathbb{R}$ is the Lagrange multiplier associated with the equality constraint and $\mu_i\ge0$ are the multipliers corresponding to the non-negativity constraints.
+
+    The \gls*{kkt} conditions are
+    \begin{align*}
+        \left\{
+        \begin{aligned}
+             & \frac{\partial \mathcal{L}}{\partial \phat_i}
+            = \frac{\partial \W{r}}{\partial \phat_i}
+            - \lambda + \mu_i = 0,
+             &                                               & i=1,\ldots,C+1, \\
+             & \sum_{i=1}^{C+1} \phat_i = 1,                                   \\
+             & \phat_i                   \ge 0,
+             &                                               & i=1,\ldots,C+1, \\
+             & \mu_i                       \ge 0,
+             &                                               & i=1,\ldots,C+1, \\
+             & \mu_i \phat_i             = 0,
+             &                                               & i=1,\ldots,C+1.
+        \end{aligned}
+        \right.
+    \end{align*}
+
+    For the gambler's objective in \cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
+    \begin{align*}
+        \frac{\partial\mathcal{L}}{\partial\phat_i}
+         & =
+        \frac{p_i}
+        {\costmult\cdot\phat_i+\phat_{C+1}}
+        -\lambda+\mu_i
+        =0,
+    \end{align*}
+    for \(i = 1, \ldots, C\), and,
+    \begin{align*}
+        \frac{\partial\mathcal{L}}{\partial\phat_{C+1}}
+         & =
+        \sum_{i=1}^{C}
+        \frac{p_i}
+        {\costmult\cdot\phat_i+\phat_{C+1}}
+        -\lambda+\mu_{C+1}
+        =0.
+    \end{align*}
+
+    The complementary slackness condition naturally leads to two cases for each class output.
+
+    \paragraph{Case 1: $\phat_i>0$.}
+    In this case, complementary slackness implies $\mu_i=0$, yielding
+    \begin{align*}
+        \frac{\costmult\cdot p_i}
+        {\costmult\cdot\phat_i+\phat_{C+1}}
         =
-        \frac{p_j}{\lambda}
-        -
-        \frac{\phat^{\star}_{C+1}}{\costmult}.
+        \lambda,
     \end{align*}
-    Summing over $j\in S$ and using $\sum_{j\in S} \phat^{\star}_{j} = 1-\phat^{\star}_{C+1}$ gives
+    or equivalently,
     \begin{align*}
-        \frac{P_S}{\lambda}-\frac{a \phat^{\star}_{C+1}}{\costmult}=1-\phat^{\star}_{C+1}.
+        \phat_i
+        =
+        \frac{p_i}{\lambda}-\frac{\phat_{C+1}}{\costmult}.
     \end{align*}
-    From the stationarity condition for $\phat_{C+1}$, we have
+    Notice how the requirement $\phat_i>0$ implies that $p_i>\lambda\phat_{C+1}$, which means that a class becomes inactive whenever its probability falls below the threshold \(\lambda\frac{\phat_{C+1}}{\costmult}\) where \(\frac{\phat_{C+1}}{\costmult}\) is the ratio of the reserve output to the cost multiplier associated with betting on the class prediction.
+    % Conversely, if $p_i\le\lambda\frac{\phat_{C+1}}{\costmult}$, then $\phat_i=0$ and the class becomes inactive.
+
+    \paragraph{Case 2: $\phat_i=0$.}
+    In this case, complementary slackness only implies that $\mu_i\ge0$. The stationarity condition becomes
     \begin{align*}
-        \sum_{j=1}^{C}
-        \frac{p_j}
-        {\costmult \phat^{\star}_j+\phat^{\star}_{C+1}}
+        \frac{\costmult\,p_i}
+        {\phat_{C+1}}
+        -\lambda+\mu_i
+        =0,
+    \end{align*}
+    provided that $\phat_{C+1}>0$. Since $\mu_i\ge0$, it follows that
+    \begin{align*}
+        \frac{\costmult\,p_i}{\phat_{C+1}}
+        \le
+        \lambda,
+    \end{align*}
+    or equivalently,
+    \begin{align*}
+        p_i
+        \le
+        \lambda\frac{\phat_{C+1}}{\costmult}.
+    \end{align*}
+    Therefore, for the branch $\phat_{C+1}>0$, any inactive class must satisfy
+    \[
+        p_i \le \lambda\frac{\phat_{C+1}}{\costmult}.
+    \]
+
+    \paragraph{Case 3: $\phat_{C+1}>0$.}
+    Since $\phat_{C+1}>0$, complementary slackness implies
+    $\mu_{C+1}=0$. The stationarity condition therefore becomes
+    \begin{align*}
+        \sum_{i=1}^{C}
+        \frac{p_i}
+        {\costmult\phat_i+\phat_{C+1}}
         =
         \lambda.
     \end{align*}
-    For the active terms, we can substitute the expression for $\phat^{\star}_j$ to obtain
+
+    \paragraph{Case 4: $\phat_{C+1}=0$.}
+    In this case, complementary slackness only implies
+    $\mu_{C+1}\ge0$. The stationarity condition becomes
     \begin{align*}
-        \frac{p_j}{\costmult \phat^{\star}_j+\phat^{\star}_{C+1}}
-        =
-        \frac{p_j}{\costmult\left(\frac{p_j}{\lambda}-\frac{\phat^{\star}_{C+1}}{\costmult}\right)+\phat^{\star}_{C+1}}
-        =
-        \frac{p_j}{\costmult\frac{p_j}{\lambda}}
-        =
-        \frac{\lambda}{\costmult}.
+        \sum_{i=1}^{C}
+        \frac{p_i}
+        {\costmult\phat_i}
+        -\lambda+\mu_{C+1}
+        =0,
     \end{align*}
-    Therefore, the stationarity condition for $\phat_{C+1}$ becomes
+    or equivalently,
     \begin{align*}
-        \frac{a\lambda}{\costmult}+\sum_{j\notin S}\frac{p_j}{\phat^{\star}_{C+1}}=\lambda,
-    \end{align*}
-    which can be rearranged to give
-    \begin{align*}
-        \sum_{j\notin S}\frac{p_j}{\phat^{\star}_{C+1}}=\lambda-\frac{a\lambda}{\costmult}
+        \mu_{C+1}
         =
-        \lambda\left(1-\frac{a}{\costmult}\right).
+        \lambda
+        -
+        \sum_{i=1}^{C}
+        \frac{p_i}
+        {\costmult\phat_i}.
     \end{align*}
-    If $P_{\bar{S}}>0$, then we can solve for $\phat^{\star}_{C+1}$:
+    Since $\mu_{C+1}\ge0$, it follows that
     \begin{align*}
-        \phat^{\star}_{C+1}
-        =
-        \frac{P_{\bar{S}}}{\lambda\left(1-\frac{a}{\costmult}\right)}.
-    \end{align*}
-    Substituting this into the previous equation for the active coordinates gives
-    \begin{align*}
-        \frac{P_S}{\lambda}-\frac{a P_{\bar{S}}}{\costmult \lambda\left(1-\frac{a}{\costmult}\right)}=1-\frac{P_{\bar{S}}}{\lambda\left(1-\frac{a}{\costmult}\right)}.
-    \end{align*}
-    Rearranging and simplifying yields $\lambda=1$. Therefore, for active coordinates,
-    \begin{align*}
-        \phat^{\star}_j
-        =
-        p_j-\frac{\phat^{\star}_{C+1}}{\costmult}
-        =
-        p_j-\frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)}.
-    \end{align*}
-    For inactive coordinates, we have $\phat^{\star}_j=0$, and complementary slackness implies that
-    \begin{align*}
-        p_j\le\frac{\phat^{\star}_{C+1}}{\costmult}
-        =
-        \frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)}.
-    \end{align*}
-    Setting
-    \begin{align*}
-        t^\star=\frac{\phat^{\star}_{C+1}}{\costmult}=\frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)},
-    \end{align*}
-    we obtain the threshold structure:
-    \begin{align*}
-        \phat^{\star}_j
-        =
-        \max(p_j-t^\star,0),
-        \qquad
-        \phat^{\star}_{C+1}
-        =
-        \costmult t^\star.
-    \end{align*}
-    Finally, because $P_{\bar{S}}>0$ and there is at least one inactive class, we have
-    \begin{align*}
-        P_{\bar{S}}
-        =
-        \sum_{j\notin S} p_j
+        \sum_{i=1}^{C}
+        \frac{p_i}
+        {\costmult\phat_i}
         \le
-        (C-a) t^\star
-        =
-        (C-a)\frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)},
+        \lambda.
     \end{align*}
-    which implies that $\costmult\le C$. Also, since $a\ge 1$ and $\costmult>a$ is required for $P_{\bar{S}}>0$, we get $\costmult>1$. Hence $1<\costmult<C$.
-\end{proof}
 
-\section{Pure regimes}
+    Furthermore, if $p_i>0$ for every class, any feasible solution satisfying
+    $\phat_{C+1}=0$ and $\phat_i=0$ for some $i$ yields
+    \[
+        \W{r}=-\infty,
+    \]
+    since the objective contains the term
+    $p_i\log(\costmult\phat_i+\phat_{C+1})=p_i\log(0)$.
+    Consequently, whenever $\phat_{C+1}=0$, all classes with $p_i>0$ must satisfy
+    $\phat_i>0$.
 
-The mixed theorem shows that a genuinely mixed betting-and-reservation optimum can only occur in the intermediate regime
-\[
-    1<\costmult<C.
-\]
 
-\begin{theorem}[Full reservation for low payoff]
-    If \(\costmult<1\), then every optimal solution is full reservation:
-    \[
-        \phat_{C+1}^\star=1,
-        \qquad
-        \phat_1^\star=\cdots=\phat_C^\star=0.
-    \]
-\end{theorem}
 
-\begin{proof}
-    For any feasible \(\phat\in\Delta^C\) and any \(j\in\{1,\ldots,C\}\),
-    \[
-        \costmult\,\phat_j+\phat_{C+1}
-        \le \phat_j+\phat_{C+1}
-        \le 1,
-    \]
-    because \(\costmult<1\) and \(\sum_{j=1}^{C+1}\phat_j=1\).
-    Therefore each logarithm in \(\W{r}\) is at most \(0\), so
-    \[
-        \W{r}\le 0.
-    \]
-    The full-reservation point
-    \[
-        (\phat_1,\ldots,\phat_C,\phat_{C+1})=(0,\ldots,0,1)
-    \]
-    attains \(\W{r}=0\), hence it is optimal.
-    The full-reservation point
-    \[
-        (\phat_1,\ldots,\phat_C,\phat_{C+1})
-        =(0,\ldots,0,1)
-    \]
-    attains \(\W{r}=0\). Moreover, if \(\phat_i>0\) for some
-    \(i\in\{1,\ldots,C\}\), then
-    \[
-        \costmult\phat_i+\phat_{C+1}<1,
-    \]
-    since
-    \[
-        \costmult\phat_i+\phat_{C+1}
-        =
-        1-(1-\costmult)\phat_i
-        -\sum_{j\neq i}\phat_j,
-    \]
-    and \(1-\costmult>0\). Therefore,
-    \[
-        \log(\costmult\phat_i+\phat_{C+1})<0,
-    \]
-    so \(\W{r}<0\). Hence
-    \[
-        (\phat_1,\ldots,\phat_C,\phat_{C+1})
-        =(0,\ldots,0,1)
-    \]
-    is the unique optimal solution.
-\end{proof}
-\begin{theorem}[Full betting for high payoff]
-    If \(\costmult>C\), then every optimal solution satisfies
-    \[
-        \phat_{C+1}^\star=0,
-        \qquad\text{and}\qquad
-        \phat_j^\star=p_j,
-        \quad
-        j=1,\ldots,C.
-    \]
-\end{theorem}
-\begin{proof}
-    Assume, for contradiction, that an optimal solution satisfies
-    \[
-        \phat_{C+1}^\star>0.
-    \]
+    \vspace{5\baselineskip}
+
+
+
+
+    \subsection{Proof of \cref{theorem:threshold}}
+    \label{sec:proof_threshold}
+    \theoremThreshold*
 
     Let
+    \[ S=\{j:b_j>0\},\]
+    \[a=|S|,\]
+    \[P_S=\sum_{j\in S}p_j,\]
+    and
+    \[P_{\bar{S}}=\sum_{j\notin S}p_j=1-P_S. \]
+    We first analyze the nontrivial mixed case, where $r>0$ and at least one class is inactive with positive posterior mass.
+
+    \begin{proof}
+        For active coordinates $j\in S$, we know that the stationarity condition holds:
+        \begin{align*}
+            \phat^{\star}_j
+            =
+            \frac{p_j}{\lambda}
+            -
+            \frac{\phat^{\star}_{C+1}}{\costmult}.
+        \end{align*}
+        Summing over $j\in S$ and using $\sum_{j\in S} \phat^{\star}_{j} = 1-\phat^{\star}_{C+1}$ gives
+        \begin{align*}
+            \frac{P_S}{\lambda}-\frac{a \phat^{\star}_{C+1}}{\costmult}=1-\phat^{\star}_{C+1}.
+        \end{align*}
+        From the stationarity condition for $\phat_{C+1}$, we have
+        \begin{align*}
+            \sum_{j=1}^{C}
+            \frac{p_j}
+            {\costmult \phat^{\star}_j+\phat^{\star}_{C+1}}
+            =
+            \lambda.
+        \end{align*}
+        For the active terms, we can substitute the expression for $\phat^{\star}_j$ to obtain
+        \begin{align*}
+            \frac{p_j}{\costmult \phat^{\star}_j+\phat^{\star}_{C+1}}
+            =
+            \frac{p_j}{\costmult\left(\frac{p_j}{\lambda}-\frac{\phat^{\star}_{C+1}}{\costmult}\right)+\phat^{\star}_{C+1}}
+            =
+            \frac{p_j}{\costmult\frac{p_j}{\lambda}}
+            =
+            \frac{\lambda}{\costmult}.
+        \end{align*}
+        Therefore, the stationarity condition for $\phat_{C+1}$ becomes
+        \begin{align*}
+            \frac{a\lambda}{\costmult}+\sum_{j\notin S}\frac{p_j}{\phat^{\star}_{C+1}}=\lambda,
+        \end{align*}
+        which can be rearranged to give
+        \begin{align*}
+            \sum_{j\notin S}\frac{p_j}{\phat^{\star}_{C+1}}=\lambda-\frac{a\lambda}{\costmult}
+            =
+            \lambda\left(1-\frac{a}{\costmult}\right).
+        \end{align*}
+        If $P_{\bar{S}}>0$, then we can solve for $\phat^{\star}_{C+1}$:
+        \begin{align*}
+            \phat^{\star}_{C+1}
+            =
+            \frac{P_{\bar{S}}}{\lambda\left(1-\frac{a}{\costmult}\right)}.
+        \end{align*}
+        Substituting this into the previous equation for the active coordinates gives
+        \begin{align*}
+            \frac{P_S}{\lambda}-\frac{a P_{\bar{S}}}{\costmult \lambda\left(1-\frac{a}{\costmult}\right)}=1-\frac{P_{\bar{S}}}{\lambda\left(1-\frac{a}{\costmult}\right)}.
+        \end{align*}
+        Rearranging and simplifying yields $\lambda=1$. Therefore, for active coordinates,
+        \begin{align*}
+            \phat^{\star}_j
+            =
+            p_j-\frac{\phat^{\star}_{C+1}}{\costmult}
+            =
+            p_j-\frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)}.
+        \end{align*}
+        For inactive coordinates, we have $\phat^{\star}_j=0$, and complementary slackness implies that
+        \begin{align*}
+            p_j\le\frac{\phat^{\star}_{C+1}}{\costmult}
+            =
+            \frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)}.
+        \end{align*}
+        Setting
+        \begin{align*}
+            t^\star=\frac{\phat^{\star}_{C+1}}{\costmult}=\frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)},
+        \end{align*}
+        we obtain the threshold structure:
+        \begin{align*}
+            \phat^{\star}_j
+            =
+            \max(p_j-t^\star,0),
+            \qquad
+            \phat^{\star}_{C+1}
+            =
+            \costmult t^\star.
+        \end{align*}
+        Finally, because $P_{\bar{S}}>0$ and there is at least one inactive class, we have
+        \begin{align*}
+            P_{\bar{S}}
+            =
+            \sum_{j\notin S} p_j
+            \le
+            (C-a) t^\star
+            =
+            (C-a)\frac{P_{\bar{S}}}{\costmult\left(1-\frac{a}{\costmult}\right)},
+        \end{align*}
+        which implies that $\costmult\le C$. Also, since $a\ge 1$ and $\costmult>a$ is required for $P_{\bar{S}}>0$, we get $\costmult>1$. Hence $1<\costmult<C$.
+    \end{proof}
+
+    \section{Pure regimes}
+
+    The mixed theorem shows that a genuinely mixed betting-and-reservation optimum can only occur in the intermediate regime
     \[
-        S=\{j:\phat_j^\star>0\},
-        \qquad
-        a=|S|,
-        \qquad
-        q=\sum_{j\notin S}p_j.
+        1<\costmult<C.
     \]
 
-    Since \(\phat_{C+1}^\star>0\), complementary slackness gives
-    \(\mu_{C+1}=0\), and the stationarity condition for the reserve
-    coordinate becomes
-    \begin{equation}
-        \frac{a\lambda}{\costmult}
-        +
-        \frac{q}{\phat_{C+1}^\star}
-        =
-        \lambda.
-        \label{eq:reserve_stationarity_high}
-    \end{equation}
+    \begin{theorem}[Full reservation for low payoff]
+        If \(\costmult<1\), then every optimal solution is full reservation:
+        \[
+            \phat_{C+1}^\star=1,
+            \qquad
+            \phat_1^\star=\cdots=\phat_C^\star=0.
+        \]
+    \end{theorem}
 
-    If \(q>0\), then \eqref{eq:reserve_stationarity_high} implies
-    \[
-        q
-        =
-        \frac{\lambda(\costmult-a)}
-        {\costmult}
-        \phat_{C+1}^\star.
-    \]
-    Using the identity \(\lambda=1\), established in the mixed-case
-    analysis, yields
-    \[
-        q
-        =
-        (\costmult-a)
-        \frac{\phat_{C+1}^\star}{\costmult}.
-    \]
-    Setting
-    \[
-        t=\frac{\phat_{C+1}^\star}{\costmult},
-    \]
-    we obtain
-    \[
-        q=(\costmult-a)t.
-    \]
-    On the other hand, every inactive class satisfies
-    \(p_j\le t\), so
-    \[
-        q
-        =
-        \sum_{j\notin S}p_j
-        \le
-        (C-a)t.
-    \]
-    Therefore,
-    \[
-        \costmult-a
-        \le
-        C-a,
-    \]
-    or equivalently,
-    \[
-        \costmult\le C,
-    \]
-    contradicting the assumption \(\costmult>C\).
+    \begin{proof}
+        For any feasible \(\phat\in\Delta^C\) and any \(j\in\{1,\ldots,C\}\),
+        \[
+            \costmult\,\phat_j+\phat_{C+1}
+            \le \phat_j+\phat_{C+1}
+            \le 1,
+        \]
+        because \(\costmult<1\) and \(\sum_{j=1}^{C+1}\phat_j=1\).
+        Therefore each logarithm in \(\W{r}\) is at most \(0\), so
+        \[
+            \W{r}\le 0.
+        \]
+        The full-reservation point
+        \[
+            (\phat_1,\ldots,\phat_C,\phat_{C+1})=(0,\ldots,0,1)
+        \]
+        attains \(\W{r}=0\), hence it is optimal.
+        The full-reservation point
+        \[
+            (\phat_1,\ldots,\phat_C,\phat_{C+1})
+            =(0,\ldots,0,1)
+        \]
+        attains \(\W{r}=0\). Moreover, if \(\phat_i>0\) for some
+        \(i\in\{1,\ldots,C\}\), then
+        \[
+            \costmult\phat_i+\phat_{C+1}<1,
+        \]
+        since
+        \[
+            \costmult\phat_i+\phat_{C+1}
+            =
+            1-(1-\costmult)\phat_i
+            -\sum_{j\neq i}\phat_j,
+        \]
+        and \(1-\costmult>0\). Therefore,
+        \[
+            \log(\costmult\phat_i+\phat_{C+1})<0,
+        \]
+        so \(\W{r}<0\). Hence
+        \[
+            (\phat_1,\ldots,\phat_C,\phat_{C+1})
+            =(0,\ldots,0,1)
+        \]
+        is the unique optimal solution.
+    \end{proof}
+    \begin{theorem}[Full betting for high payoff]
+        If \(\costmult>C\), then every optimal solution satisfies
+        \[
+            \phat_{C+1}^\star=0,
+            \qquad\text{and}\qquad
+            \phat_j^\star=p_j,
+            \quad
+            j=1,\ldots,C.
+        \]
+    \end{theorem}
+    \begin{proof}
+        Assume, for contradiction, that an optimal solution satisfies
+        \[
+            \phat_{C+1}^\star>0.
+        \]
 
-    It remains to consider the case \(q=0\). Then
-    \eqref{eq:reserve_stationarity_high} reduces to
-    \[
-        \frac{a\lambda}{\costmult}
-        =
-        \lambda.
-    \]
-    Since \(\lambda>0\), this implies
-    \[
-        a=\costmult.
-    \]
-    However,
-    \[
-        a\le C<\costmult,
-    \]
-    which is impossible.
+        Let
+        \[
+            S=\{j:\phat_j^\star>0\},
+            \qquad
+            a=|S|,
+            \qquad
+            q=\sum_{j\notin S}p_j.
+        \]
 
-    Hence both cases lead to a contradiction, and therefore
-    \[
-        \phat_{C+1}^\star=0.
-    \]
+        Since \(\phat_{C+1}^\star>0\), complementary slackness gives
+        \(\mu_{C+1}=0\), and the stationarity condition for the reserve
+        coordinate becomes
+        \begin{equation}
+            \frac{a\lambda}{\costmult}
+            +
+            \frac{q}{\phat_{C+1}^\star}
+            =
+            \lambda.
+            \label{eq:reserve_stationarity_high}
+        \end{equation}
 
-    With no reservation, the optimization problem reduces to
-    \[
-        \max_{\phat\in\Delta^{C-1}}
-        \sum_{j=1}^{C}
-        p_j\log(\costmult\phat_j).
-    \]
-    Since \(\log(\costmult)\) is constant,
-    \[
-        \sum_{j=1}^{C}
-        p_j\log(\costmult\phat_j)
-        =
-        \log(\costmult)
-        +
-        \sum_{j=1}^{C}
-        p_j\log(\phat_j).
-    \]
-    Thus the problem is equivalent to maximizing
-    \[
-        \sum_{j=1}^{C}
-        p_j\log(\phat_j),
-    \]
-    whose unique maximizer is
-    \[
-        \phat_j^\star=p_j,
-        \qquad
-        j=1,\ldots,C,
-    \]
-    by Gibbs' inequality (equivalently, by the non-negativity of the
-    Kullback--Leibler divergence).
-\end{proof}
+        If \(q>0\), then \eqref{eq:reserve_stationarity_high} implies
+        \[
+            q
+            =
+            \frac{\lambda(\costmult-a)}
+            {\costmult}
+            \phat_{C+1}^\star.
+        \]
+        Using the identity \(\lambda=1\), established in the mixed-case
+        analysis, yields
+        \[
+            q
+            =
+            (\costmult-a)
+            \frac{\phat_{C+1}^\star}{\costmult}.
+        \]
+        Setting
+        \[
+            t=\frac{\phat_{C+1}^\star}{\costmult},
+        \]
+        we obtain
+        \[
+            q=(\costmult-a)t.
+        \]
+        On the other hand, every inactive class satisfies
+        \(p_j\le t\), so
+        \[
+            q
+            =
+            \sum_{j\notin S}p_j
+            \le
+            (C-a)t.
+        \]
+        Therefore,
+        \[
+            \costmult-a
+            \le
+            C-a,
+        \]
+        or equivalently,
+        \[
+            \costmult\le C,
+        \]
+        contradicting the assumption \(\costmult>C\).
+
+        It remains to consider the case \(q=0\). Then
+        \eqref{eq:reserve_stationarity_high} reduces to
+        \[
+            \frac{a\lambda}{\costmult}
+            =
+            \lambda.
+        \]
+        Since \(\lambda>0\), this implies
+        \[
+            a=\costmult.
+        \]
+        However,
+        \[
+            a\le C<\costmult,
+        \]
+        which is impossible.
+
+        Hence both cases lead to a contradiction, and therefore
+        \[
+            \phat_{C+1}^\star=0.
+        \]
+
+        With no reservation, the optimization problem reduces to
+        \[
+            \max_{\phat\in\Delta^{C-1}}
+            \sum_{j=1}^{C}
+            p_j\log(\costmult\phat_j).
+        \]
+        Since \(\log(\costmult)\) is constant,
+        \[
+            \sum_{j=1}^{C}
+            p_j\log(\costmult\phat_j)
+            =
+            \log(\costmult)
+            +
+            \sum_{j=1}^{C}
+            p_j\log(\phat_j).
+        \]
+        Thus the problem is equivalent to maximizing
+        \[
+            \sum_{j=1}^{C}
+            p_j\log(\phat_j),
+        \]
+        whose unique maximizer is
+        \[
+            \phat_j^\star=p_j,
+            \qquad
+            j=1,\ldots,C,
+        \]
+        by Gibbs' inequality (equivalently, by the non-negativity of the
+        Kullback--Leibler divergence).
+    \end{proof}
+
+
+
+    \begin{remark}[Boundary cases]
+        The boundary values \(\costmult=1\) and \(\costmult=C\) can be degenerate.
+        At \(\costmult=1\), full reservation remains optimal.
+    \end{remark}
+
+    If \(\costmult=1\), then full reservation is optimal. However, the optimizer is not unique in general.
+    \begin{proof}
+        Let \(\phat\in\Delta^C\) be any feasible point. Since
+        \[
+            \sum_{j=1}^{C+1}\phat_j=1,
+        \]
+        we have, for every \(j\in\{1,\ldots,C\}\),
+        \[
+            \phat_j+\phat_{C+1}\le1.
+        \]
+        Therefore,
+        \[
+            \log(\phat_j+\phat_{C+1})\le0,
+        \]
+        and hence
+        \[
+            \W_r(\phat)\le0.
+        \]
+
+        The full-reservation point
+        \[
+            (\phat_1,\ldots,\phat_C,\phat_{C+1})
+            =
+            (0,\ldots,0,1)
+        \]
+        achieves \(\W_r=0\), and is therefore optimal.
+
+        The optimizer need not be unique. For example, if the posterior is
+        concentrated on a single class,
+        \[
+            p_i=1,
+            \qquad
+            p_j=0
+            \quad (j\neq i),
+        \]
+        then every feasible point satisfying
+        \[
+            \phat_i+\phat_{C+1}=1
+        \]
+        achieves
+        \[
+            \W_r
+            =
+            \log(\phat_i+\phat_{C+1})
+            =
+            0.
+        \]
+        Thus, in this case, there are infinitely many optimal solutions.
+    \end{proof}
+
+
+    At \(\costmult=C\), there may be a continuum of optimal points between full betting and mixed solutions.
+
+    \begin{remark}[Degeneracy at \(\costmult=C\)]
+        The boundary case \(\costmult=C\) may admit multiple optimal solutions.
+        For example, suppose
+        \[
+            p_j=\frac1C,
+            \qquad j=1,\ldots,C.
+        \]
+        Then, for any \(\alpha\in[0,1]\), the feasible point
+        \[
+            \phat_j^{(\alpha)}
+            =
+            \frac{1-\alpha}{C},
+            \qquad
+            j=1,\ldots,C,
+            \qquad
+            \phat_{C+1}^{(\alpha)}
+            =
+            \alpha,
+        \]
+        satisfies
+        \[
+            \costmult\,\phat_j^{(\alpha)}
+            +
+            \phat_{C+1}^{(\alpha)}
+            =
+            1,
+            \qquad
+            j=1,\ldots,C.
+        \]
+        Hence,
+        \[
+            \W{r}
+            =
+            \sum_{j=1}^{C}
+            \frac1C
+            \log(1)
+            =
+            0.
+        \]
+
+        Moreover, Jensen's inequality yields
+        \begin{align*}
+            \W{r}
+             & \le \log\!\left(
+            \frac1C
+            \sum_{j=1}^{C}
+            (\costmult\,\phat_j+\phat_{C+1})
+            \right)               \\
+             & =           \log 1
+            =               0,
+        \end{align*}
+        where the last equality follows from
+        \[
+            \sum_{j=1}^{C+1}\phat_j=1
+            \quad\text{and}\quad
+            \costmult=C.
+        \]
+        Therefore, every point in this family is optimal. This example shows that the optimizer need not be unique when \(\costmult=C\).
+    \end{remark}
+\end{comment}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%% These are older commented versions will be likely removed in the final version. %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% \begin{proof}
+%     Let \(\phat\in\Delta^C\) be any feasible point. Since
+%     \[
+%         \sum_{j=1}^{C+1}\phat_j=1,
+%     \]
+%     we have, for each \(j\in\{1,\ldots,C\}\),
+%     \[
+%         \phat_j+\phat_{C+1}\le 1.
+%     \]
+%     Therefore,
+%     \[
+%         \log(\phat_j+\phat_{C+1})\le 0,
+%     \]
+%     and hence the objective satisfies
+%     \[
+%         \W{r}\le 0.
+%     \]
+%     The full-reservation point
+%     \[
+%         (\phat_1,\ldots,\phat_C,\phat_{C+1})=(0,\ldots,0,1)
+%     \]
+%     achieves \(\W{r}=0\), so full reservation is optimal.
+
+%     To see that the optimizer is not unique, note that equality
+%     \(\phat_j+\phat_{C+1}=1\) can also occur at other feasible points. For example, if all mass is placed on a single class \(i\), then
+%     \[
+%         \phat_i+\phat_{C+1}=1
+%     \]
+%     with the remaining coordinates equal to zero, and the corresponding objective value is again \(0\). Thus full reservation is optimal, but not unique.
+% \end{proof}
 
 % \begin{proof}
 %     Assume, for contradiction, that an optimal solution satisfies
@@ -771,152 +941,7 @@ The mixed theorem shows that a genuinely mixed betting-and-reservation optimum c
 %     \]
 % \end{proof}
 
-\begin{remark}[Boundary cases]
-    The boundary values \(\costmult=1\) and \(\costmult=C\) can be degenerate.
-    At \(\costmult=1\), full reservation remains optimal.
-\end{remark}
 
-If \(\costmult=1\), then full reservation is optimal. However, the optimizer is not unique in general.
-\begin{proof}
-    Let \(\phat\in\Delta^C\) be any feasible point. Since
-    \[
-        \sum_{j=1}^{C+1}\phat_j=1,
-    \]
-    we have, for every \(j\in\{1,\ldots,C\}\),
-    \[
-        \phat_j+\phat_{C+1}\le1.
-    \]
-    Therefore,
-    \[
-        \log(\phat_j+\phat_{C+1})\le0,
-    \]
-    and hence
-    \[
-        \W_r(\phat)\le0.
-    \]
-
-    The full-reservation point
-    \[
-        (\phat_1,\ldots,\phat_C,\phat_{C+1})
-        =
-        (0,\ldots,0,1)
-    \]
-    achieves \(\W_r=0\), and is therefore optimal.
-
-    The optimizer need not be unique. For example, if the posterior is
-    concentrated on a single class,
-    \[
-        p_i=1,
-        \qquad
-        p_j=0
-        \quad (j\neq i),
-    \]
-    then every feasible point satisfying
-    \[
-        \phat_i+\phat_{C+1}=1
-    \]
-    achieves
-    \[
-        \W_r
-        =
-        \log(\phat_i+\phat_{C+1})
-        =
-        0.
-    \]
-    Thus, in this case, there are infinitely many optimal solutions.
-\end{proof}
-% \begin{proof}
-%     Let \(\phat\in\Delta^C\) be any feasible point. Since
-%     \[
-%         \sum_{j=1}^{C+1}\phat_j=1,
-%     \]
-%     we have, for each \(j\in\{1,\ldots,C\}\),
-%     \[
-%         \phat_j+\phat_{C+1}\le 1.
-%     \]
-%     Therefore,
-%     \[
-%         \log(\phat_j+\phat_{C+1})\le 0,
-%     \]
-%     and hence the objective satisfies
-%     \[
-%         \W{r}\le 0.
-%     \]
-%     The full-reservation point
-%     \[
-%         (\phat_1,\ldots,\phat_C,\phat_{C+1})=(0,\ldots,0,1)
-%     \]
-%     achieves \(\W{r}=0\), so full reservation is optimal.
-
-%     To see that the optimizer is not unique, note that equality
-%     \(\phat_j+\phat_{C+1}=1\) can also occur at other feasible points. For example, if all mass is placed on a single class \(i\), then
-%     \[
-%         \phat_i+\phat_{C+1}=1
-%     \]
-%     with the remaining coordinates equal to zero, and the corresponding objective value is again \(0\). Thus full reservation is optimal, but not unique.
-% \end{proof}
-
-At \(\costmult=C\), there may be a continuum of optimal points between full betting and mixed solutions.
-
-\begin{remark}[Degeneracy at \(\costmult=C\)]
-    The boundary case \(\costmult=C\) may admit multiple optimal solutions.
-    For example, suppose
-    \[
-        p_j=\frac1C,
-        \qquad j=1,\ldots,C.
-    \]
-    Then, for any \(\alpha\in[0,1]\), the feasible point
-    \[
-        \phat_j^{(\alpha)}
-        =
-        \frac{1-\alpha}{C},
-        \qquad
-        j=1,\ldots,C,
-        \qquad
-        \phat_{C+1}^{(\alpha)}
-        =
-        \alpha,
-    \]
-    satisfies
-    \[
-        \costmult\,\phat_j^{(\alpha)}
-        +
-        \phat_{C+1}^{(\alpha)}
-        =
-        1,
-        \qquad
-        j=1,\ldots,C.
-    \]
-    Hence,
-    \[
-        \W{r}
-        =
-        \sum_{j=1}^{C}
-        \frac1C
-        \log(1)
-        =
-        0.
-    \]
-
-    Moreover, Jensen's inequality yields
-    \begin{align*}
-        \W{r}
-         & \le \log\!\left(
-        \frac1C
-        \sum_{j=1}^{C}
-        (\costmult\,\phat_j+\phat_{C+1})
-        \right)               \\
-         & =           \log 1
-        =               0,
-    \end{align*}
-    where the last equality follows from
-    \[
-        \sum_{j=1}^{C+1}\phat_j=1
-        \quad\text{and}\quad
-        \costmult=C.
-    \]
-    Therefore, every point in this family is optimal. This example shows that the optimizer need not be unique when \(\costmult=C\).
-\end{remark}
 % \begin{remark}[Degeneracy at \(\costmult=C\)]
 %     The boundary case \(\costmult=C\) may admit multiple optimal solutions.
 %     For example, if \(p_j=1/C\) for all \(j=1,\ldots,C\), then for any
