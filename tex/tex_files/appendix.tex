@@ -13,6 +13,78 @@ First, let us consider the problem of optimizing \cref{eq:reject_cross_entropy_i
     The probability simplex \(\Delta^{C}\) defined in \cref{eq:probability_simplex} is convex, closed, and bounded.
 \end{restatable}
 
+% \lemmaSimplex*
+\marco{make another pass to clean this proof and shorten it if possible.}
+\begin{proof}
+    Let $\placeholderdist,\placeholderdist^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
+    \begin{align*}
+        \placeholderdist^{\prime\prime} = \gamma \placeholderdist + (1-\gamma)\placeholderdist^{\prime}.
+    \end{align*}
+    For every coordinate $i$,
+    \begin{align*}
+        \placeholderdist^{\prime\prime}_i = \gamma \placeholderdist_i + (1-\gamma)\placeholderdist^{\prime}_i \ge 0,
+    \end{align*}
+    since $\placeholderdist_i,\placeholderdist^{\prime}_i\ge 0$ and $\gamma,1-\gamma\ge 0$. Moreover,
+    \begin{align*}
+        \sum_{i=1}^{C+1} \placeholderdist^{\prime\prime}_i = & \sum_{i=1}^{C+1}\bigl(\gamma \placeholderdist_i+(1-\gamma)\placeholderdist^{\prime}_i\bigr)        \\
+        =                                                    & \gamma\sum_{i=1}^{C+1} \placeholderdist_i + (1-\gamma)\sum_{i=1}^{C+1} \placeholderdist^{\prime}_i \\
+        =                                                    & \gamma+(1-\gamma)                                                                                  \\
+        =                                                    & 1.
+    \end{align*}
+    Hence $\placeholderdist^{\prime\prime}\in\Delta^C$, proving that $\Delta^C$ is convex.
+
+    Next, observe that
+    \begin{align*}
+        \Delta^C = & \left(\bigcap_{i=1}^{C+1}\{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}\right) \\
+                   & \cap
+        \left\{\placeholderdist\in\mathbb R^{C+1}:\sum_{i=1}^{C+1} \placeholderdist_i = 1\right\}.
+    \end{align*}
+    Each set
+    \begin{align*}
+        \{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}
+    \end{align*}
+    is closed, as it is the preimage of the closed interval
+    $[0,\infty)$ under the continuous projection map
+    $\placeholderdist\mapsto \placeholderdist_i$. Likewise,
+    \begin{align*}
+        \left\{
+        \placeholderdist\in\mathbb R^{C+1}:
+        \sum_{i=1}^{C+1} \placeholderdist_i = 1
+        \right\}
+    \end{align*}
+    is closed, being the preimage of the closed set $\{1\}$
+    under the continuous map
+    $\placeholderdist\mapsto \sum_{i=1}^{C+1} \placeholderdist_i$.
+    Since an intersection of closed sets is closed,
+    $\Delta^C$ is closed.
+
+    Finally, let $\placeholderdist\in\Delta^C$. Since $\placeholderdist_i\ge 0$ and
+    \begin{align*}
+        \sum_{i=1}^{C+1} \placeholderdist_i = 1,
+    \end{align*}
+    it follows that
+    \begin{align*}
+        0 \le \placeholderdist_i \le 1,
+        \qquad i=1,\dots,C+1.
+    \end{align*}
+    Therefore,
+    \begin{align*}
+        \|\placeholderdist\|_2^2
+        =
+        \sum_{i=1}^{C+1} \placeholderdist_i^2
+        \le
+        \sum_{i=1}^{C+1} \placeholderdist_i
+        =
+        1,
+    \end{align*}
+    where the inequality follows from $0\le \placeholderdist_i\le 1$ implying
+    $\placeholderdist_i^2\le \placeholderdist_i$. Consequently,
+    \begin{align*}
+        \|\placeholderdist\|_2 \le 1,
+    \end{align*}
+    and thus $\Delta^C$ is bounded.
+\end{proof}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -56,78 +128,6 @@ First, let us consider the problem of optimizing \cref{eq:reject_cross_entropy_i
         \label{prop:equivalence}
         The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
     \end{restatable}
-    \subsection{Proof of \cref{lemma:simplex_properties}}
-    \label{subsec:proof_simplex_properties}
-    \lemmaSimplex*
-    \begin{proof}
-        Let $\placeholderdist,\placeholderdist^{\prime} \in \Delta^C$ and let $\gamma\in[0,1]$. Define
-        \begin{align*}
-            \placeholderdist^{\prime\prime} = \gamma \placeholderdist + (1-\gamma)\placeholderdist^{\prime}.
-        \end{align*}
-        For every coordinate $i$,
-        \begin{align*}
-            \placeholderdist^{\prime\prime}_i = \gamma \placeholderdist_i + (1-\gamma)\placeholderdist^{\prime}_i \ge 0,
-        \end{align*}
-        since $\placeholderdist_i,\placeholderdist^{\prime}_i\ge 0$ and $\gamma,1-\gamma\ge 0$. Moreover,
-        \begin{align*}
-            \sum_{i=1}^{C+1} \placeholderdist^{\prime\prime}_i = & \sum_{i=1}^{C+1}\bigl(\gamma \placeholderdist_i+(1-\gamma)\placeholderdist^{\prime}_i\bigr)        \\
-            =                                                    & \gamma\sum_{i=1}^{C+1} \placeholderdist_i + (1-\gamma)\sum_{i=1}^{C+1} \placeholderdist^{\prime}_i \\
-            =                                                    & \gamma+(1-\gamma)                                                                                  \\
-            =                                                    & 1.
-        \end{align*}
-        Hence $\placeholderdist^{\prime\prime}\in\Delta^C$, proving that $\Delta^C$ is convex.
-
-        Next, observe that
-        \begin{align*}
-            \Delta^C = & \left(\bigcap_{i=1}^{C+1}\{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}\right) \\
-                       & \cap
-            \left\{\placeholderdist\in\mathbb R^{C+1}:\sum_{i=1}^{C+1} \placeholderdist_i = 1\right\}.
-        \end{align*}
-        Each set
-        \begin{align*}
-            \{\placeholderdist\in\mathbb R^{C+1}: \placeholderdist_i\ge 0\}
-        \end{align*}
-        is closed, as it is the preimage of the closed interval
-        $[0,\infty)$ under the continuous projection map
-        $\placeholderdist\mapsto \placeholderdist_i$. Likewise,
-        \begin{align*}
-            \left\{
-            \placeholderdist\in\mathbb R^{C+1}:
-            \sum_{i=1}^{C+1} \placeholderdist_i = 1
-            \right\}
-        \end{align*}
-        is closed, being the preimage of the closed set $\{1\}$
-        under the continuous map
-        $\placeholderdist\mapsto \sum_{i=1}^{C+1} \placeholderdist_i$.
-        Since an intersection of closed sets is closed,
-        $\Delta^C$ is closed.
-
-        Finally, let $\placeholderdist\in\Delta^C$. Since $\placeholderdist_i\ge 0$ and
-        \begin{align*}
-            \sum_{i=1}^{C+1} \placeholderdist_i = 1,
-        \end{align*}
-        it follows that
-        \begin{align*}
-            0 \le \placeholderdist_i \le 1,
-            \qquad i=1,\dots,C+1.
-        \end{align*}
-        Therefore,
-        \begin{align*}
-            \|\placeholderdist\|_2^2
-            =
-            \sum_{i=1}^{C+1} \placeholderdist_i^2
-            \le
-            \sum_{i=1}^{C+1} \placeholderdist_i
-            =
-            1,
-        \end{align*}
-        where the inequality follows from $0\le \placeholderdist_i\le 1$ implying
-        $\placeholderdist_i^2\le \placeholderdist_i$. Consequently,
-        \begin{align*}
-            \|\placeholderdist\|_2 \le 1,
-        \end{align*}
-        and thus $\Delta^C$ is bounded.
-    \end{proof}
 
     \subsection{Proof of \cref{prop:concavity}}
     \label{subsec:proof_concavity}
