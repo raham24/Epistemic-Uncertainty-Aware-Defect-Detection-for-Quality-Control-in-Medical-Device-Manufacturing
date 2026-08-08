@@ -49,13 +49,11 @@ While neural networks provide a practical means of obtaining generally suboptima
 
 \subsection{Illustrative example}
 \label{subsec:illustrative_example}
-\subsection{Effect of the Reservation Variable}
 We first illustrate the effect of the reservation variable on a toy classification problem with two-dimensional features and (C=3) classes in \cref{fig:illustrative_example}. As shown in \cref{fig:decision_regions}, introducing the reservation variable allows the model to identify and reject observations concentrated around the decision boundaries. These regions correspond to inputs for which the classifier has difficulty distinguishing between competing classes and are therefore associated with greater predictive uncertainty.
 
 This behavior translates directly into improved performance on the retained predictions. The selective risk curve in \cref{fig:risk_curve} shows that reducing the coverage to approximately \(81\%\) results in a reduction in classification risk of approximately \(50\%\). Thus, by abstaining on a relatively small fraction of uncertain observations, the model can substantially reduce the error rate among the predictions it retains.
 
 Finally, \cref{fig:margin_histogram} provides further insight into the mechanism underlying this behavior. Rejected observations are predominantly associated with smaller classification margins, indicating weaker separation between the most likely competing classes. Together, these results illustrate how the reservation mechanism enables the model to identify uncertain predictions and trade coverage for lower classification risk.
-
 \begin{figure*}[!htp]
     \centering
     \begin{subfigure}[c]{0.55\textwidth}
@@ -73,7 +71,7 @@ Finally, \cref{fig:margin_histogram} provides further insight into the mechanism
             \caption{Selective risk curve.}
             \label{fig:risk_curve}
         \end{subfigure}
-        \vspace{0.5em}
+        \vspace{0.8em}
         \begin{subfigure}{\linewidth}
             \centering
             \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
@@ -85,6 +83,9 @@ Finally, \cref{fig:margin_histogram} provides further insight into the mechanism
     \label{fig:illustrative_example}
 \end{figure*}
 
+
+\subsection{Optimization problem with the reservation variable}
+\label{subsec:optimization_problem}
 
 \clearpage
 
