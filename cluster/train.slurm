@@ -18,8 +18,10 @@ cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
 source cluster/env.sh
 mkdir -p results/cluster cluster/logs
 
-# pick this task's line: run_id <TAB> dataset <TAB> mlp args
-line=$(sed -n "${SLURM_ARRAY_TASK_ID}p" cluster/runs.tsv)
+# pick this task's line: run_id <TAB> dataset <TAB> mlp args. With chunked submission the
+# array is 1..chunk and submit.sh passes RCA_LINE_OFFSET, so the true line = offset + index.
+lineno=$(( ${RCA_LINE_OFFSET:-0} + SLURM_ARRAY_TASK_ID ))
+line=$(sed -n "${lineno}p" cluster/runs.tsv)
 run_id=$(printf '%s' "$line" | cut -f1)
 dataset=$(printf '%s' "$line" | cut -f2)
 args=$(printf '%s' "$line" | cut -f3-)
@@ -28,6 +30,12 @@ csv="data/cluster/${dataset}.csv"
 if [[ ! -f "$csv" ]]; then
   echo "[train ${SLURM_ARRAY_TASK_ID}] MISSING dataset $csv -- run gen_data first" >&2
   exit 1
+fi
+
+# already trained? skip, so re-submitting only fills in NEW runs (e.g. extra seeds).
+if [[ "${RCA_FORCE:-0}" != "1" && -f "results/cluster/${run_id}.json" && -f "results/cluster/${run_id}.pt" ]]; then
+  echo "[train ${SLURM_ARRAY_TASK_ID}] $run_id already done -- skip (RCA_FORCE=1 to retrain)"
+  exit 0
 fi
 
 echo "[train ${SLURM_ARRAY_TASK_ID}] $run_id   dataset=$dataset   args: $args"
