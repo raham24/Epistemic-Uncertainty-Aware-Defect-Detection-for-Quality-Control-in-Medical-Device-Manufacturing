@@ -353,31 +353,46 @@ def _bayes_err(dfd, te):
     return float((1 - post.max(1)).mean())
 
 
+SEL_SEEDS = sorted({r["seed"] for r in manifest["runs"]})   # every seed -> mean curve + seed band
+
 sel, _rows = {}, []
 for ds in manifest["datasets"]:
-    cas, abst = _find(ds, "cascade", None, SEL_SEED), _find(ds, "abstention", SEL_O, SEL_SEED)
     csv = root / "data" / "cluster" / f"{ds}.csv"
-    if not (cas and abst and csv.exists()
-            and (root / cas["model"]).exists() and (root / abst["model"]).exists()):
+    if not csv.exists():
         continue
-    dfd = pd.read_csv(csv)
-    ic, ia = _infer(cas, dfd), _infer(abst, dfd)
-    ce_err = 1 - (ic["argmax"] == ic["y"]).mean()
-    abst_err = _risk_cov(-ia["r"], (ia["argmax"] == ia["y"]).astype(float))      # reject high r
-    conf_err = _risk_cov(ic["real"].max(1), (ic["argmax"] == ic["y"]).astype(float))  # reject low conf
-    bayes = _bayes_err(dfd, ia["te"])
-    sel[ds] = dict(bayes=bayes, ce_err=float(ce_err), abst_err=abst_err,
-                   conf_err=conf_err, ia=ia)
+    dfd = None
+    abst_stack, conf_stack, ce_list = [], [], []      # one curve/value per seed
+    bayes, ia_last = None, None
+    for seed in SEL_SEEDS:
+        cas, abst = _find(ds, "cascade", None, seed), _find(ds, "abstention", SEL_O, seed)
+        if not (cas and abst and (root / cas["model"]).exists() and (root / abst["model"]).exists()):
+            continue
+        if dfd is None:
+            dfd = pd.read_csv(csv)
+        ic, ia = _infer(cas, dfd), _infer(abst, dfd)
+        ce_list.append(1 - (ic["argmax"] == ic["y"]).mean())
+        abst_stack.append(_risk_cov(-ia["r"], (ia["argmax"] == ia["y"]).astype(float)))      # reject high r
+        conf_stack.append(_risk_cov(ic["real"].max(1), (ic["argmax"] == ic["y"]).astype(float)))  # reject low conf
+        if bayes is None:
+            bayes = _bayes_err(dfd, ia["te"])         # dataset property -- same across seeds
+        ia_last = ia
+    if not abst_stack:
+        continue
+    abst_stack, conf_stack, ce_arr = np.array(abst_stack), np.array(conf_stack), np.array(ce_list)
+    abst_err, conf_err, ce_err = abst_stack.mean(0), conf_stack.mean(0), float(ce_arr.mean())
+    sel[ds] = dict(bayes=bayes, ce_err=ce_err, abst_err=abst_err, conf_err=conf_err,
+                   abst_err_seeds=abst_stack, conf_err_seeds=conf_stack,   # [n_seeds, n_covs]
+                   ce_err_seeds=ce_arr, n_seeds=len(abst_stack), ia=ia_last)
     _at = lambda e: float(e[int(np.argmin(np.abs(_covs - SEL_COVERAGE)))])
-    _rows.append(dict(dataset=ds, bayes_err=bayes, ce_full_err=float(ce_err),
+    _rows.append(dict(dataset=ds, bayes_err=bayes, ce_full_err=ce_err, n_seeds=len(abst_stack),
                       abst_err_at=_at(abst_err), conf_err_at=_at(conf_err),
-                      gain_vs_ce=float(ce_err) - _at(abst_err),
+                      gain_vs_ce=ce_err - _at(abst_err),
                       gain_vs_conf=_at(conf_err) - _at(abst_err)))
 
 if _rows:
     sel_table = pd.DataFrame(_rows).sort_values("bayes_err").reset_index(drop=True)
-    print(f"selective analysis: {len(sel)} datasets  (abstention o={SEL_O:g}, seed {SEL_SEED}, "
-          f"reported @ coverage~{SEL_COVERAGE:.2f})")
+    print(f"selective analysis: {len(sel)} datasets  (abstention o={SEL_O:g}, mean over seeds "
+          f"{SEL_SEEDS}, reported @ coverage~{SEL_COVERAGE:.2f})")
     print(sel_table.round(4).to_string(index=False))
     print("\\ngain_vs_ce   = CE full error - abstention accepted error   (>0: abstaining beats never rejecting)")
     print("gain_vs_conf = cascade confidence error - abstention error   (>0: LEARNED reject beats confidence thresholding)")
@@ -387,20 +402,31 @@ else:
 '''
 
 SEL_RISK_PLOT = '''# Selective-risk curves (reject threshold swept) per dataset, ordered easy -> hard.
-# abstention (reject high reservation) vs cascade confidence thresholding vs the CE
-# full-coverage error and the Bayes floor. Abstention dipping below CE as coverage
-# drops = it is helping; below the blue line = it beats plain confidence.
+# The solid/dashed lines are the MEAN over seeds; the shaded band spans the per-seed
+# min..max envelope (so it contains every seed's curve). abstention (reject high
+# reservation) vs cascade confidence thresholding vs the CE full-coverage error and the
+# Bayes floor. Abstention dipping below CE as coverage drops = it is helping; below the
+# blue line = it beats plain confidence.
 if len(sel):
     order = list(sel_table["dataset"])
     ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.4 * ncol, 3.0 * nrow), squeeze=False)
     for k, ds in enumerate(order):
         ax = axes[k // ncol][k % ncol]; d = sel[ds]
+        # mean lines
         ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2, label="abstention")
         ax.plot(_covs, d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="cascade confidence")
+        # seed band (min..max over seeds); only when >1 seed is available
+        aseeds, cseeds = d.get("abst_err_seeds"), d.get("conf_err_seeds")
+        if aseeds is not None and len(aseeds) > 1:
+            ax.fill_between(_covs, aseeds.min(0), aseeds.max(0),
+                            color=COLORS["abstention"], alpha=0.20, lw=0)
+        if cseeds is not None and len(cseeds) > 1:
+            ax.fill_between(_covs, cseeds.min(0), cseeds.max(0),
+                            color=COLORS["cascade"], alpha=0.15, lw=0)
         ax.axhline(d["ce_err"], color="#999", ls=":", lw=1.4, label="CE full coverage")
         ax.axhline(d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes floor")
-        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f})", fontsize=10)
+        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=10)
         ax.set_xlabel("coverage"); ax.set_ylabel("accepted error"); ax.grid(alpha=0.25)
     for k in range(len(order), nrow * ncol):
         axes[k // ncol][k % ncol].axis("off")
