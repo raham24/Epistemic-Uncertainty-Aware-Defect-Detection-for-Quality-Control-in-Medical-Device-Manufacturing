@@ -236,8 +236,9 @@ def main() -> None:
     for s, n in sorted(by_study.items()):
         print(f"  study {s:13s}: {n} runs")
     if len(run_list) > 1000:
-        print(f"WARNING: {len(run_list)} runs exceeds the usual Slurm MaxArraySize (1001). "
-              f"Reduce RCA_SEEDS or the grids, or raise RCA_MAX_ARRAY if your cluster allows.")
+        print(f"NOTE: {len(run_list)} runs is large; submit.sh submits training in chunks of "
+              f"RCA_MAX_ARRAY (keep that <= your MaxSubmitJobsPerAccount), so this is fine. "
+              f"Only a single manual --array must stay under MaxArraySize (~1001).")
     print("wrote cluster/datasets.tsv, cluster/runs.tsv, cluster/manifest.json")
 
 

@@ -72,9 +72,11 @@ export RCA_TRAIN_TIME="${RCA_TRAIN_TIME:-00:20:00}"
 # On GPUs, set this to how many GPUs you can use simultaneously (Slurm also gates on
 # gres, so a larger value simply queues the excess). 16 is a friendly shared default. ---
 export RCA_MAX_PARALLEL="${RCA_MAX_PARALLEL:-16}"
-# Hard ceiling guard: refuse to submit if the matrix exceeds the cluster's
-# MaxArraySize (Slurm default 1001). Check yours with: scontrol show config | grep MaxArraySize
-export RCA_MAX_ARRAY="${RCA_MAX_ARRAY:-1000}"
+# Training CHUNK size: submit.sh submits training in arrays of this many tasks so the
+# total can exceed the queue cap. MUST be <= your MaxSubmitJobsPerAccount (Star HPC
+# normal QOS = 512), with a little headroom for the gen_data array + any other jobs.
+# Check the submit cap with: sacctmgr -n show qos normal format=MaxSubmitJobsPerAccount
+export RCA_MAX_ARRAY="${RCA_MAX_ARRAY:-450}"
 
 # --- sweep shape: the seeds EVERY configuration is trained at (build_matrix.py reads
 # this). Total runs = distinct configs x number of seeds. More seeds = tighter
