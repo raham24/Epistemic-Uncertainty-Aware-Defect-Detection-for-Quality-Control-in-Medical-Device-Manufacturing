@@ -301,8 +301,9 @@ else:
 '''
 
 SEL_COMPUTE = '''# Selective-classification analysis (replicates the toy_example). Unlike the cells
-# above (which read only the JSON metrics), this loads the SAVED checkpoints and
-# sweeps the REJECTION THRESHOLD on each model -- the standard selective-risk view.
+# above (which read only the JSON metrics), this loads the SAVED abstention checkpoints and
+# sweeps coverage on ONE model -- the learned reject head vs the same model's softmax
+# confidence, both referenced to that model's own full-coverage (CE) error.
 # Needs results/cluster/*.pt + data/cluster/*.csv, so run it on the cluster (or after
 # rsync-ing them back). Edit SEL_O / SEL_SEED / SEL_COVERAGE to probe other settings.
 import sys
@@ -364,15 +365,16 @@ for ds in manifest["datasets"]:
     abst_stack, conf_stack, ce_list = [], [], []      # one curve/value per seed
     bayes, ia_last = None, None
     for seed in SEL_SEEDS:
-        cas, abst = _find(ds, "cascade", None, seed), _find(ds, "abstention", SEL_O, seed)
-        if not (cas and abst and (root / cas["model"]).exists() and (root / abst["model"]).exists()):
+        abst = _find(ds, "abstention", SEL_O, seed)   # ONE model for all three curves
+        if not (abst and (root / abst["model"]).exists()):
             continue
         if dfd is None:
             dfd = pd.read_csv(csv)
-        ic, ia = _infer(cas, dfd), _infer(abst, dfd)
-        ce_list.append(1 - (ic["argmax"] == ic["y"]).mean())
-        abst_stack.append(_risk_cov(-ia["r"], (ia["argmax"] == ia["y"]).astype(float)))      # reject high r
-        conf_stack.append(_risk_cov(ic["real"].max(1), (ic["argmax"] == ic["y"]).astype(float)))  # reject low conf
+        ia = _infer(abst, dfd)
+        correct = (ia["argmax"] == ia["y"]).astype(float)
+        ce_list.append(1 - correct.mean())                            # THIS model's full-coverage error
+        abst_stack.append(_risk_cov(-ia["r"], correct))               # rank by the learned reject head
+        conf_stack.append(_risk_cov(ia["real"].max(1), correct))      # rank by the SAME model's softmax confidence
         if bayes is None:
             bayes = _bayes_err(dfd, ia["te"])         # dataset property -- same across seeds
         ia_last = ia
@@ -394,19 +396,19 @@ if _rows:
     print(f"selective analysis: {len(sel)} datasets  (abstention o={SEL_O:g}, mean over seeds "
           f"{SEL_SEEDS}, reported @ coverage~{SEL_COVERAGE:.2f})")
     print(sel_table.round(4).to_string(index=False))
-    print("\\ngain_vs_ce   = CE full error - abstention accepted error   (>0: abstaining beats never rejecting)")
-    print("gain_vs_conf = cascade confidence error - abstention error   (>0: LEARNED reject beats confidence thresholding)")
+    print("\\ngain_vs_ce   = full-coverage error - abstention accepted error   (>0: abstaining helps vs never rejecting)")
+    print("gain_vs_conf = softmax-confidence error - reject-head error   (>0: the LEARNED reject beats the model's own softmax confidence)")
 else:
     sel_table = pd.DataFrame()
     print("No checkpoints found -- run this on the cluster (needs results/cluster/*.pt + data/cluster/*.csv).")
 '''
 
 SEL_RISK_PLOT = '''# Selective-risk curves (reject threshold swept) per dataset, ordered easy -> hard.
-# The solid/dashed lines are the MEAN over seeds; the shaded band spans the per-seed
-# min..max envelope (so it contains every seed's curve). abstention (reject high
-# reservation) vs cascade confidence thresholding vs the CE full-coverage error and the
-# Bayes floor. Abstention dipping below CE as coverage drops = it is helping; below the
-# blue line = it beats plain confidence.
+# Single model (the abstention model). Solid/dashed lines are the MEAN over seeds; the
+# shaded band spans the per-seed min..max envelope. abstention = rank by the learned reject
+# head; softmax confidence = rank the SAME model by its softmax margin. Both start at the
+# model's full-coverage error (CE) at coverage 1 and can only fall as coverage drops. Orange
+# below blue = the learned reject beats the model's own confidence.
 if len(sel):
     order = list(sel_table["dataset"])
     ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
@@ -415,7 +417,7 @@ if len(sel):
         ax = axes[k // ncol][k % ncol]; d = sel[ds]
         # mean lines
         ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2, label="abstention")
-        ax.plot(_covs, d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="cascade confidence")
+        ax.plot(_covs, d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="softmax confidence")
         # seed band (min..max over seeds); only when >1 seed is available
         aseeds, cseeds = d.get("abst_err_seeds"), d.get("conf_err_seeds")
         if aseeds is not None and len(aseeds) > 1:
@@ -439,8 +441,8 @@ else:
 SEL_ACC_PLOT = '''# Selective-ACCURACY curves (reject threshold swept) per dataset, ordered easy -> hard.
 # Exactly the risk plot above with accuracy = 1 - accepted error on the y-axis. abstention
 # (reject high reservation) vs cascade confidence thresholding vs the CE full-coverage accuracy
-# and the Bayes ceiling. Abstention rising above CE as coverage drops = it is helping; above the
-# blue line = it beats plain confidence.
+# and the Bayes ceiling. Both curves come from the SAME abstention model (reject head vs its
+# own softmax confidence) and meet the full-coverage accuracy at coverage 1.
 if len(sel):
     order = list(sel_table["dataset"])
     ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
@@ -448,7 +450,7 @@ if len(sel):
     for k, ds in enumerate(order):
         ax = axes[k // ncol][k % ncol]; d = sel[ds]
         ax.plot(_covs, 1 - d["abst_err"], "-", color=COLORS["abstention"], lw=2, label="abstention")
-        ax.plot(_covs, 1 - d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="cascade confidence")
+        ax.plot(_covs, 1 - d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="softmax confidence")
         ax.axhline(1 - d["ce_err"], color="#999", ls=":", lw=1.4, label="CE full coverage")
         ax.axhline(1 - d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes ceiling")
         ax.set_title(f"{ds} (Bayes {1 - d['bayes']:.3f})", fontsize=10)
