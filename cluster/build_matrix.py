@@ -69,6 +69,11 @@ DATASETS = {
 # --------------------------------------------------------------------------- #
 SEEDS = [int(s) for s in os.environ.get("RCA_SEEDS", "0,1,2,3,4").split(",") if s.strip() != ""]
 
+# Classifier-warmup epochs for ABSTENTION runs (RCA_WARMUP; 0 disables). Trains the
+# classifier at a high payoff first so the reservation term cannot collapse it into
+# abstaining on everything -- fixes the degenerate-basin seeds. Cascade runs ignore it.
+WARMUP = int(os.environ.get("RCA_WARMUP", "5"))
+
 # --------------------------------------------------------------------------- #
 # BASE model config (SEED-INDEPENDENT -- seed is a separate axis, applied below).
 # Every study varies exactly ONE axis around this. The values mirror mlp.py's own
@@ -175,6 +180,8 @@ def _args(c: dict, seed: int) -> str:
          f"--class-weight {c['class_weight']} --lr {c['lr']:g}")
     if c["o"] is not None:
         a += f" --o {c['o']:g}"
+    if c["loss"] == "abstention" and WARMUP > 0:
+        a += f" --warmup {WARMUP}"
     return a
 
 
