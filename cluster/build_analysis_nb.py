@@ -418,14 +418,11 @@ if len(sel):
         # mean lines
         ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2, label="abstention")
         ax.plot(_covs, d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="softmax confidence")
-        # seed band (min..max over seeds); only when >1 seed is available
-        aseeds, cseeds = d.get("abst_err_seeds"), d.get("conf_err_seeds")
+        # one seed band (min..max over seeds) on the abstention curve
+        aseeds = d.get("abst_err_seeds")
         if aseeds is not None and len(aseeds) > 1:
             ax.fill_between(_covs, aseeds.min(0), aseeds.max(0),
                             color=COLORS["abstention"], alpha=0.20, lw=0)
-        if cseeds is not None and len(cseeds) > 1:
-            ax.fill_between(_covs, cseeds.min(0), cseeds.max(0),
-                            color=COLORS["cascade"], alpha=0.15, lw=0)
         ax.axhline(d["ce_err"], color="#999", ls=":", lw=1.4, label="CE full coverage")
         ax.axhline(d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes floor")
         ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=10)
