@@ -744,33 +744,44 @@ else:
     print("no dataset CSVs found (need data/cluster/*.csv on the cluster)")
 '''
 
-CAS_VS_ABST = '''core = study("core")
+CAS_VS_ABST = '''# Cascade at full coverage vs the abstention model on the boards it answers (r<0.5),
+# per dataset. Bars are the mean over seeds; error bars are +/- 1 std over seeds.
+core = study("core")
 datasets = list(manifest["datasets"])
-cas = seed_mean(core[core.loss == "cascade"], ["dataset"], ["defect_acc"])
-ab  = seed_mean(core[core.loss == "abstention"], ["dataset"], ["selective_acc@0.5", "coverage@0.5"])
+cas_f, ab_f = core[core.loss == "cascade"], core[core.loss == "abstention"]
 
-def _g(frame, ds, col):
-    v = frame[frame.dataset == ds][col]
-    return float(v.iloc[0]) if len(v) else np.nan
 
-order = sorted(datasets, key=lambda d: _g(cas, d, "defect_acc"))
+def _ms(frame, ds, col):
+    """(mean, std) over seeds for one dataset/column."""
+    v = frame[frame.dataset == ds][col].dropna()
+    return (float(v.mean()), float(v.std())) if len(v) else (np.nan, np.nan)
+
+
+order = sorted(datasets, key=lambda d: _ms(cas_f, d, "defect_acc")[0])   # low -> high
 x = np.arange(len(order)); w = 0.38
-cas_acc = [_g(cas, d, "defect_acc") for d in order]
-sel_acc = [_g(ab, d, "selective_acc@0.5") for d in order]
-cov     = [_g(ab, d, "coverage@0.5") for d in order]
+cas_m = [_ms(cas_f, d, "defect_acc")[0] for d in order]
+cas_s = [_ms(cas_f, d, "defect_acc")[1] for d in order]
+sel_m = [_ms(ab_f, d, "selective_acc@0.5")[0] for d in order]
+sel_s = [_ms(ab_f, d, "selective_acc@0.5")[1] for d in order]
+cov   = [_ms(ab_f, d, "coverage@0.5")[0] for d in order]
 
 fig, ax = plt.subplots(figsize=(11, 6))
-ax.bar(x - w/2, cas_acc, w, color=COLORS["cascade"], label="cascade (full coverage)")
-ax.bar(x + w/2, sel_acc, w, color=COLORS["abstention"], label="abstention (selective, r<0.5)")
-for xi, s, c in zip(x, sel_acc, cov):
+ekw = dict(ecolor="0.3", capsize=3, elinewidth=1)
+ax.bar(x - w/2, cas_m, w, yerr=cas_s, color=COLORS["cascade"],
+       label="cascade (full coverage)", error_kw=ekw)
+ax.bar(x + w/2, sel_m, w, yerr=sel_s, color=COLORS["abstention"],
+       label="abstention (selective, r<0.5)", error_kw=ekw)
+for xi, s, ss, c in zip(x, sel_m, sel_s, cov):
     if not np.isnan(s):
-        ax.annotate(f"cov {c:.2f}", (xi + w/2, s), ha="center", va="bottom", fontsize=8)
-allv = [v for v in cas_acc + sel_acc if not np.isnan(v)]
-ax.set_ylim(max(0.0, min(allv) - 0.03), 1.0)
+        ax.annotate(f"cov {c:.2f}", (xi + w/2, s + (0 if np.isnan(ss) else ss)),
+                    ha="center", va="bottom", fontsize=8)
+allv = [v for v in cas_m + sel_m if not np.isnan(v)]
+ax.set_ylim(max(0.0, min(allv) - 0.04), 1.0)
 ax.set_xticks(x); ax.set_xticklabels(order, rotation=25, ha="right")
 ax.set_ylabel("accuracy")
-ax.set_title("Cascade full-coverage accuracy vs abstention selective accuracy (answered boards, r<0.5)")
-ax.legend(loc="lower right"); ax.grid(axis="x", alpha=0)
+ax.set_title("Full-coverage vs selective accuracy  (answered boards, r<0.5;  error bars = ±1 std over seeds)",
+             fontsize=12)
+ax.legend(loc="upper left"); ax.grid(axis="x", alpha=0)
 save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
 '''
 

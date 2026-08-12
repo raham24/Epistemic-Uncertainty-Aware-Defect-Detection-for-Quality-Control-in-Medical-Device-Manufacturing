@@ -413,7 +413,7 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
           loss_cls: type[CascadeLoss] = CascadeLoss,
           hidden: tuple[int, ...] = HIDDEN, dropout: float = DROPOUT,
           seed: int = 0, o: float = 2.0, lr: float = LR,
-          batch: int = BATCH) -> tuple[CascadeMLP, dict]:
+          batch: int = BATCH, warmup: int = 0) -> tuple[CascadeMLP, dict]:
     """Train the cascade with early stopping on validation loss.
 
     Return: the best model and the encoded-data bundle (stats + val curve).
@@ -444,8 +444,17 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
     tr_dl = _loader(enc, tr, batch, shuffle=True, generator=g)
     va_dl = _loader(enc, va, batch, shuffle=False)
 
+    # classifier warmup (abstention only): for the first `warmup` epochs train at a HIGH
+    # payoff (>= n_defects => full betting, no abstention, cf. the regime theorem) so the
+    # classifier is competent BEFORE the reservation term can collapse it into abstaining
+    # on everything; then drop to the target o. Avoids the degenerate-basin seeds.
+    warmup = int(warmup) if abstain else 0
+    warm_o = max(o, float(len(enc["names"])) + 5.0)
+
     best_val, best_state, waited, val_hist = float("inf"), None, 0, []
     for ep in range(epochs):
+        if warmup:
+            loss_fn.o = warm_o if ep < warmup else o     # classifier first, then abstention
         model.train()
         for xb, yd, ym, yr in tr_dl:
             xb, yd, ym, yr = xb.to(device), yd.to(device), ym.to(device), yr.to(device)
@@ -458,7 +467,9 @@ def train(spec: dict, df: pd.DataFrame, device: str = "cpu",
 
         val = _epoch_loss(model, loss_fn, va_dl, device)
         val_hist.append(val)
-        print(f"  epoch {ep:2d}  val_loss {val:.4f}")
+        print(f"  epoch {ep:2d}  val_loss {val:.4f}" + ("  (warmup)" if warmup and ep < warmup else ""))
+        if warmup and ep < warmup:
+            continue                                     # don't select/early-stop at warm_o
         if val < best_val - 1e-4:
             best_val, best_state, waited = val, _clone(model), 0
         else:
@@ -581,6 +592,9 @@ def main() -> None:
     ap.add_argument("--loss", default="cascade", choices=list(LOSSES),
                     help="cascade = CE/CE/BCE (default); abstention = the "
                          "selective-classification term on the defect + mech heads")
+    ap.add_argument("--warmup", type=int, default=0,
+                    help="abstention only: epochs of classifier-only warmup (high payoff) "
+                         "before the reservation term is applied at --o")
     ap.add_argument("--o", type=float, default=2.0,
                     help="abstention payoff (only used by --loss abstention)")
     ap.add_argument("--hidden", default=",".join(map(str, HIDDEN)),
@@ -615,7 +629,7 @@ def main() -> None:
                            class_weight_mode=args.class_weight,
                            loss_cls=LOSSES[args.loss], hidden=hidden,
                            dropout=args.dropout, seed=args.seed, o=args.o,
-                           lr=args.lr, batch=args.batch)
+                           lr=args.lr, batch=args.batch, warmup=args.warmup)
 
     metrics = evaluate(model, enc, df, spec, device=args.device,
                        model_version=MODEL_VERSION)
@@ -642,7 +656,8 @@ def main() -> None:
             "train_args": {"spec": args.spec, "data": args.data, "loss": args.loss,
                            "o": args.o, "seed": args.seed, "lr": args.lr,
                            "batch": args.batch, "epochs": args.epochs,
-                           "dropout": args.dropout, "class_weight": args.class_weight},
+                           "dropout": args.dropout, "class_weight": args.class_weight,
+                           "warmup": args.warmup},
         }, args.model_out)
         print(f"Saved model checkpoint to {args.model_out}")
 
