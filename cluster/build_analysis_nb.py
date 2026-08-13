@@ -407,7 +407,7 @@ SEL_RISK_PLOT = '''# Selective-risk curves per dataset (easy -> hard). Single mo
 # accepted error vs coverage when the test boards are ranked by the learned reject head.
 # Solid line = MEAN over seeds; shaded band = min..max over seeds (the full seed envelope).
 # Dashed line = the model's own full-coverage (no-rejection) error; the curve meets it at
-# coverage 1 and falls below it as coverage drops. Bayes floor = the achievable minimum.
+# coverage 1 and falls below it as coverage drops.
 if len(sel):
     order = list(sel_table["dataset"])          # all datasets, easy -> hard
     ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
@@ -421,7 +421,6 @@ if len(sel):
             ax.fill_between(_covs, aseeds.min(0), aseeds.max(0),
                             color=COLORS["abstention"], alpha=0.22, lw=0, label="min-max over seeds")
         ax.axhline(d["ce_err"], color="#333", ls="--", lw=1.4, label="no rejection (full coverage)")
-        ax.axhline(d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes floor")
         ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=10)
         ax.set_xlabel("coverage"); ax.set_ylabel("accepted error"); ax.grid(alpha=0.25)
     for k in range(len(order), nrow * ncol):
