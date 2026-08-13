@@ -32,8 +32,7 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
 | `fig_selective_vs_o` | selective accuracy (kept rows) vs `o` on `balanced_hard` |
 | `fig_cascade_vs_abstention_selective` | non-abstention vs abstention accuracy comparison, per dataset |
-| `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
-| `fig_selective_accuracy` | selective-accuracy curves per dataset (= 1 - the risk plot) |
+| `fig_selective_risk` | selective-risk curves (`baseline` + `harder`): abstention vs no-rejection |
 
 Prereq: run the sweep first (`bash cluster/submit.sh` on SLURM, or
 `bash cluster/run_local.sh` locally), then run this notebook from the repo root.
@@ -245,7 +244,7 @@ RISK_COVERAGE = '''# PAPER FIGURE: risk-coverage curve. Each abstention model (o
 # o = 1 -> 4 traces the frontier. The star marks the non-abstention model at full coverage (it never
 # abstains). Points up-and-left of a star => abstaining buys accuracy on the boards
 # the model chooses to answer.
-RC_DATASETS = ["baseline", "hard", "imbalanced"]      # the original three
+RC_DATASETS = ["baseline", "harder", "imbalanced"]    # baseline + harder + imbalanced
 pay = study("payoff"); core = study("core")
 if len(pay):
     sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
@@ -409,7 +408,7 @@ SEL_RISK_PLOT = '''# Selective-risk curves per dataset (easy -> hard). Single mo
 # Dashed line = the model's own full-coverage (no-rejection) error; the curve meets it at
 # coverage 1 and falls below it as coverage drops.
 if len(sel):
-    order = list(sel_table["dataset"])          # all datasets, easy -> hard
+    order = [d for d in sel_table["dataset"] if d in ("baseline", "harder")]   # paper datasets
     ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.6 * ncol, 3.0 * nrow), squeeze=False)
     for k, ds in enumerate(order):
@@ -757,8 +756,9 @@ def _ms(frame, ds, col):
     return (float(v.mean()), float(v.std())) if len(v) else (np.nan, np.nan)
 
 
+BAR_DATASETS = ["baseline", "harder"]                              # paper datasets
 rows = []
-for ds in [d for d in sel if d in set(core.dataset)]:
+for ds in [d for d in sel if d in set(core.dataset) and d in BAR_DATASETS]:
     d = sel[ds]
     sel_acc = 1 - d["abst_err"]                                     # selective accuracy at each coverage
     na_m, na_s = _ms(core[core.loss == "cascade"], ds, "defect_acc")   # non-abstention model
@@ -875,14 +875,9 @@ SECTIONS = [
     ("## Accuracy comparison (non-abstention vs abstention)\\n\\nThe non-abstention model at full coverage vs abstention's "
      "selective accuracy on the boards it answers (`r<0.5`), per dataset, coverage annotated. "
      "**Saved: `fig_cascade_vs_abstention_selective`.**", CAS_VS_ABST),
-    ("## Comparing the datasets: selective-risk curves\\n\\nAccepted error vs coverage for every dataset, "
-     "easy -> hard, vs the confidence baseline / CE / Bayes floor. **Saved: `fig_selective_risk`.**",
+    ("## Comparing the datasets: selective-risk curves\\n\\nAccepted error vs coverage on `baseline` + "
+     "`harder`: abstention (min-max seed band) vs the no-rejection line. **Saved: `fig_selective_risk`.**",
      SEL_RISK_PLOT),
-    ("## Comparing the datasets: selective-accuracy curves\\n\\nThe same plot with selective accuracy "
-     "(= 1 - accepted error) on the y-axis: accuracy on the answered boards vs coverage, easy -> hard, "
-     "vs the confidence baseline / CE full-coverage accuracy / Bayes ceiling. "
-     "**Saved: `fig_selective_accuracy`.**", SEL_ACC_PLOT),
-    ("## Optimal configurations", OPTIMAL),
 ]
 
 
