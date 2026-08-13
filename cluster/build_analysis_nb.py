@@ -739,15 +739,15 @@ else:
     print("no dataset CSVs found (need data/cluster/*.csv on the cluster)")
 '''
 
-CAS_VS_ABST = '''# Accuracy comparison: the non-abstention model at full coverage vs the abstention model
-# at a PER-DATASET operating point that best trades coverage for accuracy. For each dataset we
-# pick the coverage maximizing  net = (selective_acc - non_abstention_acc) - PENALTY*(1 - coverage);
-# PENALTY tunes the mix (lower -> abstain more / lower coverage; higher -> keep coverage high).
-# Selective curves come from `sel` (rank-based, from the compute cell); the non-abstention
-# accuracy is the "cascade"-loss model at full coverage. Bars = mean, error bars = +/- 1 std.
+CAS_VS_ABST = '''# Accuracy comparison: non-abstention (full coverage) vs abstention at a per-dataset
+# operating point. Uses the SAME o-swept data as the risk-coverage frontier -- each payoff o gives
+# one (coverage@0.5, selective_acc@0.5) point (seed-averaged) -- and picks the o that best trades
+# coverage for accuracy:  net = (selective_acc - non_abstention_acc) - PENALTY*(1 - coverage).
+# So the abstention bar sits exactly on the risk-coverage curve. PENALTY tunes the mix (lower ->
+# abstain more / lower coverage; higher -> keep coverage high). Error bars = +/-1 std over seeds.
 PENALTY = 0.20
 COV_MIN = 0.60
-core = study("core")
+pay = study("payoff"); core = study("core")
 
 
 def _ms(frame, ds, col):
@@ -757,17 +757,21 @@ def _ms(frame, ds, col):
 
 
 BAR_DATASETS = ["baseline", "harder"]                              # paper datasets
+sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
 rows = []
-for ds in [d for d in sel if d in set(core.dataset) and d in BAR_DATASETS]:
-    d = sel[ds]
-    sel_acc = 1 - d["abst_err"]                                     # selective accuracy at each coverage
+for ds in BAR_DATASETS:
+    s = sm[sm.dataset == ds].dropna(subset=["coverage@0.5", "selective_acc@0.5"])
+    if not len(s):
+        continue
     na_m, na_s = _ms(core[core.loss == "cascade"], ds, "defect_acc")   # non-abstention model
-    net = (sel_acc - na_m) - PENALTY * (1 - _covs)
-    net = np.where(_covs >= COV_MIN, net, -np.inf)                  # avoid degenerate low coverage
+    covv = s["coverage@0.5"].to_numpy(); accv = s["selective_acc@0.5"].to_numpy()
+    net = (accv - na_m) - PENALTY * (1 - covv)
+    net = np.where(covv >= COV_MIN, net, -np.inf)                  # avoid degenerate low coverage
     j = int(np.argmax(net))
-    seeds = d.get("abst_err_seeds")
-    ab_s = float((1 - seeds[:, j]).std()) if seeds is not None and len(seeds) > 1 else 0.0
-    rows.append((ds, na_m, na_s, float(sel_acc[j]), ab_s, float(_covs[j])))
+    o_star = float(s["o"].to_numpy()[j])                           # the chosen payoff o
+    sv = pay[(pay.dataset == ds) & (np.isclose(pay["o"], o_star))]["selective_acc@0.5"].dropna()
+    ab_s = float(sv.std()) if len(sv) > 1 else 0.0
+    rows.append((ds, na_m, na_s, float(accv[j]), ab_s, float(covv[j])))
 
 rows.sort(key=lambda r: r[1])                                       # low -> high non-abstention accuracy
 labels = [r[0] for r in rows]; x = np.arange(len(labels)); w = 0.38
