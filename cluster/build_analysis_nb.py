@@ -128,6 +128,19 @@ plt.rcParams.update({
 })
 COLORS = {"cascade": "#2c7fb8", "abstention": "#e6550d", "bayes": "#333333"}
 
+# Per-dataset colors: the SAME color identifies a dataset in every figure (risk-coverage
+# frontier, selective-risk panels, ...). Canonical map (baseline=blue, harder=orange,
+# imbalanced=green); any dataset not listed falls back to the tab10 cycle by position.
+_TAB10 = plt.get_cmap("tab10")
+DSCOLORS = {d: _TAB10(i) for i, d in enumerate(
+    ["baseline", "harder", "imbalanced", "balanced", "balanced_hard", "hard"])}
+
+
+def dscolor(d, i=0):
+    """Consistent color for a dataset (falls back to tab10 by position i)."""
+    return DSCOLORS.get(d, _TAB10(i % 10))
+
+
 FIGDIR = root / "figs"
 FIGDIR.mkdir(exist_ok=True)
 
@@ -248,14 +261,14 @@ RC_DATASETS = ["baseline", "harder", "imbalanced"]    # baseline + harder + imba
 pay = study("payoff"); core = study("core")
 if len(pay):
     sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
-    cmap = plt.get_cmap("tab10")
     fig, ax = plt.subplots(figsize=(8.5, 6))
     for j, d in enumerate([d for d in RC_DATASETS if d in set(pay["dataset"])]):
+        c = dscolor(d, j)
         s = sm[sm.dataset == d].sort_values("coverage@0.5")
         ax.plot(s["coverage@0.5"], s["selective_acc@0.5"], "-o", ms=4,
-                color=cmap(j), label=d)
+                color=c, label=d)
         cba = core[(core.dataset == d) & (core.loss == "cascade")]["defect_acc"].mean()
-        ax.scatter(1.0, cba, marker="*", s=190, color=cmap(j),
+        ax.scatter(1.0, cba, marker="*", s=190, color=c,
                    edgecolor="k", linewidth=0.6, zorder=5)
     ax.set_xlabel("coverage  (fraction of boards the model answers)")
     ax.set_ylabel("selective accuracy  (on the answered boards)")
@@ -402,32 +415,42 @@ else:
     print("No checkpoints found -- run this on the cluster (needs results/cluster/*.pt + data/cluster/*.csv).")
 '''
 
-SEL_RISK_PLOT = '''# Selective-risk curves per dataset (easy -> hard). Single model (the abstention model):
-# accepted error vs coverage when the test boards are ranked by the learned reject head.
-# Solid line = MEAN over seeds; shaded band = min..max over seeds (the full seed envelope).
-# Dashed line = the model's own full-coverage (no-rejection) error; the curve meets it at
-# coverage 1 and falls below it as coverage drops.
-if len(sel):
-    order = [d for d in sel_table["dataset"] if d in ("baseline", "harder")]   # paper datasets
-    ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(3.6 * ncol, 3.0 * nrow), squeeze=False)
+SEL_RISK_PLOT = '''# PAPER FIGURE: selective-risk curves (accepted error vs coverage) for baseline + harder,
+# built from the SAME o-swept data as the bar chart and the risk-coverage frontier -- each payoff
+# o gives one (coverage@0.5, 1 - selective_acc@0.5) point (seed-averaged), so all three figures
+# agree number-for-number. Each panel is colored by its dataset (matching the frontier). Line =
+# seed mean; band = min..max over seeds; dashed line = non-abstention full-coverage error (the
+# curve meets it at coverage 1 and falls below it as coverage drops).
+RISK_DATASETS = ["baseline", "harder"]
+pay = study("payoff"); core = study("core")
+if len(pay):
+    order = [d for d in RISK_DATASETS if d in set(pay["dataset"])]
+    fig, axes = plt.subplots(1, len(order), figsize=(5.0 * len(order), 3.9), squeeze=False)
+    sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
     for k, ds in enumerate(order):
-        ax = axes[k // ncol][k % ncol]; d = sel[ds]
-        ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2,
-                label="abstention (selective)")
-        aseeds = d.get("abst_err_seeds")
-        if aseeds is not None and len(aseeds) > 1:
-            ax.fill_between(_covs, aseeds.min(0), aseeds.max(0),
-                            color=COLORS["abstention"], alpha=0.22, lw=0, label="min-max over seeds")
-        ax.axhline(d["ce_err"], color="#333", ls="--", lw=1.4, label="no rejection (full coverage)")
-        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=10)
-        ax.set_xlabel("coverage"); ax.set_ylabel("accepted error"); ax.grid(alpha=0.25)
-    for k in range(len(order), nrow * ncol):
-        axes[k // ncol][k % ncol].axis("off")
-    axes[0][0].legend(fontsize=8)
+        ax = axes[0][k]; c = dscolor(ds, k)
+        s = (sm[sm.dataset == ds].dropna(subset=["coverage@0.5", "selective_acc@0.5"])
+             .sort_values("coverage@0.5"))
+        band = (pay[pay.dataset == ds].dropna(subset=["coverage@0.5", "selective_acc@0.5"])
+                .groupby("o").agg(cov=("coverage@0.5", "mean"),
+                                  amax=("selective_acc@0.5", "max"),
+                                  amin=("selective_acc@0.5", "min")).sort_values("cov"))
+        ax.fill_between(band["cov"], 1 - band["amax"], 1 - band["amin"],
+                        color=c, alpha=0.20, lw=0, label="min-max over seeds")
+        ax.plot(s["coverage@0.5"], 1 - s["selective_acc@0.5"], "-o", ms=4.5, lw=2.2, color=c,
+                markeredgecolor="white", markeredgewidth=0.6, label="abstention (selective)")
+        na = core[(core.dataset == ds) & (core.loss == "cascade")]["defect_acc"].mean()
+        ax.axhline(1 - na, color=COLORS["bayes"], ls="--", lw=1.4, label="no rejection (full coverage)")
+        bayes = 1 - core[core.dataset == ds]["bayes"].mean()
+        ax.set_title(f"{ds}   (Bayes error {bayes:.3f})", color=c)
+        ax.set_xlabel("coverage"); ax.set_ylabel("accepted error")
+        ax.margins(x=0.03); ax.grid(alpha=0.25)
+    axes[0][0].legend(loc="upper left", fontsize=9)
+    fig.suptitle("Selective risk: abstaining lowers error on the answered boards",
+                 fontweight="bold", y=1.02)
     fig.tight_layout(); save_fig(fig, "fig_selective_risk"); plt.show()
 else:
-    print("no checkpoints loaded (see the compute cell above)")
+    print("no payoff-study runs with metrics yet")
 '''
 
 SEL_ACC_PLOT = '''# Selective-ACCURACY curves (reject threshold swept) per dataset, ordered easy -> hard.
@@ -773,27 +796,30 @@ for ds in BAR_DATASETS:
     ab_s = float(sv.std()) if len(sv) > 1 else 0.0
     rows.append((ds, na_m, na_s, float(accv[j]), ab_s, float(covv[j])))
 
-rows.sort(key=lambda r: r[1])                                       # low -> high non-abstention accuracy
+rows.sort(key=lambda r: BAR_DATASETS.index(r[0]))                   # dataset order (baseline on the left)
 labels = [r[0] for r in rows]; x = np.arange(len(labels)); w = 0.38
 na_m = [r[1] for r in rows]; na_s = [r[2] for r in rows]
 ab_m = [r[3] for r in rows]; ab_s = [r[4] for r in rows]; cov = [r[5] for r in rows]
 
-fig, ax = plt.subplots(figsize=(11, 6))
+fig, ax = plt.subplots(figsize=(8.5, 5.5))
 ekw = dict(ecolor="0.3", capsize=3, elinewidth=1)
 ax.bar(x - w/2, na_m, w, yerr=na_s, color=COLORS["cascade"],
        label="non-abstention (full coverage)", error_kw=ekw)
 ax.bar(x + w/2, ab_m, w, yerr=ab_s, color=COLORS["abstention"],
        label="abstention (selective)", error_kw=ekw)
-for xi, a, s, c in zip(x, ab_m, ab_s, cov):
-    ax.annotate(f"cov {c:.2f}", (xi + w/2, a + (0 if np.isnan(s) else s)),
-                ha="center", va="bottom", fontsize=8)
+for xi, m, s in zip(x - w/2, na_m, na_s):                           # value label on each bar
+    ax.annotate(f"{m:.3f}", (xi, m + (0 if np.isnan(s) else s)),
+                ha="center", va="bottom", fontsize=8, color="0.25")
+for xi, m, s, c in zip(x + w/2, ab_m, ab_s, cov):
+    ax.annotate(f"{m:.3f}\\ncov {c:.2f}", (xi, m + (0 if np.isnan(s) else s)),
+                ha="center", va="bottom", fontsize=8, color="0.25")
 allv = [v for v in na_m + ab_m if not np.isnan(v)]
-ax.set_ylim(max(0.0, min(allv) - 0.04), 1.0)
-ax.set_xticks(x); ax.set_xticklabels(labels, rotation=25, ha="right")
-ax.set_ylabel("accuracy")
-ax.set_title("Accuracy comparison")
+ax.set_ylim(max(0.0, min(allv) - 0.05), 1.0)
+ax.set_xticks(x); ax.set_xticklabels(labels)
+ax.set_ylabel("defect accuracy")
+ax.set_title("Non-abstention vs abstention accuracy")
 ax.legend(loc="upper left"); ax.grid(axis="x", alpha=0)
-save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
+fig.tight_layout(); save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
 print("\\n".join(f"{r[0]:>14}: non-abstention {r[1]:.4f}   abstention {r[3]:.4f} @ cov {r[5]:.2f}   gain {r[3]-r[1]:+.4f}" for r in rows))
 '''
 
