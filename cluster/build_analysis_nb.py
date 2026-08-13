@@ -403,33 +403,30 @@ else:
     print("No checkpoints found -- run this on the cluster (needs results/cluster/*.pt + data/cluster/*.csv).")
 '''
 
-SEL_RISK_PLOT = '''# Selective-risk curves (reject threshold swept) per dataset, ordered easy -> hard.
-# Single model (the abstention model). Solid/dashed lines are the MEAN over seeds; the
-# shaded band spans the per-seed min..max envelope. abstention = rank by the learned reject
-# head; softmax confidence = rank the SAME model by its softmax margin. Both start at the
-# model's full-coverage error (CE) at coverage 1 and can only fall as coverage drops. Orange
-# below blue = the learned reject beats the model's own confidence.
+SEL_RISK_PLOT = '''# Selective-risk curves for the paper datasets. Single model (the abstention model):
+# accepted error vs coverage when the test boards are ranked by the learned reject head.
+# Solid line = MEAN over seeds; shaded band = MEAN +/- 1 std over seeds (the paper's spread).
+# Dashed line = the model's own full-coverage (no-rejection) error; the curve meets it at
+# coverage 1 and falls below it as coverage drops. Bayes floor = the achievable minimum.
+RISK_DATASETS = ["baseline", "hard"]        # align with the paper's PDF plots
 if len(sel):
-    order = list(sel_table["dataset"])
-    ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(3.4 * ncol, 3.0 * nrow), squeeze=False)
+    order = [d for d in sel_table["dataset"] if d in RISK_DATASETS]
+    ncol = max(len(order), 1)
+    fig, axes = plt.subplots(1, ncol, figsize=(4.8 * ncol, 3.8), squeeze=False)
     for k, ds in enumerate(order):
-        ax = axes[k // ncol][k % ncol]; d = sel[ds]
-        # mean lines
-        ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2, label="abstention")
-        ax.plot(_covs, d["conf_err"], "--", color=COLORS["cascade"], lw=1.8, label="softmax confidence")
-        # one seed band (min..max over seeds) on the abstention curve
+        ax = axes[0][k]; d = sel[ds]
+        ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2,
+                label="abstention (selective)")
         aseeds = d.get("abst_err_seeds")
         if aseeds is not None and len(aseeds) > 1:
-            ax.fill_between(_covs, aseeds.min(0), aseeds.max(0),
-                            color=COLORS["abstention"], alpha=0.20, lw=0)
-        ax.axhline(d["ce_err"], color="#999", ls=":", lw=1.4, label="CE full coverage")
+            sd = aseeds.std(0)
+            ax.fill_between(_covs, d["abst_err"] - sd, d["abst_err"] + sd,
+                            color=COLORS["abstention"], alpha=0.22, lw=0, label="+/- 1 std over seeds")
+        ax.axhline(d["ce_err"], color="#333", ls="--", lw=1.4, label="no rejection (full coverage)")
         ax.axhline(d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes floor")
-        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=10)
+        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=11)
         ax.set_xlabel("coverage"); ax.set_ylabel("accepted error"); ax.grid(alpha=0.25)
-    for k in range(len(order), nrow * ncol):
-        axes[k // ncol][k % ncol].axis("off")
-    axes[0][0].legend(fontsize=8)
+    axes[0][0].legend(fontsize=9)
     fig.tight_layout(); save_fig(fig, "fig_selective_risk"); plt.show()
 else:
     print("no checkpoints loaded (see the compute cell above)")
@@ -757,7 +754,8 @@ def _ms(frame, ds, col):
     return (float(v.mean()), float(v.std())) if len(v) else (np.nan, np.nan)
 
 
-order = sorted(datasets, key=lambda d: _ms(cas_f, d, "defect_acc")[0])   # low -> high
+order = [d for d in sorted(datasets, key=lambda d: _ms(cas_f, d, "defect_acc")[0])
+         if d in ("baseline", "hard")]                                   # paper datasets, low -> high
 x = np.arange(len(order)); w = 0.38
 cas_m = [_ms(cas_f, d, "defect_acc")[0] for d in order]
 cas_s = [_ms(cas_f, d, "defect_acc")[1] for d in order]
