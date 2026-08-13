@@ -239,32 +239,31 @@ axes[0].set_ylabel("accuracy"); axes[1].set_ylabel("MAE"); axes[0].legend()
 save_fig(fig, "fig_mechanism_risk"); plt.show()
 '''
 
-RISK_COVERAGE = '''# PAPER FIGURE: risk-coverage curve. Each abstention model (one per payoff o) gives
-# one (coverage, selective-accuracy) point at the h=0.5 accept threshold; sweeping
-# o = 1 -> 4 traces the frontier. The star marks the non-abstention model at full coverage (it never
-# abstains). Points up-and-left of a star => abstaining buys accuracy on the boards
-# the model chooses to answer.
-RC_DATASETS = ["baseline", "harder", "imbalanced"]    # baseline + harder + imbalanced
-pay = study("payoff"); core = study("core")
-if len(pay):
-    sm = seed_mean(pay, ["dataset", "o"], ["coverage@0.5", "selective_acc@0.5"])
+RISK_COVERAGE = '''# PAPER FIGURE: risk-coverage curve. Uses the SAME rank-based data as the bar chart and
+# the selective-risk curves -- the o=2 abstention model's `sel[ds]["abst_err"]` -- so all three
+# figures agree number-for-number. For each dataset: selective accuracy = 1 - accepted error at
+# each coverage. The star marks the non-abstention model at full coverage; points up-and-left of a
+# star => abstaining buys accuracy on the boards the model chooses to answer. (Runs after the
+# compute cell, which builds `sel`.)
+RC_DATASETS = ["baseline", "harder", "imbalanced"]
+if len(sel):
+    core = study("core")
     cmap = plt.get_cmap("tab10")
     fig, ax = plt.subplots(figsize=(8.5, 6))
-    for j, d in enumerate([d for d in RC_DATASETS if d in set(pay["dataset"])]):
-        s = sm[sm.dataset == d].sort_values("coverage@0.5")
-        ax.plot(s["coverage@0.5"], s["selective_acc@0.5"], "-o", ms=4,
-                color=cmap(j), label=d)
+    for j, d in enumerate([ds for ds in RC_DATASETS if ds in sel]):
+        acc = 1 - sel[d]["abst_err"]                         # selective accuracy vs coverage (rank-based, o=2)
+        ax.plot(_covs, acc, "-o", ms=4, color=cmap(j), label=d)
         cba = core[(core.dataset == d) & (core.loss == "cascade")]["defect_acc"].mean()
         ax.scatter(1.0, cba, marker="*", s=190, color=cmap(j),
                    edgecolor="k", linewidth=0.6, zorder=5)
     ax.set_xlabel("coverage  (fraction of boards the model answers)")
     ax.set_ylabel("selective accuracy  (on the answered boards)")
     ax.set_title("Risk-coverage: abstention trades coverage for accuracy\\n"
-                 "line = abstention swept over o;   star = non-abstention at full coverage")
+                 "line = o=2 abstention model;   star = non-abstention at full coverage")
     ax.legend(title="dataset", loc="lower left")
     save_fig(fig, "fig_risk_coverage"); plt.show()
 else:
-    print("no payoff-study runs with metrics yet")
+    print("no checkpoints loaded (see the compute cell above)")
 '''
 
 PAYOFF_CLS_PLOT = '''# SELECTIVE accuracy vs the payoff o, per dataset -- selective accuracy interpolated at a
@@ -862,13 +861,13 @@ SECTIONS = [
      "overlap. Low open/bridge overlap = the feature separates the defects; high overlap = it carries "
      "little signal, which is what makes the task hard. **Saved: `fig_feature_separability_<dataset>`.**",
      FEATSEP),
-    ("## Risk vs coverage\\n\\nThe selective-classification figure: coverage vs selective accuracy as the "
-     "payoff `o` sweeps (one operating point per model); star = non-abstention at full coverage. "
-     "**Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
     ("## Selective-classification analysis (threshold-swept)\\n\\nLoads the saved checkpoints and sweeps "
      "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
      "(needs `results/cluster/*.pt` + `data/cluster/*.csv`); builds `sel_table` + the `_find/_infer/"
      "_risk_cov` helpers used below.", SEL_COMPUTE),
+    ("## Risk vs coverage\\n\\nSelective accuracy vs coverage for the `o=2` abstention model -- the SAME "
+     "rank-based data as the bar chart and the selective-risk curves, so all three figures agree; "
+     "star = non-abstention at full coverage. **Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
     ("## Selective accuracy vs the payoff o\\n\\nSelective accuracy (kept rows) vs the payoff `o` on "
      "`balanced_hard`, from each `o`'s checkpoint. It rises to an interior peak, then comes back down as "
      "the model stops abstaining. **Saved: `fig_selective_vs_o`.**", SELVO),
