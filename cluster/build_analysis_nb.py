@@ -31,7 +31,7 @@ Paper-ready figures are written to `figs/fig_*.{png,pdf}` as they render:
 | `fig_feature_separability_<dataset>` | per-feature class-conditional densities + overlap, baseline vs hardest |
 | `fig_risk_coverage` | risk vs coverage: abstention's coverage/accuracy trade-off across `o` |
 | `fig_selective_vs_o` | selective accuracy (kept rows) vs `o` on `balanced_hard` |
-| `fig_cascade_vs_abstention_selective` | cascade full-coverage vs abstention selective accuracy, per dataset |
+| `fig_cascade_vs_abstention_selective` | non-abstention vs abstention accuracy comparison, per dataset |
 | `fig_selective_risk` | selective-risk curves per dataset (easy -> hard) vs confidence / CE / Bayes |
 | `fig_selective_accuracy` | selective-accuracy curves per dataset (= 1 - the risk plot) |
 
@@ -242,7 +242,7 @@ save_fig(fig, "fig_mechanism_risk"); plt.show()
 
 RISK_COVERAGE = '''# PAPER FIGURE: risk-coverage curve. Each abstention model (one per payoff o) gives
 # one (coverage, selective-accuracy) point at the h=0.5 accept threshold; sweeping
-# o = 1 -> 4 traces the frontier. The star marks cascade at full coverage (it never
+# o = 1 -> 4 traces the frontier. The star marks the non-abstention model at full coverage (it never
 # abstains). Points up-and-left of a star => abstaining buys accuracy on the boards
 # the model chooses to answer.
 RC_DATASETS = ["baseline", "hard", "imbalanced"]      # the original three
@@ -261,7 +261,7 @@ if len(pay):
     ax.set_xlabel("coverage  (fraction of boards the model answers)")
     ax.set_ylabel("selective accuracy  (on the answered boards)")
     ax.set_title("Risk-coverage: abstention trades coverage for accuracy\\n"
-                 "line = abstention swept over o;   star = cascade at full coverage")
+                 "line = abstention swept over o;   star = non-abstention at full coverage")
     ax.legend(title="dataset", loc="lower left")
     save_fig(fig, "fig_risk_coverage"); plt.show()
 else:
@@ -434,7 +434,7 @@ else:
 
 SEL_ACC_PLOT = '''# Selective-ACCURACY curves (reject threshold swept) per dataset, ordered easy -> hard.
 # Exactly the risk plot above with accuracy = 1 - accepted error on the y-axis. abstention
-# (reject high reservation) vs cascade confidence thresholding vs the CE full-coverage accuracy
+# (reject high reservation) vs the model's own softmax confidence vs the CE full-coverage accuracy
 # and the Bayes ceiling. Both curves come from the SAME abstention model (reject head vs its
 # own softmax confidence) and meet the full-coverage accuracy at coverage 1.
 if len(sel):
@@ -741,11 +741,15 @@ else:
     print("no dataset CSVs found (need data/cluster/*.csv on the cluster)")
 '''
 
-CAS_VS_ABST = '''# Cascade at full coverage vs the abstention model on the boards it answers (r<0.5),
-# per dataset. Bars are the mean over seeds; error bars are +/- 1 std over seeds.
+CAS_VS_ABST = '''# Accuracy comparison: the non-abstention model at full coverage vs the abstention model
+# at a PER-DATASET operating point that best trades coverage for accuracy. For each dataset we
+# pick the coverage maximizing  net = (selective_acc - non_abstention_acc) - PENALTY*(1 - coverage);
+# PENALTY tunes the mix (lower -> abstain more / lower coverage; higher -> keep coverage high).
+# Selective curves come from `sel` (rank-based, from the compute cell); the non-abstention
+# accuracy is the "cascade"-loss model at full coverage. Bars = mean, error bars = +/- 1 std.
+PENALTY = 0.20
+COV_MIN = 0.60
 core = study("core")
-datasets = list(manifest["datasets"])
-cas_f, ab_f = core[core.loss == "cascade"], core[core.loss == "abstention"]
 
 
 def _ms(frame, ds, col):
@@ -754,33 +758,40 @@ def _ms(frame, ds, col):
     return (float(v.mean()), float(v.std())) if len(v) else (np.nan, np.nan)
 
 
-order = [d for d in sorted(datasets, key=lambda d: _ms(cas_f, d, "defect_acc")[0])
-         if d in ("baseline", "hard")]                                   # paper datasets, low -> high
-x = np.arange(len(order)); w = 0.38
-cas_m = [_ms(cas_f, d, "defect_acc")[0] for d in order]
-cas_s = [_ms(cas_f, d, "defect_acc")[1] for d in order]
-sel_m = [_ms(ab_f, d, "selective_acc@0.5")[0] for d in order]
-sel_s = [_ms(ab_f, d, "selective_acc@0.5")[1] for d in order]
-cov   = [_ms(ab_f, d, "coverage@0.5")[0] for d in order]
+rows = []
+for ds in [d for d in sel if d in set(core.dataset)]:
+    d = sel[ds]
+    sel_acc = 1 - d["abst_err"]                                     # selective accuracy at each coverage
+    na_m, na_s = _ms(core[core.loss == "cascade"], ds, "defect_acc")   # non-abstention model
+    net = (sel_acc - na_m) - PENALTY * (1 - _covs)
+    net = np.where(_covs >= COV_MIN, net, -np.inf)                  # avoid degenerate low coverage
+    j = int(np.argmax(net))
+    seeds = d.get("abst_err_seeds")
+    ab_s = float((1 - seeds[:, j]).std()) if seeds is not None and len(seeds) > 1 else 0.0
+    rows.append((ds, na_m, na_s, float(sel_acc[j]), ab_s, float(_covs[j])))
+
+rows.sort(key=lambda r: r[1])                                       # low -> high non-abstention accuracy
+labels = [r[0] for r in rows]; x = np.arange(len(labels)); w = 0.38
+na_m = [r[1] for r in rows]; na_s = [r[2] for r in rows]
+ab_m = [r[3] for r in rows]; ab_s = [r[4] for r in rows]; cov = [r[5] for r in rows]
 
 fig, ax = plt.subplots(figsize=(11, 6))
 ekw = dict(ecolor="0.3", capsize=3, elinewidth=1)
-ax.bar(x - w/2, cas_m, w, yerr=cas_s, color=COLORS["cascade"],
-       label="cascade (full coverage)", error_kw=ekw)
-ax.bar(x + w/2, sel_m, w, yerr=sel_s, color=COLORS["abstention"],
-       label="abstention (selective, r<0.5)", error_kw=ekw)
-for xi, s, ss, c in zip(x, sel_m, sel_s, cov):
-    if not np.isnan(s):
-        ax.annotate(f"cov {c:.2f}", (xi + w/2, s + (0 if np.isnan(ss) else ss)),
-                    ha="center", va="bottom", fontsize=8)
-allv = [v for v in cas_m + sel_m if not np.isnan(v)]
+ax.bar(x - w/2, na_m, w, yerr=na_s, color=COLORS["cascade"],
+       label="non-abstention (full coverage)", error_kw=ekw)
+ax.bar(x + w/2, ab_m, w, yerr=ab_s, color=COLORS["abstention"],
+       label="abstention (selective)", error_kw=ekw)
+for xi, a, s, c in zip(x, ab_m, ab_s, cov):
+    ax.annotate(f"cov {c:.2f}", (xi + w/2, a + (0 if np.isnan(s) else s)),
+                ha="center", va="bottom", fontsize=8)
+allv = [v for v in na_m + ab_m if not np.isnan(v)]
 ax.set_ylim(max(0.0, min(allv) - 0.04), 1.0)
-ax.set_xticks(x); ax.set_xticklabels(order, rotation=25, ha="right")
+ax.set_xticks(x); ax.set_xticklabels(labels, rotation=25, ha="right")
 ax.set_ylabel("accuracy")
-ax.set_title("Full-coverage vs selective accuracy  (answered boards, r<0.5;  error bars = ±1 std over seeds)",
-             fontsize=12)
+ax.set_title("Accuracy comparison")
 ax.legend(loc="upper left"); ax.grid(axis="x", alpha=0)
 save_fig(fig, "fig_cascade_vs_abstention_selective"); plt.show()
+print("\\n".join(f"{r[0]:>14}: non-abstention {r[1]:.4f}   abstention {r[3]:.4f} @ cov {r[5]:.2f}   gain {r[3]-r[1]:+.4f}" for r in rows))
 '''
 
 SELVO = '''# Selective accuracy vs the payoff o, on balanced_hard (the dataset that under-fits at low o).
@@ -853,7 +864,7 @@ SECTIONS = [
      "little signal, which is what makes the task hard. **Saved: `fig_feature_separability_<dataset>`.**",
      FEATSEP),
     ("## Risk vs coverage\\n\\nThe selective-classification figure: coverage vs selective accuracy as the "
-     "payoff `o` sweeps (one operating point per model); star = cascade at full coverage. "
+     "payoff `o` sweeps (one operating point per model); star = non-abstention at full coverage. "
      "**Saved: `fig_risk_coverage`.**", RISK_COVERAGE),
     ("## Selective-classification analysis (threshold-swept)\\n\\nLoads the saved checkpoints and sweeps "
      "the **rejection threshold** on each model (the standard selective-risk view). Runs on the cluster "
@@ -862,7 +873,7 @@ SECTIONS = [
     ("## Selective accuracy vs the payoff o\\n\\nSelective accuracy (kept rows) vs the payoff `o` on "
      "`balanced_hard`, from each `o`'s checkpoint. It rises to an interior peak, then comes back down as "
      "the model stops abstaining. **Saved: `fig_selective_vs_o`.**", SELVO),
-    ("## Cascade vs abstention (selective accuracy)\\n\\nFull-coverage cascade accuracy vs abstention's "
+    ("## Accuracy comparison (non-abstention vs abstention)\\n\\nThe non-abstention model at full coverage vs abstention's "
      "selective accuracy on the boards it answers (`r<0.5`), per dataset, coverage annotated. "
      "**Saved: `fig_cascade_vs_abstention_selective`.**", CAS_VS_ABST),
     ("## Comparing the datasets: selective-risk curves\\n\\nAccepted error vs coverage for every dataset, "
