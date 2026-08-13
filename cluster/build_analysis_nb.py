@@ -403,18 +403,17 @@ else:
     print("No checkpoints found -- run this on the cluster (needs results/cluster/*.pt + data/cluster/*.csv).")
 '''
 
-SEL_RISK_PLOT = '''# Selective-risk curves for the paper datasets. Single model (the abstention model):
+SEL_RISK_PLOT = '''# Selective-risk curves per dataset (easy -> hard). Single model (the abstention model):
 # accepted error vs coverage when the test boards are ranked by the learned reject head.
 # Solid line = MEAN over seeds; shaded band = MEAN +/- 1 std over seeds (the paper's spread).
 # Dashed line = the model's own full-coverage (no-rejection) error; the curve meets it at
 # coverage 1 and falls below it as coverage drops. Bayes floor = the achievable minimum.
-RISK_DATASETS = ["baseline", "hard"]        # align with the paper's PDF plots
 if len(sel):
-    order = [d for d in sel_table["dataset"] if d in RISK_DATASETS]
-    ncol = max(len(order), 1)
-    fig, axes = plt.subplots(1, ncol, figsize=(4.8 * ncol, 3.8), squeeze=False)
+    order = list(sel_table["dataset"])          # all datasets, easy -> hard
+    ncol = min(5, len(order)); nrow = int(np.ceil(len(order) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.6 * ncol, 3.0 * nrow), squeeze=False)
     for k, ds in enumerate(order):
-        ax = axes[0][k]; d = sel[ds]
+        ax = axes[k // ncol][k % ncol]; d = sel[ds]
         ax.plot(_covs, d["abst_err"], "-", color=COLORS["abstention"], lw=2,
                 label="abstention (selective)")
         aseeds = d.get("abst_err_seeds")
@@ -424,9 +423,11 @@ if len(sel):
                             color=COLORS["abstention"], alpha=0.22, lw=0, label="+/- 1 std over seeds")
         ax.axhline(d["ce_err"], color="#333", ls="--", lw=1.4, label="no rejection (full coverage)")
         ax.axhline(d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes floor")
-        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=11)
+        ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=10)
         ax.set_xlabel("coverage"); ax.set_ylabel("accepted error"); ax.grid(alpha=0.25)
-    axes[0][0].legend(fontsize=9)
+    for k in range(len(order), nrow * ncol):
+        axes[k // ncol][k % ncol].axis("off")
+    axes[0][0].legend(fontsize=8)
     fig.tight_layout(); save_fig(fig, "fig_selective_risk"); plt.show()
 else:
     print("no checkpoints loaded (see the compute cell above)")
