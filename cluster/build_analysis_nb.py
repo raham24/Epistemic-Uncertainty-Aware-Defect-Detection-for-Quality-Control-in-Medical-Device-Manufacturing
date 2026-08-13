@@ -405,7 +405,7 @@ else:
 
 SEL_RISK_PLOT = '''# Selective-risk curves per dataset (easy -> hard). Single model (the abstention model):
 # accepted error vs coverage when the test boards are ranked by the learned reject head.
-# Solid line = MEAN over seeds; shaded band = MEAN +/- 1 std over seeds (the paper's spread).
+# Solid line = MEAN over seeds; shaded band = min..max over seeds (the full seed envelope).
 # Dashed line = the model's own full-coverage (no-rejection) error; the curve meets it at
 # coverage 1 and falls below it as coverage drops. Bayes floor = the achievable minimum.
 if len(sel):
@@ -418,9 +418,8 @@ if len(sel):
                 label="abstention (selective)")
         aseeds = d.get("abst_err_seeds")
         if aseeds is not None and len(aseeds) > 1:
-            sd = aseeds.std(0)
-            ax.fill_between(_covs, d["abst_err"] - sd, d["abst_err"] + sd,
-                            color=COLORS["abstention"], alpha=0.22, lw=0, label="+/- 1 std over seeds")
+            ax.fill_between(_covs, aseeds.min(0), aseeds.max(0),
+                            color=COLORS["abstention"], alpha=0.22, lw=0, label="min-max over seeds")
         ax.axhline(d["ce_err"], color="#333", ls="--", lw=1.4, label="no rejection (full coverage)")
         ax.axhline(d["bayes"], color="k", ls="-", lw=1.0, alpha=0.6, label="Bayes floor")
         ax.set_title(f"{ds} (Bayes {d['bayes']:.3f}, {d.get('n_seeds', 1)} seeds)", fontsize=10)
