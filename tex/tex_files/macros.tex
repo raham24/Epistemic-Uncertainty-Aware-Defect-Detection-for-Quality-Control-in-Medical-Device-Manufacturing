@@ -33,8 +33,10 @@
 \newcommand{\marco}[1]{\textcolor{blue}{\textsuperscript{M}: #1}}
 \newcommand{\raham}[1]{\textcolor{red}{\textsuperscript{R}: #1}}
 %For Pseudo codes
-\newcommand{\algcomment}[1]{\footnotesize #1}   % black algorithm comments
+\newcommand{\algcomment}[1]{\footnotesize\textcolor[gray]{0.5}{#1}}   % gray algorithm comments
 \SetCommentSty{algcomment}
+\crefname{algocf}{Algorithm}{Algorithms}   
+\Crefname{algocf}{Algorithm}{Algorithms}
 %%%%%%%%%%% Glossary %%%%%%%%%%%
 \newacronym{pdf}{pdf}{probability density function}
 \newacronym{kkt}{KKT}{Karush-Kuhn-Tucker}

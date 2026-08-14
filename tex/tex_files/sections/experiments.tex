@@ -21,28 +21,37 @@ In this section we report our numerical results. We start by showing how the bas
 \DontPrintSemicolon
 \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
 \SetKwComment{Comment}{// }{}
-    \Input{process spec (nominals $\bm\mu$, spreads $\bm\sigma$, correlation $R$, drift); causal edges $E$; class priors $\bm\pi$; target Bayes error $\varepsilon^\star$; seed $s$.}
-    \Output{labeled boards (defect, mechanism, per-parameter risk), split into train / validation / test.}
+    \Input{$N$ boards, $p$ parameters, $K$ defect classes; nominals $\bm\mu$, spreads $\bm\sigma$, spec half-widths $\mathbf h$, correlation $\mathbf R$, drift $\bm\delta_i$; causal weights $\mathbf W$; class priors $\bm\pi$; target Bayes error $\varepsilon^\star$; risk map $\rho$; seed $s$.}
+    \Output{labeled boards $\{(\x_i,\,y_i,\,m_i,\,\mathbf r_i)\}_{i=1}^{N}$, split into train / validation / test.}
     \BlankLine
-    \Comment{correlated, drifting process parameters}
-    $\x \leftarrow \bm\mu + \bm\sigma \odot (L\bm z + \mathrm{drift})$,\quad $LL^\top=R,\ \ \bm z\sim\mathcal N(\mathbf 0,I)$\;
+    \Comment{Cholesky factor of the process correlation}
+    $\mathbf L \leftarrow \mathrm{cholesky}(\mathbf R)$, \ \ so that $\mathbf L\mathbf L^{\!\top}=\mathbf R$\;
     \BlankLine
-    \Comment{normalized deviation from the spec limits}
-    $\mathrm{dev}_j \leftarrow (\x_j-\mu_j)/h_j$\;
+    \Comment{parameter values per board $i=1,\dots,N$: correlated, drifting ($\bm z_i$ latent standard-normal draw; $\bm\delta_i=$ wear $+$ diurnal; $\odot$ elementwise)}
+    $\bm z_i \sim \mathcal N(\mathbf 0,\mathbf I_p)$, \quad $\x_i \leftarrow \bm\mu + \bm\sigma \odot (\mathbf L\bm z_i + \bm\delta_i)$\;
     \BlankLine
-    \Comment{sum each defect's causal parameters}
-    $s_d(\x) \leftarrow \textstyle\sum_{e\in E:\,e.\mathrm{def}=d} w_e\,\mathrm{ReLU}(\varsigma_e\,\mathrm{dev}_{e.\mathrm{par}})$\;
+    \Comment{normalized deviation; $|\mathrm{dev}|=1$ sits at the spec limit}
+    $\mathrm{dev}_{ij} \leftarrow (x_{ij}-\mu_j)/h_j, \quad j=1,\dots,p$\;
     \BlankLine
-    \Comment{calibrate the gain to $\varepsilon^\star$, the offsets to the priors}
-    find $\gamma,\ \bm\beta\ $ s.t.\ $\mathrm{BayesErr}=\varepsilon^\star$ and class marginals $=\bm\pi$\;
+    \Comment{Ishikawa causal score per defect $d$ ($|W_{dj}|$ edge strength, $\mathrm{sign}\,W_{dj}$ direction, $0$ no edge); class $0=$ no-defect}
+    $u_{id} \leftarrow \sum_{j=1}^{p}\mathrm{ReLU}(W_{dj}\,\mathrm{dev}_{ij}), \quad u_{i0}\equiv 0$\;
     \BlankLine
-    \Comment{class posterior, then sample the label (not thresholded)}
-    $\PYX(d\mid\x) \leftarrow \mathrm{softmax}\!\big(\gamma\,s_d(\x)+\beta_d\big)$\;
-    $y \sim \mathrm{Categorical}\!\big(\PYX(\cdot\mid\x)\big)$\;
+    \Comment{calibrate: gain $\gamma$ to the target Bayes error, offsets $\bm\beta$ to the class priors}
+    $\gamma \leftarrow$ bisection s.t.\ Bayes error $=\varepsilon^\star$; \quad $\bm\beta \leftarrow$ IPF s.t.\ class marginals $=\bm\pi$\;
     \BlankLine
-    \Comment{mechanisms, graded risk, leakage-free split}
-    tag mechanism;\ \ $r_j \leftarrow g(\mathrm{dev}_j)$;\ \ split whole batches\;
-    \Return{labeled, split dataset}
+    \Comment{exact class posterior, then sample the label (not thresholded)}
+    $\PYX(d\mid\x_i) \leftarrow \mathrm{softmax}_d\!\big(\gamma\,u_{id}+\beta_d\big); \quad y_i \sim \mathrm{Categorical}\!\big(\PYX(\cdot\mid\x_i)\big)$\;
+    \BlankLine
+    \Comment{ground-truth mechanism per stage $\ell$ ($\mathrm{st}(j)=$ stage of parameter $j$): strongest firing edge of the drawn defect $y_i$}
+    $m_i^{\ell} \leftarrow \argmax_{\{j:\,\mathrm{st}(j)=\ell\}} \mathrm{ReLU}(W_{y_i j}\,\mathrm{dev}_{ij})$, \ \ or \textsc{none} if none fires\;
+    \BlankLine
+    \Comment{graded per-parameter risk target, two-sided in $|\mathrm{dev}|$}
+    $r_{ij} \leftarrow \rho(\mathrm{dev}_{ij}), \quad j=1,\dots,p$\;
+    \BlankLine
+    \Comment{leakage-free split: each whole batch goes to a single split}
+    partition the $N$ boards into batches; assign each whole batch to train / val / test\;
+    \BlankLine
+    \textbf{Return:} $\{(\x_i,\,y_i,\,m_i,\,\mathbf r_i)\}_{i=1}^{N}$, \ with $m_i=(m_i^{\ell})_{\ell}$\;
 \end{algorithm}
 
 
