@@ -479,7 +479,7 @@ print("chosen config:", dict(zip(COLS, chosen)))
 d2 = d.dropna(subset=["sel_acc"])
 d2 = d2[d2["coverage"] >= MIN_COV]
 fig2, ax = plt.subplots(figsize=(7, 4.5))
-ax.plot(d2["o"], d2["sel_acc"], marker="o", color="#1f77b4", lw=2)
+ax.plot(d2["o"], d2["sel_acc"], marker="o", color=COLORS["abstention"], lw=2)
 ax.set_xlabel("payoff  o"); ax.set_ylabel("selective accuracy (kept rows)")
 ax.set_title("Selective accuracy vs o")
 ax.grid(alpha=0.3); fig2.tight_layout(); save(fig2, "fig_maude_selective_vs_o"); plt.show()
@@ -489,11 +489,11 @@ base_acc = float(d.loc[d["o"] == om, "forced_acc"].iloc[0])       # baseline: fu
 frontier = d.dropna(subset=["sel_acc"])
 frontier = frontier[frontier["coverage"] >= MIN_COV].sort_values("coverage")
 fig3, ax = plt.subplots(figsize=(7.5, 4.5))
-ax.plot(frontier["coverage"], frontier["sel_acc"], marker="o", color="#1f77b4", lw=2,
+ax.plot(frontier["coverage"], frontier["sel_acc"], marker="o", color=COLORS["abstention"], lw=2,
         label="abstention model (operating points across o)")
-ax.scatter([1.0], [base_acc], color="#d62728", s=160, marker="*", zorder=5,
+ax.scatter([1.0], [base_acc], color=COLORS["cascade"], s=160, marker="*", zorder=5,
            label=f"no abstention  (coverage 100%, acc {base_acc:.3f})")
-ax.axhline(base_acc, color="#d62728", ls="--", lw=1, alpha=0.6)
+ax.axhline(base_acc, color=COLORS["cascade"], ls="--", lw=1, alpha=0.6)
 ax.set_xlabel("coverage (fraction of reports answered)")
 ax.set_ylabel("accuracy on answered reports")
 ax.set_title("No-abstention vs abstention: accuracy vs coverage")
