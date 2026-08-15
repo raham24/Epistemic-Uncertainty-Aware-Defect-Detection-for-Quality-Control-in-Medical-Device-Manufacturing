@@ -38,6 +38,7 @@ Paper-ready figures write to `figs/fig_maude_*.{png,pdf}`:
 |---|---|
 | `fig_maude_selective_vs_o` | selective accuracy (kept rows) vs `o` |
 | `fig_maude_noabstain_vs_abstain` | accuracy vs coverage: no-abstention baseline vs abstention model |
+| `fig_maude_noabstain_vs_abstain_bar` | non-abstention vs abstention accuracy (bar chart, synthetic-notebook format) |
 | `fig_maude_confusion_baseline` | per-class confusion for the baseline -- where the accuracy really comes from |
 
 Prereq: run the sweep first. Generated into the repo root next to
@@ -142,6 +143,9 @@ plt.rcParams.update({
     "axes.grid": True, "grid.alpha": 0.25, "legend.frameon": False,
 })
 C_LEARNED, C_CONF = "#1f77b4", "#d62728"   # learned reject vs confidence baseline
+# Same palette as the synthetic notebook so the two papers read as one system:
+# non-abstention = blue, abstention = orange (used by the accuracy-comparison bar chart).
+COLORS = {"cascade": "#2c7fb8", "abstention": "#e6550d", "bayes": "#333333"}
 FIGS = root / "figs"; FIGS.mkdir(exist_ok=True)
 
 
@@ -498,6 +502,54 @@ ax.legend(); ax.grid(alpha=0.3); fig3.tight_layout(); save(fig3, "fig_maude_noab
 print(d[["o", "forced_acc", "sel_acc", "coverage"]].round(4).to_string(index=False))
 '''
 
+CAS_VS_ABST = '''# ACCURACY COMPARISON: non-abstention (full coverage) vs abstention -- the MAUDE analog of
+# the synthetic notebook's bar chart, in the SAME format and colors. Non-abstention (blue) =
+# the plain classifier at the largest o, which predicts on EVERY report. Abstention (orange) =
+# the same family at the mid o that best trades coverage for accuracy on the reports it keeps:
+#   net = (selective_acc - non_abstention_acc) - PENALTY*(1 - coverage),  coverage >= COV_MIN.
+# So the abstention bar sits on the same operating point as the risk-coverage frontier above.
+# Coverage is annotated on the abstention bar; error bars = +/-1 std over seeds.
+PENALTY = 0.20
+COV_MIN = 0.60
+pay = PAY
+if len(pay):
+    agg = (seed_mean(pay, ["o"], ["forced_acc", "learned_sel_acc", "learned_cov"])
+           .sort_values("o").reset_index(drop=True))
+    i_base = int(agg["o"].idxmax()); o_base = float(agg.loc[i_base, "o"])
+    na_m = float(agg.loc[i_base, "forced_acc"]); na_s = float(agg.loc[i_base, "forced_acc_std"])
+    cand = (agg[agg["o"] < o_base].dropna(subset=["learned_sel_acc", "learned_cov"])
+            .reset_index(drop=True))
+    covv = cand["learned_cov"].to_numpy(); accv = cand["learned_sel_acc"].to_numpy()
+    net = (accv - na_m) - PENALTY * (1 - covv)
+    net = np.where(covv >= COV_MIN, net, -np.inf)
+    if len(cand) and np.isfinite(net).any():
+        j = int(np.argmax(net))
+        o_star = float(cand.loc[j, "o"]); ab_m = float(accv[j]); ab_c = float(covv[j])
+        ab_s = float(cand.loc[j, "learned_sel_acc_std"])
+
+        x = np.arange(1); w = 0.38
+        fig, ax = plt.subplots(figsize=(6.0, 5.5))
+        ekw = dict(ecolor="0.3", capsize=3, elinewidth=1)
+        ax.bar(x - w/2, [na_m], w, yerr=[na_s], color=COLORS["cascade"],
+               label="non-abstention (full coverage)", error_kw=ekw)
+        ax.bar(x + w/2, [ab_m], w, yerr=[ab_s], color=COLORS["abstention"],
+               label="abstention (selective)", error_kw=ekw)
+        ax.annotate(f"cov {ab_c:.2f}", (float(x[0] + w/2), ab_m + (0 if np.isnan(ab_s) else ab_s)),
+                    ha="center", va="bottom", fontsize=9, color="0.25")   # coverage on the abstention bar
+        ax.set_ylim(max(0.0, min(na_m, ab_m) - 0.05), 1.0)
+        ax.set_xticks(x); ax.set_xticklabels(["MAUDE"])
+        ax.set_ylabel("accuracy")
+        ax.set_title("Non-abstention vs abstention accuracy")
+        ax.legend(loc="upper right"); ax.grid(axis="x", alpha=0)
+        fig.tight_layout(); save(fig, "fig_maude_noabstain_vs_abstain_bar"); plt.show()
+        print(f"non-abstention {na_m:.4f}   abstention {ab_m:.4f} @ cov {ab_c:.2f}   "
+              f"gain {ab_m - na_m:+.4f}   (chosen o={o_star:g})")
+    else:
+        print(f"no abstaining o with coverage >= {COV_MIN} for the chosen config")
+else:
+    print("no payoff-study runs loaded")
+'''
+
 OPTIMAL = '''# Best operating point for the CHOSEN config: the o with the highest learned selective
 # accuracy at its target coverage, next to that config's regular baseline (largest o).
 pay = PAY
@@ -528,6 +580,10 @@ SECTIONS = [
      "`o`** (kept rows) and **accuracy (risk) vs coverage** (no-abstention baseline vs the abstention "
      "model). `MIN_COV` drops degenerate low-coverage points. **Saved: `fig_maude_selective_vs_o`, "
      "`fig_maude_noabstain_vs_abstain`.**", RUNACC),
+    ("## Accuracy comparison (non-abstention vs abstention)\\n\\nThe non-abstention baseline at "
+     "full coverage vs abstention's selective accuracy on the reports it answers, as a bar chart "
+     "-- same format and colors as the synthetic notebook. Coverage annotated on the abstention "
+     "bar. **Saved: `fig_maude_noabstain_vs_abstain_bar`.**", CAS_VS_ABST),
     ("## Per-class breakdown\\n\\nWhere the accuracy actually comes from: per-class "
      "precision/recall/F1 and the confusion matrix for the baseline. Accuracy hides the rare "
      "classes; this exposes them. **Saved: `fig_maude_confusion_baseline`.**", PERCLASS),
