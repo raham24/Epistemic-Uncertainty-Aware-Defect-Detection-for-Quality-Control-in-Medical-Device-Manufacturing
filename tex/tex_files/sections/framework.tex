@@ -42,12 +42,12 @@ Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explic
 where \(\phat_{C+1}\) is the reservation variable for a given input \(\x\), subject to the constraints
 \begin{align}
     \label{eq:reject_cross_entropy_sum}
-    \sum_{j=1}^{C} p_{j}+p_{C+1}=1,
+    \sum_{j=1}^{C} \phat_{j}+\phat_{C+1}=1,
 \end{align}
 and
 \begin{align}
     \label{eq:reject_cross_entropy_nonneg}
-    p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
+    \phat_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
 \end{align}
 where \(\costmult\in\R_{+}\) is a positive hyperparameter that controls the trade-off between making a prediction and abstaining. Higher values of \(\costmult\) encourages the model to make predictions, while lower values promote abstention.
 While neural networks provide a practical means of obtaining generally suboptimal solutions that can be applied to arbitrary inputs, as noted in \cite{liu2019deep}, a principled reformulation and analysis of the underlying optimization problem (cf. \cite{boyd2004convex}) can yield further theoretical insights. In particular, such an analysis allows us to characterize the uncertainty threshold for abstention and identify previously unrecognized degenerate cases. These findings provide further insight into the principled management of epistemic uncertainty in high-stakes applications, such as fault detection in medical devices.
@@ -94,7 +94,6 @@ Finally, \cref{fig:margin_histogram} provides further insight into the mechanism
 
 We now present the main theoretical results of this work, providing a principled characterization of the role of the reservation variable in managing epistemic uncertainty. Proofs based on the \gls*{kkt} optimality conditions, together with the necessary auxiliary results, are provided in \cref{sec:appendix}.
 
-
 \begin{restatable}{theorem}{theoremKKT}
     \label{theorem:kkt}
     Let $\hat{\mathbf p}^\star$ be a \gls*{kkt} optimal point for the maximization of \cref{eq:reject_cross_entropy_internal} with constraints \cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
@@ -102,15 +101,25 @@ We now present the main theoretical results of this work, providing a principled
         \label{eq:kkt_conditions_solution}
         \hat p_i^\star = \max\left\{\frac{p_i}{\lambda} - \frac{\hat p_{C+1}^\star}{\costmult}, \,0 \right\}.
     \end{align}
-    Moreover, the quantity
-    \begin{align}
-        \label{eq:threshold}
-        \frac{\hat p_{C+1}^\star}{\costmult}
-    \end{align}
-    acts as an adaptive threshold that determines which class probabilities remain active in the optimal solution.
 \end{restatable}
+Moreover, the quantity
+% \begin{align}
+\(
+\label{eq:threshold}
+\frac{\hat p_{C+1}^\star}{\costmult}
+\)
+% \end{align}
+defines an adaptive threshold that determines which class probabilities
+remain active at the optimum. An increase in the optimal reserve probability
+$\hat p_{C+1}^\star$, or a decrease in the cost multiplier $\costmult$, raises
+this threshold, thereby causing a larger number of class probabilities to
+become inactive. This characterization provides an optimization-based
+interpretation of the reserve output as an adaptive measure of uncertainty.
+The corresponding derivation is provided in \cref{sec:proof_kkt_conditions}.
 
-\marco{Rephrase \Cref{theorem:kkt} shows that the reserve output induces an adaptive confidence threshold. As the reserve output increases (or the cost multiplier decreases), the threshold rises, causing more classes to become inactive. This provides a principled optimization-based interpretation of the reserve output as a learned uncertainty score. The proof is provided in \dots}
+\clearpage
+Page left intentionally blank
+\clearpage
 
 \begin{restatable}{theorem}{theoremThreshold}
     \label{theorem:threshold}

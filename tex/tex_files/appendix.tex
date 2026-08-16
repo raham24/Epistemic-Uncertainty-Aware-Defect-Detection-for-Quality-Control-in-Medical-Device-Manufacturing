@@ -201,59 +201,15 @@ Thus, the following holds:
     \end{align*}
     where $H(p)$ is the Shannon entropy of $p$ and $D_{\text{KL}}(p\| \phat)$ is the Kullback-Leibler divergence between $p$ and $\phat$. Since $\log\!\left(\costmult\right)$ and $H(p)$ are constants with respect to $\phat$, maximizing $\W{r}$ is equivalent to minimizing $D_{\text{KL}}(p\| \phat)$, which is equivalent to minimizing the cross-entropy loss.
 \end{proof}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%% These are only temporarily commented while cleaning up the proofs section. %%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\begin{comment}
-
-
-
-
-
-
-
-
-
-
-    \subsection{Proof of \cref{theorem:kkt}}
-    \label{sec:proof_kkt_conditions}
-    \theoremKKT*
-    Consequently, every active class satisfies
-    \begin{align}
-        p_i>\lambda\frac{\hat p_{C+1}^\star}{\costmult},
-    \end{align}
-    whereas every inactive class satisfies
-    \begin{align}
-        p_i\le
-        \lambda\frac{\hat p_{C+1}^\star}{\costmult}.
-    \end{align}
+\subsection{Proof of \cref{theorem:kkt}}
+\label{sec:proof_kkt_conditions}
+\theoremKKT*
+\begin{proof}
     The optimization problem in Eq.~\eqref{eq:cmp_problem} can be analyzed using the \gls*{kkt} conditions. The corresponding Lagrangian is given by
-    \begin{align*}
-        \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu})
-         & =
-        \W{r}                                          \\
-         &
-        +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\
-         &
-        +\sum_{i=1}^{C+1}\mu_i\phat_i,
+    \begin{align*} 
+        \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu}) & = \W{r} \\ & +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\ & +\sum_{i=1}^{C+1}\mu_i\phat_i, 
     \end{align*}
     where $\lambda\in\mathbb{R}$ is the Lagrange multiplier associated with the equality constraint and $\mu_i\ge0$ are the multipliers corresponding to the non-negativity constraints.
-
     The \gls*{kkt} conditions are
     \begin{align*}
         \left\{
@@ -272,128 +228,141 @@ Thus, the following holds:
         \end{aligned}
         \right.
     \end{align*}
-
-    For the gambler's objective in \cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
-    \begin{align*}
-        \frac{\partial\mathcal{L}}{\partial\phat_i}
-         & =
-        \frac{p_i}
-        {\costmult\cdot\phat_i+\phat_{C+1}}
-        -\lambda+\mu_i
-        =0,
+    For the objective in \cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
+    \begin{align*} 
+        \frac{\partial\mathcal{L}}{\partial\phat_i} & = \frac{\costmult\cdot p_i}{\costmult\cdot\phat_i+\phat_{C+1}}-\lambda+\mu_i = 0, 
     \end{align*}
-    for \(i = 1, \ldots, C\), and,
-    \begin{align*}
-        \frac{\partial\mathcal{L}}{\partial\phat_{C+1}}
-         & =
-        \sum_{i=1}^{C}
-        \frac{p_i}
-        {\costmult\cdot\phat_i+\phat_{C+1}}
-        -\lambda+\mu_{C+1}
-        =0.
+    for \(i = 1, \ldots, C\), and
+    \begin{align*} 
+        \frac{\partial\mathcal{L}}{\partial\phat_{C+1}} & = \sum_{i=1}^{C}\frac{p_i}{\costmult\cdot\phat_i+\phat_{C+1}}-\lambda+\mu_{C+1} = 0. 
+    \end{align*}
+    Since $\phat_{C+1}^\star>0$, complementary slackness implies $\mu_{C+1}=0$. Evaluating the stationarity condition at $\hat{\mathbf p}^\star$ therefore gives
+    \begin{align*} 
+        \lambda = \sum_{i=1}^{C}\frac{p_i}{\costmult\cdot\phat_i^\star+\phat_{C+1}^\star}. 
+    \end{align*}
+    Since $\phat_{C+1}^\star>0$, every denominator is strictly positive. Moreover, since $\mathbf p$ is a probability vector, $p_i\ge0$ for all $i$ and at least one $p_i>0$. Hence,
+    \begin{align*} 
+        \lambda>0. 
     \end{align*}
 
     The complementary slackness condition naturally leads to two cases for each class output.
 
-    \paragraph{Case 1: $\phat_i>0$.}
+    \paragraph{Case 1: $\phat_i^\star>0$}
     In this case, complementary slackness implies $\mu_i=0$, yielding
     \begin{align*}
-        \frac{\costmult\cdot p_i}
-        {\costmult\cdot\phat_i+\phat_{C+1}}
-        =
-        \lambda,
+        \frac{\costmult\cdot p_i}{\costmult\cdot\phat_i^\star+\phat_{C+1}^\star} = \lambda,
     \end{align*}
     or equivalently,
     \begin{align*}
-        \phat_i
-        =
-        \frac{p_i}{\lambda}-\frac{\phat_{C+1}}{\costmult}.
+        \phat_i^\star = \frac{p_i}{\lambda}-\frac{\phat_{C+1}^\star}{\costmult}.
     \end{align*}
-    Notice how the requirement $\phat_i>0$ implies that $p_i>\lambda\phat_{C+1}$, which means that a class becomes inactive whenever its probability falls below the threshold \(\lambda\frac{\phat_{C+1}}{\costmult}\) where \(\frac{\phat_{C+1}}{\costmult}\) is the ratio of the reserve output to the cost multiplier associated with betting on the class prediction.
-    % Conversely, if $p_i\le\lambda\frac{\phat_{C+1}}{\costmult}$, then $\phat_i=0$ and the class becomes inactive.
+    Notice how the requirement $\phat_i^\star>0$ implies that $p_i>\lambda\frac{\phat_{C+1}^\star}{\costmult}$, which means that a class becomes inactive whenever its probability falls below the threshold \(\lambda\frac{\phat_{C+1}^\star}{\costmult}\), where \(\frac{\phat_{C+1}^\star}{\costmult}\) is the ratio of the reserve output to the cost multiplier associated with betting on the class prediction.
 
-    \paragraph{Case 2: $\phat_i=0$.}
+    \paragraph{Case 2: $\phat_i^\star=0$}
     In this case, complementary slackness only implies that $\mu_i\ge0$. The stationarity condition becomes
     \begin{align*}
-        \frac{\costmult\,p_i}
-        {\phat_{C+1}}
-        -\lambda+\mu_i
-        =0,
+        \frac{\costmult\,p_i}{\phat_{C+1}^\star}-\lambda+\mu_i=0,
     \end{align*}
-    provided that $\phat_{C+1}>0$. Since $\mu_i\ge0$, it follows that
+    where $\phat_{C+1}^\star>0$ by assumption. Equivalently,
     \begin{align*}
-        \frac{\costmult\,p_i}{\phat_{C+1}}
-        \le
-        \lambda,
+        \mu_i = \lambda-\frac{\costmult\,p_i}{\phat_{C+1}^\star}.
+    \end{align*}
+    Since $\mu_i\ge0$, it follows that
+    \begin{align*}
+        \frac{\costmult\,p_i}{\phat_{C+1}^\star}\le\lambda,
     \end{align*}
     or equivalently,
     \begin{align*}
-        p_i
-        \le
-        \lambda\frac{\phat_{C+1}}{\costmult}.
+        p_i\le\lambda\frac{\phat_{C+1}^\star}{\costmult}.
     \end{align*}
-    Therefore, for the branch $\phat_{C+1}>0$, any inactive class must satisfy
-    \[
-        p_i \le \lambda\frac{\phat_{C+1}}{\costmult}.
-    \]
-
-    \paragraph{Case 3: $\phat_{C+1}>0$.}
-    Since $\phat_{C+1}>0$, complementary slackness implies
-    $\mu_{C+1}=0$. The stationarity condition therefore becomes
+    Since $\lambda>0$, this is equivalent to
     \begin{align*}
-        \sum_{i=1}^{C}
-        \frac{p_i}
-        {\costmult\phat_i+\phat_{C+1}}
-        =
-        \lambda.
+        \frac{p_i}{\lambda}-\frac{\phat_{C+1}^\star}{\costmult}\le0.
     \end{align*}
 
-    \paragraph{Case 4: $\phat_{C+1}=0$.}
-    In this case, complementary slackness only implies
-    $\mu_{C+1}\ge0$. The stationarity condition becomes
+    Combining the two cases, for every $i\in\{1,\ldots,C\}$ we obtain
     \begin{align*}
-        \sum_{i=1}^{C}
-        \frac{p_i}
-        {\costmult\phat_i}
-        -\lambda+\mu_{C+1}
-        =0,
+        \phat_i^\star = \max\left\{\frac{p_i}{\lambda}-\frac{\phat_{C+1}^\star}{\costmult}, \,0\right\},
     \end{align*}
-    or equivalently,
-    \begin{align*}
-        \mu_{C+1}
-        =
-        \lambda
-        -
-        \sum_{i=1}^{C}
-        \frac{p_i}
-        {\costmult\phat_i}.
-    \end{align*}
-    Since $\mu_{C+1}\ge0$, it follows that
-    \begin{align*}
-        \sum_{i=1}^{C}
-        \frac{p_i}
-        {\costmult\phat_i}
-        \le
-        \lambda.
-    \end{align*}
+    which proves the result.
+\end{proof}
 
-    Furthermore, if $p_i>0$ for every class, any feasible solution satisfying
-    $\phat_{C+1}=0$ and $\phat_i=0$ for some $i$ yields
-    \[
-        \W{r}=-\infty,
-    \]
-    since the objective contains the term
-    $p_i\log(\costmult\phat_i+\phat_{C+1})=p_i\log(0)$.
-    Consequently, whenever $\phat_{C+1}=0$, all classes with $p_i>0$ must satisfy
-    $\phat_i>0$.
+% \begin{proof}
+%     The optimization problem in Eq.~\eqref{eq:cmp_problem} can be analyzed using the \gls*{kkt} conditions. The corresponding Lagrangian is given by
+%     \begin{align*}
+%         \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu})
+%          & =
+%         \W{r}                                          \\
+%          &
+%         +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\
+%          &
+%         +\sum_{i=1}^{C+1}\mu_i\phat_i,
+%     \end{align*}
+%     where $\lambda\in\mathbb{R}$ is the Lagrange multiplier associated with the equality constraint and $\mu_i\ge0$ are the multipliers corresponding to the non-negativity constraints.
+%     The \gls*{kkt} conditions are
+%     \begin{align*}
+%         \left\{
+%         \begin{aligned}
+%              & \frac{\partial \mathcal{L}}{\partial \phat_i}
+%             = \frac{\partial \W{r}}{\partial \phat_i}
+%             - \lambda + \mu_i = 0,
+%              &                                               & i=1,\ldots,C+1, \\
+%              & \sum_{i=1}^{C+1} \phat_i = 1,                                   \\
+%              & \phat_i                   \ge 0,
+%              &                                               & i=1,\ldots,C+1, \\
+%              & \mu_i                       \ge 0,
+%              &                                               & i=1,\ldots,C+1, \\
+%              & \mu_i \phat_i             = 0,
+%              &                                               & i=1,\ldots,C+1.
+%         \end{aligned}
+%         \right.
+%     \end{align*}
+%     For the objective in \cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
+%     \begin{align*}
+%         \frac{\partial\mathcal{L}}{\partial\phat_i} & = \frac{\costmult\cdot p_i}{\costmult\cdot\phat_i+\phat_{C+1}}-\lambda+\mu_i = 0,
+%     \end{align*}
+%     for \(i = 1, \ldots, C\), and,
+%     \begin{align*}
+%         \frac{\partial\mathcal{L}}{\partial\phat_{C+1}} & = \sum_{i=1}^{C}\frac{p_i}{\costmult\cdot\phat_i+\phat_{C+1}}-\lambda+\mu_{C+1} = 0.
+%     \end{align*}
+
+%     The complementary slackness condition naturally leads to two cases for each class output.
+
+%     \paragraph{Case 1: $\phat_i>0$.}
+%     In this case, complementary slackness implies $\mu_i=0$, yielding
+%     \begin{align*}
+%         \frac{\costmult\cdot p_i}
+%         {\costmult\cdot\phat_i+\phat_{C+1}} = \lambda,
+%     \end{align*}
+%     or equivalently,
+%     \begin{align*}
+%         \phat_i = \frac{p_i}{\lambda}-\frac{\phat_{C+1}}{\costmult}.
+%     \end{align*}
+%     Notice how the requirement $\phat_i>0$ implies that $p_i>\lambda\frac{\phat_{C+1}}{\costmult}$, which means that a class becomes inactive whenever its probability falls below the threshold \(\lambda\frac{\phat_{C+1}}{\costmult}\) where \(\frac{\phat_{C+1}}{\costmult}\) is the ratio of the reserve output to the cost multiplier associated with betting on the class prediction.
+%     \paragraph{Case 2: $\phat_i=0$.} Conversely, if $p_i\le\lambda\frac{\phat_{C+1}}{\costmult}$, then $\phat_i=0$ and the class becomes inactive.
+%     In this case, complementary slackness only implies that $\mu_i\ge0$. The stationarity condition becomes
+%     \begin{align*}
+%         \frac{\costmult\,p_i}{\phat_{C+1}}-\lambda+\mu_i=0,
+%     \end{align*}
+%     provided that $\phat_{C+1}>0$. Since $\mu_i\ge0$, it follows that
+%     \begin{align*}
+%         \frac{\costmult\,p_i}{\phat_{C+1}}\le\lambda,
+%     \end{align*}
+%     or equivalently,
+%     \begin{align*}
+%         p_i\le\lambda\frac{\phat_{C+1}}{\costmult}.
+%     \end{align*}
+%     Therefore, for the branch $\phat_{C+1}>0$, any inactive class must satisfy
+%     \begin{align*}
+%         p_i \le \lambda\frac{\phat_{C+1}}{\costmult}.
+%     \end{align*}
+% \end{proof}
 
 
 
-    \vspace{5\baselineskip}
 
 
-
-
+\begin{comment}
     \subsection{Proof of \cref{theorem:threshold}}
     \label{sec:proof_threshold}
     \theoremThreshold*
