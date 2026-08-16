@@ -115,18 +115,12 @@ $\hat p_{C+1}^\star$, or a decrease in the cost multiplier $\costmult$, raises
 this threshold, thereby causing a larger number of class probabilities to
 become inactive. This characterization provides an optimization-based
 interpretation of the reserve output as an adaptive measure of uncertainty.
-The corresponding derivation is provided in \cref{sec:proof_kkt_conditions}.
-
-\clearpage
-Page left intentionally blank
-\clearpage
+The corresponding derivation is provided in \cref{sec:proof_kkt_conditions} of the appendix.
 
 \begin{restatable}{theorem}{theoremThreshold}
     \label{theorem:threshold}
     Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
     \in \{1, \dots, C\}\). Then necessarily \(1<\costmult<C\) (cf. \cite{liu2019deep}). Moreover, for \(k<1\) abstaining is the optimal strategy, while for \(k>C\) the optimal solution is to always make a prediction. Finally, \(k=1\) and \(k=C\) are degenerate cases, where there may be multiple optimal solutions.
 \end{restatable}
-
-\marco{Explain \Cref{theorem:threshold} and its implications. The proof is provided in \dots}
-
-
+The proof is provided in \cref{sec:proof_threshold} of the appendix.
+\Cref{theorem:threshold} provides a principled characterization of the cost multiplier \(\costmult\) and its relationship to the number of classes \(C\), providing guidance for selecting \(\costmult\) in practice, as shown in the ablation studies in \cref{sec:experiments}.
