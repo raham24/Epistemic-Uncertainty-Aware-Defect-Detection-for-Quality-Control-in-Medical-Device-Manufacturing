@@ -1,8 +1,14 @@
 In this section we report our numerical results. We start by showing how the baseline data benchmark presented in \cite{shenoy2026uncertainty} is affected by epistemic uncertainty, and how our proposed approach can mitigate its impact. Furthermore, we propose a more nuanced version of their benchmark, where the detection task at end is more challenging, further highlighting the validity of our mitigation approach in less ad-hoc settings. Finally, we present a real-world case study of a medical device, introducing a benchmark easily downloadable through Proto-OKN, demonstrating the practical applicability and benefits of our proposed method in a high-stakes setting.
+\marco{We present our results in terms of accuracy coverage and risk.}
 
+\raham{Description of the model used for the experiments, and the training procedure.}
 \subsection{Synthetic Benchmark}
 \label{subsec:synthetic-benchmark}
 We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \emph{baseline}. In particular, as, to the best of our knowledge, the official data had not been released we have reproduced the generation process for the benchmark as described in the aforementioned paper to the best of our capabilities, ensuring that for a comparable \gls*{mlp} net we obtain the same performance (cf. \cref{subsec:benchmark_gen}). We thus consider a three-classes (no defect, open circuit, and solder bridging) and six-features problem (relative humidity, temperature, pressure, paste viscosity, stencil thickness, time above liquidus, and peak reflow temperature). A plot showing the per-feature class distribution is available in \cref{fig:baseline}. One can notice how some classes are easily separated by the feature values making the classification problem rather simple. Nevertheless, \cref{fig:cascade-vs-abstention-synthetic} shows how by abstaining on less than \(10\%\) of the samples one can achieve a significant increase in accuracy of about \(4\) percentage points, by abstaining on the samples that are more likely to be misclassified.
+
+Next, we artificially increase the difficulty of the problem by modeling features such that the class posteriors given the feature are more overlapped, i.e., we artificially increase the Bayes error, as can be observed in \cref{fig:overlap_harder}. Though the accuracy of the classifier on this task decreases, we can still observe in \Cref{fig:cascade-vs-abstention-synthetic} how abstention allows for higher accuracy.
+
+Finally, an ablation study sampling over different target coverage is presented in \Cref{fig:risk-baseline} for the baseline and \Cref{fig:risk-harder} for the higher overlap. Moreover, an ablation study over possible values of the payoff, confirming the results in \cref{fig:selective-risk} are relegated to the appendix in \cref{sec:additional_plots}
 \begin{figure*}[!htbp]
     \centering
 
@@ -19,7 +25,7 @@ We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \
         \centering
         \includegraphics[width=\textwidth]{../tex/img/fig_feature_separability_harder.png}
         \caption{Increased class posterior overlap.}
-        \label{fig:overlap}
+        \label{fig:overlap_harder}
     \end{subfigure}
 
     \caption{Feature distributions under different levels of class posterior overlap.}
@@ -28,18 +34,6 @@ We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \
 
 \subsection{Experiment on real medical devices data}
 \label{subsec:real-medical-devices-data}
-\begin{enumerate}
-    \item \raham{Plots with accuracy and risk curves should be done averaging over multiple seed and filling the area between +/- std curve.}
-\end{enumerate}
-
-\begin{enumerate}
-    \item \marco{Description of the data, in particular the fact the original synthetic data had very simple feature to separate the classes, and why we propose a more challegning benchmark.}
-    \item \raham{Added pseudocode for dataset generation below - awaiting approval}
-    \item \raham{We need a pseudocode of the benchmark generation, and a description of the parameters that can be tuned to make the benchmark more or less challenging. This will go in the appendix, but it will be referenced here.}
-    \item \raham{Description of the model used for the experiments, and the training procedure.}
-    \item \raham{Risk plots should be averaged over multiple runs, and the number of runs should be reported.}
-\end{enumerate}
-
 \begin{figure}[!htbp]
     \includegraphics[width=.48\textwidth]{../tex/img/fig_cascade_vs_abstention_selective.png}
     \caption{(Best) Accuracy bar plot over multiple seeds for the baseline benchmark, comparing the performance of a single model w/o and w/ abstention (target coverage \(\ge 90\%\)).}
@@ -61,7 +55,6 @@ We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \
         \caption{Increased class posterior overlap}
         \label{fig:risk-harder}
     \end{subfigure}
-
     \caption{Selective risk as a function of coverage.}
     \label{fig:selective-risk}
 \end{figure}
