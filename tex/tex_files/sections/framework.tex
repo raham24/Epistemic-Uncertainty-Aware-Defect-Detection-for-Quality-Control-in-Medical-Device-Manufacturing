@@ -117,10 +117,14 @@ become inactive. This characterization provides an optimization-based
 interpretation of the reserve output as an adaptive measure of uncertainty.
 The corresponding derivation is provided in \cref{sec:proof_kkt_conditions} of the appendix.
 
+% \begin{restatable}{theorem}{theoremThreshold}
+%     \label{theorem:threshold}
+%     Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
+%     \in \{1, \dots, C\}\). Then necessarily \(1<\costmult<C\) (cf. \cite{liu2019deep}). Moreover, for \(k<1\) abstaining is the optimal strategy, while for \(k>C\) the optimal solution is to always make a prediction. Finally, \(k=1\) and \(k=C\) are degenerate cases, where there may be multiple optimal solutions.
+% \end{restatable}
 \begin{restatable}{theorem}{theoremThreshold}
     \label{theorem:threshold}
-    Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
-    \in \{1, \dots, C\}\). Then necessarily \(1<\costmult<C\) (cf. \cite{liu2019deep}). Moreover, for \(k<1\) abstaining is the optimal strategy, while for \(k>C\) the optimal solution is to always make a prediction. Finally, \(k=1\) and \(k=C\) are degenerate cases, where there may be multiple optimal solutions.
+    Consider the maximization of \cref{eq:reject_cross_entropy_internal} subject to \cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}. The nondegenerate cost-multiplier regime is \begin{align*} 1<\costmult<C. \end{align*} In particular, if \(\costmult<1\), full reservation is optimal, whereas if \(\costmult>C\), every optimal solution has \(\phat_{C+1}^\star=0\) and the prediction coordinates satisfy \(\phat_j^\star=p_j\) for \(j=1,\ldots,C\). The boundary cases \(\costmult=1\) and \(\costmult=C\) are degenerate: the optimizer need not be unique, and distinct prediction--reservation allocations may attain the same optimal value.
 \end{restatable}
 The proof is provided in \cref{sec:proof_threshold} of the appendix.
 \Cref{theorem:threshold} provides a principled characterization of the cost multiplier \(\costmult\) and its relationship to the number of classes \(C\), providing guidance for selecting \(\costmult\) in practice, as shown in the ablation studies in \cref{sec:experiments}.
