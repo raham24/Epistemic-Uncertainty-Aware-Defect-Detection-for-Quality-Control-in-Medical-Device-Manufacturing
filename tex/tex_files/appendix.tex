@@ -1,4 +1,78 @@
-In this section we present the proofs for the main theoretical results in \cref{sec:framework}. We first present some auxiliary results that will be used in the proofs of \cref{theorem:kkt,theorem:threshold}.
+In this section we present the proofs for the main theoretical results in \cref{sec:framework}. We first present some auxiliary results that will be used in the proofs of \cref{theorem:kkt,theorem:threshold}. For the sake of generality, in this section, we consider true posterior probabilities \(p=\PYX(\cdot\mid\x)\), rather than empirical one-hot encoded labels. Indeed, let \(Z=(Z_1,\ldots,Z_C)\) denote the observed one-hot target, where
+\begin{align}
+    Z_i = \mathbbm{1}\{Y=i\},
+    \qquad i\in\{1,\ldots,C\}.
+\end{align}
+Thus, for every individual observation, \(Z_i\in\{0,1\}\) and
+\begin{align}
+    \sum_{i=1}^{C} Z_i = 1.
+\end{align}
+We distinguish this observed target from the true conditional class
+probabilities
+\begin{align}
+    p_i(\x)
+    := \mathbb{P}(Y=i\mid X=\x)
+    = \mathbb{E}[Z_i\mid X=\x],
+\end{align}
+for \(i\in\{1,\dots,C\}\).
+Hence, although the observed target \(Z\) is one-hot, the conditional
+posterior
+\begin{align}
+    \mathbf{p}(\x)
+    =
+    \bigl(p_1(\x),\ldots,p_C(\x)\bigr)
+\end{align}
+need not be one-hot and satisfies
+\begin{align}
+    p_i(\x)\geq 0,
+    \qquad
+    \sum_{i=1}^{C}p_i(\x)=1.
+\end{align}
+
+For a single observation with one-hot target \(Z\), consider the
+objective
+\begin{align}
+    \sum_{i=1}^{C}
+    Z_i
+    \log\left(
+    \costmult\phat_i+\phat_{C+1}
+    \right).
+\end{align}
+Taking the conditional expectation with respect to the label \(Y\)
+given \(X=\x\) yields
+\begin{align}
+     & \mathbb{E}\left[
+                     \left.
+                     \sum_{i=1}^{C}
+                     Z_i
+                     \log\left(
+                     \costmult\phat_i+\phat_{C+1}
+                     \right)
+                     \,\right|\,X=\x
+                     \right]
+    \nonumber                                    \\
+     & \qquad=
+    \sum_{i=1}^{C}
+    \mathbb{E}\left[
+                  Z_i\mid X=\x
+                  \right]
+    \log\left(
+    \costmult\phat_i+\phat_{C+1}
+    \right)
+    \nonumber                                    \\
+     & \qquad=
+    \sum_{i=1}^{C}
+    p_i(\x)
+    \log\left(
+    \costmult\phat_i+\phat_{C+1}
+    \right).
+\end{align}
+Therefore, the quantities \(p_i(\x)\) appearing in the theoretical
+optimization should be interpreted as the true conditional class
+probabilities rather than as the observed one-hot labels. The empirical
+loss is evaluated using one-hot targets, whereas the corresponding
+conditional population objective is obtained by averaging this loss
+over the conditional distribution of \(Y\) given \(X=\x\).
 
 \subsection{Auxiliary results}
 \label{subsec:auxiliary_results}
@@ -298,40 +372,66 @@ Thus, the following holds:
     We consider separately the regimes \(\costmult<1\), \(\costmult>C\), and the boundary cases \(\costmult=1\) and \(\costmult=C\).
 
     \paragraph{Case 1: \(\costmult<1\).}
-    For any feasible \(\hat{\mathbf p}\) and every \(j\in\{1,\ldots,C\}\),
-    \begin{align*} \costmult\phat_j+\phat_{C+1}\le\phat_j+\phat_{C+1}\le1, \end{align*}
+    For any feasible \(\phat\) and every \(j\in\{1,\ldots,C\}\),
+    \begin{align*}
+        \costmult\phat_j+\phat_{C+1}\le\phat_j+\phat_{C+1}\le1,
+    \end{align*}
     where the second inequality follows from \(\sum_{j=1}^{C+1}\phat_j=1\). Hence,
-    \begin{align*} \log\left(\costmult\phat_j+\phat_{C+1}\right)\le0, \end{align*}
+    \begin{align*}
+        \log\left(\costmult\phat_j+\phat_{C+1}\right)\le0,
+    \end{align*}
     and therefore
-    \begin{align*} \W{r}\le0. \end{align*}
+    \begin{align*}
+        \W{r}\le0.
+    \end{align*}
     The full-reservation solution
-    \begin{align*} (\phat_1,\ldots,\phat_C,\phat_{C+1})=(0,\ldots,0,1) \end{align*}
+    \begin{align*}
+        (\phat_1,\ldots,\phat_C,\phat_{C+1})=(0,\ldots,0,1)
+    \end{align*}
     attains \(\W{r}=0\), and is therefore optimal. Thus, for \(\costmult<1\), full reservation is optimal.
 
     \paragraph{Case 2: \(\costmult>C\).}
     Suppose, for contradiction, that an optimal solution satisfies \(\phat_{C+1}^\star>0\). Let
-    \begin{align*} S=\{j:\phat_j^\star>0\}, \qquad a=|S|, \qquad P_{\bar S}=\sum_{j\notin S}p_j. \end{align*}
+    \begin{align*}
+        S=\{j:\phat_j^\star>0\}, \qquad a=|S|, \qquad P_{\bar S}=\sum_{j\notin S}p_j.
+    \end{align*}
     Since \(\phat_{C+1}^\star>0\), complementary slackness gives \(\mu_{C+1}=0\). Moreover, for every \(j\in S\), \cref{eq:kkt_conditions_solution} implies
-    \begin{align*} \costmult\phat_j^\star+\phat_{C+1}^\star=\frac{\costmult p_j}{\lambda}. \end{align*}
+    \begin{align*}
+        \costmult\phat_j^\star+\phat_{C+1}^\star=\frac{\costmult p_j}{\lambda}.
+    \end{align*}
     Hence, the stationarity condition for the reservation coordinate becomes
-    \begin{align*} \frac{a\lambda}{\costmult}+\frac{P_{\bar S}}{\phat_{C+1}^\star}=\lambda. \end{align*}
+    \begin{align*}
+        \frac{a\lambda}{\costmult}+\frac{P_{\bar S}}{\phat_{C+1}^\star}=\lambda.
+    \end{align*}
 
     If \(P_{\bar S}>0\), then
-    \begin{align*} P_{\bar S}=\lambda\left(1-\frac{a}{\costmult}\right)\phat_{C+1}^\star. \end{align*}
+    \begin{align*}
+        P_{\bar S}=\lambda\left(1-\frac{a}{\costmult}\right)\phat_{C+1}^\star.
+    \end{align*}
     Summing \cref{eq:kkt_conditions_solution} over \(j\in S\) and using \(\sum_{j\in S}\phat_j^\star=1-\phat_{C+1}^\star\) gives
     \begin{align*} \frac{1-P_{\bar S}}{\lambda}-\frac{a\phat_{C+1}^\star}{\costmult}=1-\phat_{C+1}^\star. \end{align*}
     Substituting the preceding expression for \(P_{\bar S}\) yields
-    \begin{align*} \lambda=1. \end{align*}
+    \(\lambda=1 \).
     Therefore,
-    \begin{align*} P_{\bar S}=(\costmult-a)\frac{\phat_{C+1}^\star}{\costmult}. \end{align*}
+    \begin{align*}
+        P_{\bar S}=(\costmult-a)\frac{\phat_{C+1}^\star}{\costmult}.
+    \end{align*}
     On the other hand, for every inactive coordinate \(j\notin S\), \cref{eq:kkt_conditions_solution} implies
-    \begin{align*} p_j\le\frac{\phat_{C+1}^\star}{\costmult}. \end{align*}
+    \begin{align*}
+        p_j\le\frac{\phat_{C+1}^\star}{\costmult}.
+    \end{align*}
     Summing over the \(C-a\) inactive coordinates gives
-    \begin{align*} P_{\bar S}\le(C-a)\frac{\phat_{C+1}^\star}{\costmult}. \end{align*}
+    \begin{align*}
+        P_{\bar S}\le(C-a)\frac{\phat_{C+1}^\star}{\costmult}.
+    \end{align*}
     Combining the last two relations and using \(\phat_{C+1}^\star>0\) yields
-    \begin{align*} \costmult-a\le C-a, \end{align*}
+    \begin{align*}
+        \costmult-a\le C-a,
+    \end{align*}
     and hence
-    \begin{align*} \costmult\le C, \end{align*}
+    \begin{align*}
+        \costmult\le C,
+    \end{align*}
     contradicting the assumption \(\costmult>C\).
 
     It remains to consider \(P_{\bar S}=0\). In this case, the reservation stationarity condition reduces to
@@ -342,39 +442,64 @@ Thus, the following holds:
     \begin{align*} \phat_{C+1}^\star=0. \end{align*}
 
     With no reservation, the objective becomes
-    \begin{align*} \W{r}=\sum_{j=1}^{C}p_j\log(\costmult\phat_j)=\log(\costmult)+\sum_{j=1}^{C}p_j\log\phat_j. \end{align*}
+    \begin{align*}
+        \W{r}=\sum_{j=1}^{C}p_j\log(\costmult\phat_j)=\log(\costmult)+\sum_{j=1}^{C}p_j\log\phat_j.
+    \end{align*}
     Thus, maximizing \(\W{r}\) is equivalent to maximizing \(\sum_{j=1}^{C}p_j\log\phat_j\) over the probability simplex. By Gibbs' inequality, the maximum is attained at
-    \begin{align*} \phat_j^\star=p_j, \qquad j=1,\ldots,C. \end{align*}
+    \begin{align*}
+        \phat_j^\star=p_j, \qquad j=1,\ldots,C.
+    \end{align*}
     Hence, for \(\costmult>C\), every optimal solution has no reservation and predicts according to the posterior distribution.
 
     \paragraph{Case 3: \(\costmult=1\).}
-    For every feasible \(\hat{\mathbf p}\) and every \(j\in\{1,\ldots,C\}\),
-    \begin{align*} \phat_j+\phat_{C+1}\le1. \end{align*}
+    For every feasible \(\phat\) and every \(j\in\{1,\ldots,C\}\),
+    \begin{align*}
+        \phat_j+\phat_{C+1}\le1.
+    \end{align*}
     Therefore,
-    \begin{align*} \W{r}\le0, \end{align*}
+    \begin{align*}
+        \W{r}\le0,
+    \end{align*}
     and full reservation attains \(\W{r}=0\). Hence, full reservation is optimal. However, the optimizer need not be unique. For example, suppose the posterior is concentrated on a single class \(i\), so that
-    \begin{align*} p_i=1, \qquad p_j=0 \quad \text{for } j\neq i. \end{align*}
+    \begin{align*}
+        p_i=1, \qquad p_j=0 \quad \text{for } j\neq i.
+    \end{align*}
     Then every feasible solution satisfying
-    \begin{align*} \phat_i+\phat_{C+1}=1, \qquad \phat_j=0 \quad \text{for } j\neq i, \end{align*}
+    \begin{align*}
+        \phat_i+\phat_{C+1}=1, \qquad \phat_j=0 \quad \text{for } j\neq i,
+    \end{align*}
     achieves
-    \begin{align*} \W{r}=\log(\phat_i+\phat_{C+1})=0. \end{align*}
+    \begin{align*}
+        \W{r}=\log(\phat_i+\phat_{C+1})=0.
+    \end{align*}
     Thus, distinct prediction--reservation allocations may be equally optimal when \(\costmult=1\).
 
     \paragraph{Case 4: \(\costmult=C\).}
     The optimizer need not be unique at this boundary either. Consider the uniform posterior
-    \begin{align*} p_j=\frac{1}{C}, \qquad j=1,\ldots,C. \end{align*}
+    \begin{align*}
+        p_j=\frac{1}{C}, \qquad j=1,\ldots,C.
+    \end{align*}
     For any \(\alpha\in[0,1]\), define
-    \begin{align*} \phat_j^{(\alpha)}=\frac{1-\alpha}{C}, \qquad j=1,\ldots,C, \qquad \phat_{C+1}^{(\alpha)}=\alpha. \end{align*}
+    \begin{align*}
+        \phat_j^{(\alpha)}=\frac{1-\alpha}{C}, \qquad j=1,\ldots,C, \qquad \phat_{C+1}^{(\alpha)}=\alpha.
+    \end{align*}
     Then
-    \begin{align*} C\phat_j^{(\alpha)}+\phat_{C+1}^{(\alpha)}=1, \qquad j=1,\ldots,C, \end{align*}
+    \begin{align*}
+        C\phat_j^{(\alpha)}+\phat_{C+1}^{(\alpha)}=1, \qquad j=1,\ldots,C,
+    \end{align*}
     and consequently
-    \begin{align*} \W{r}=\sum_{j=1}^{C}\frac{1}{C}\log(1)=0. \end{align*}
+    \begin{align*}
+        \W{r}=\sum_{j=1}^{C}\frac{1}{C}\log(1)=0.
+    \end{align*}
     To see that this value is optimal, Jensen's inequality gives
-    \begin{align*} \W{r}\le\log\left(\frac{1}{C}\sum_{j=1}^{C}\left(C\phat_j+\phat_{C+1}\right)\right)=\log(1)=0. \end{align*}
+    \begin{align*}
+        \W{r} & \le                                                                          \\
+              & \log\left(\frac{1}{C}\sum_{j=1}^{C}\left(C\phat_j+\phat_{C+1}\right)\right)= \\
+              & \log(1)=0.
+    \end{align*}
     Thus, every member of this family for different values of \(\alpha\) is optimal, showing that distinct prediction--reservation allocations may also be equally optimal when \(\costmult=C\).
 
-    Therefore, \(\costmult<1\) corresponds to the full-reservation regime, while \(\costmult>C\) corresponds to the no-reservation prediction regime. The boundary values \(\costmult=1\) and \(\costmult=C\) may admit multiple optimal prediction--reservation allocations. Hence, the nondegenerate intermediate cost-multiplier regime is
-    \begin{align*} 1<\costmult<C. \end{align*}
+    Therefore, \(\costmult<1\) corresponds to the full-reservation regime, while \(\costmult>C\) corresponds to the no-reservation prediction regime. The boundary values \(\costmult=1\) and \(\costmult=C\) may admit multiple optimal prediction--reservation allocations. The cost-multiplier mixed-regime, which is the most interesting case, is \(1<\costmult<C\).
 \end{proof}
 
 
