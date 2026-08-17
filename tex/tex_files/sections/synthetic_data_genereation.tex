@@ -1,38 +1,142 @@
-\begin{algorithm}[t]
-\caption{Synthetic data generation}
+\captionof{algorithm}{Synthetic Data Generation with Target Bayes Error}
 \label{alg:generator}
-\DontPrintSemicolon
-\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
-\SetKwComment{Comment}{// }{}
-    \Input{$N$ boards, $p$ parameters, $K$ defect classes; nominals $\bm\mu$, spreads $\bm\sigma$, spec half-widths $\mathbf h$, correlation $\mathbf R$, drift $\bm\delta_i$; causal weights $\mathbf W$; class priors $\bm\pi$; target Bayes error $\varepsilon^\star$; risk map $\rho$; seed $s$.}
-    \Output{labeled boards $\{(\x_i,\,y_i,\,m_i,\,\mathbf r_i)\}_{i=1}^{N}$, split into train / validation / test.}
-    \BlankLine
-    \Comment{Cholesky factor of the process correlation}
-    $\mathbf L \leftarrow \mathrm{cholesky}(\mathbf R)$, \ \ so that $\mathbf L\mathbf L^{\!\top}=\mathbf R$\;
-    \BlankLine
-    \Comment{parameter values per board $i=1,\dots,N$: correlated, drifting ($\bm z_i$ latent standard-normal draw; $\bm\delta_i=$ wear $+$ diurnal; $\odot$ elementwise)}
-    $\bm z_i \sim \mathcal N(\mathbf 0,\mathbf I_p)$, \quad $\x_i \leftarrow \bm\mu + \bm\sigma \odot (\mathbf L\bm z_i + \bm\delta_i)$\;
-    \BlankLine
-    \Comment{normalized deviation; $|\mathrm{dev}|=1$ sits at the spec limit}
-    $\mathrm{dev}_{ij} \leftarrow (x_{ij}-\mu_j)/h_j, \quad j=1,\dots,p$\;
-    \BlankLine
-    \Comment{Ishikawa causal score per defect $d$ ($|W_{dj}|$ edge strength, $\mathrm{sign}\,W_{dj}$ direction, $0$ no edge); class $0=$ no-defect}
-    $u_{id} \leftarrow \sum_{j=1}^{p}\mathrm{ReLU}(W_{dj}\,\mathrm{dev}_{ij}), \quad u_{i0}\equiv 0$\;
-    \BlankLine
-    \Comment{calibrate: gain $\gamma$ to the target Bayes error, offsets $\bm\beta$ to the class priors}
-    $\gamma \leftarrow$ bisection s.t.\ Bayes error $=\varepsilon^\star$; \quad $\bm\beta \leftarrow$ IPF s.t.\ class marginals $=\bm\pi$\;
-    \BlankLine
-    \Comment{exact class posterior, then sample the label (not thresholded)}
-    $\PYX(d\mid\x_i) \leftarrow \mathrm{softmax}_d\!\big(\gamma\,u_{id}+\beta_d\big); \quad y_i \sim \mathrm{Categorical}\!\big(\PYX(\cdot\mid\x_i)\big)$\;
-    \BlankLine
-    \Comment{ground-truth mechanism per stage $\ell$ ($\mathrm{st}(j)=$ stage of parameter $j$): strongest firing edge of the drawn defect $y_i$}
-    $m_i^{\ell} \leftarrow \argmax_{\{j:\,\mathrm{st}(j)=\ell\}} \mathrm{ReLU}(W_{y_i j}\,\mathrm{dev}_{ij})$, \ \ or \textsc{none} if none fires\;
-    \BlankLine
-    \Comment{graded per-parameter risk target, two-sided in $|\mathrm{dev}|$}
-    $r_{ij} \leftarrow \rho(\mathrm{dev}_{ij}), \quad j=1,\dots,p$\;
-    \BlankLine
-    \Comment{leakage-free split: each whole batch goes to a single split}
-    partition the $N$ boards into batches; assign each whole batch to train / val / test\;
-    \BlankLine
-    \textbf{Return:} $\{(\x_i,\,y_i,\,m_i,\,\mathbf r_i)\}_{i=1}^{N}$, \ with $m_i=(m_i^{\ell})_{\ell}$\;
-\end{algorithm}
+
+\begin{algorithmic}[1]
+
+\Require Number of samples $N$; feature means $\bm{\mu}$ and scales
+$\bm{\sigma}$; correlation matrix $\mathbf{R}$; causal defect map
+$\mathcal{E}$; class priors $\bm{\pi}$; target Bayes error
+$\varepsilon^\star$
+\Ensure Synthetic labeled dataset $\mathcal{D}$
+
+\State Sample correlated process noise
+\[
+    \mathbf{Z} \sim \mathcal{N}(\mathbf{0},\mathbf{R})
+\]
+
+\State Generate process features
+\[
+    \mathbf{X}
+    = \bm{\mu} + \bm{\sigma}\odot\mathbf{Z}
+\]
+
+\State Normalize each feature relative to its specification limits
+to obtain deviations $\bm{\Delta}$
+
+\State Compute class scores $s_k(\bm{\Delta};\mathcal{E})$
+from the causal defect map
+
+\State Initialize gain interval $[g_{\min},g_{\max}]$
+
+\Repeat
+    \State $g \gets (g_{\min}+g_{\max})/2$
+
+    \State Calibrate class offsets $b_k$ so that the mean posterior
+    probabilities match the desired priors $\pi_k$
+
+    \State Compute the class posterior
+    \[
+        p_{ik}
+        =
+        P(Y=k\mid\mathbf{x}_i)
+        =
+        \operatorname{softmax}_k
+        \left(g\,s_k(\bm{\Delta}_i)+b_k\right)
+    \]
+
+    \State Compute the resulting Bayes error
+    \[
+        \varepsilon_B
+        =
+        \frac{1}{N}
+        \sum_{i=1}^{N}
+        \left(1-\max_k p_{ik}\right)
+    \]
+
+    \If{$\varepsilon_B > \varepsilon^\star$}
+        \State $g_{\min} \gets g$
+    \Else
+        \State $g_{\max} \gets g$
+    \EndIf
+\Until{$\varepsilon_B \approx \varepsilon^\star$}
+
+\For{$i=1,\ldots,N$}
+    \State Sample
+    $y_i \sim \operatorname{Categorical}(p_{i1},\ldots,p_{iK})$
+\EndFor
+
+\State $\mathcal{D}\gets\{(\mathbf{x}_i,y_i)\}_{i=1}^{N}$
+
+\State \Return $\mathcal{D}$
+
+\end{algorithmic}
+% \begin{algorithm}[t]
+% \caption{Synthetic Data Generation with Target Bayes Error}
+% \label{alg:generator}
+% \begin{algorithmic}[1]
+
+% \Require Number of samples $N$; feature means $\bm{\mu}$ and scales
+% $\bm{\sigma}$; correlation matrix $\mathbf{R}$; causal defect map
+% $\mathcal{E}$; class priors $\bm{\pi}$; target Bayes error
+% $\varepsilon^\star$
+% \Ensure Synthetic labeled dataset $\mathcal{D}$
+
+% \State Sample correlated process noise
+% \[
+%     \mathbf{Z} \sim \mathcal{N}(\mathbf{0},\mathbf{R})
+% \]
+
+% \State Generate process features
+% \[
+%     \mathbf{X}
+%     = \bm{\mu} + \bm{\sigma}\odot\mathbf{Z}
+% \]
+
+% \State Normalize each feature relative to its specification limits
+% to obtain deviations $\bm{\Delta}$
+
+% \State Compute class scores $s_k(\bm{\Delta};\mathcal{E})$
+% from the causal defect map
+
+% \State Initialize gain interval $[g_{\min},g_{\max}]$
+
+% \Repeat
+%     \State $g \gets (g_{\min}+g_{\max})/2$
+%     \State Calibrate class offsets $b_k$ so that the mean posterior
+%     probabilities match the desired priors $\pi_k$
+%     \State Compute the class posterior
+%     \[
+%         p_{ik}
+%         =
+%         P(Y=k\mid\mathbf{x}_i)
+%         =
+%         \operatorname{softmax}_k
+%         \left(g\,s_k(\bm{\Delta}_i)+b_k\right)
+%     \]
+%     \State Compute the resulting Bayes error
+%     \[
+%         \varepsilon_B
+%         =
+%         \frac{1}{N}
+%         \sum_{i=1}^{N}
+%         \left(1-\max_k p_{ik}\right)
+%     \]
+%     \If{$\varepsilon_B > \varepsilon^\star$}
+%         \State $g_{\min} \gets g$
+%     \Else
+%         \State $g_{\max} \gets g$
+%     \EndIf
+% \Until{$\varepsilon_B \approx \varepsilon^\star$}
+
+% \For{$i=1,\ldots,N$}
+%     \State Sample $y_i \sim
+%     \operatorname{Categorical}(p_{i1},\ldots,p_{iK})$
+% \EndFor
+
+% \State $\mathcal{D}\gets
+% \{(\mathbf{x}_i,y_i)\}_{i=1}^{N}$
+
+% \State \Return $\mathcal{D}$
+
+% \end{algorithmic}
+% \end{algorithm}
