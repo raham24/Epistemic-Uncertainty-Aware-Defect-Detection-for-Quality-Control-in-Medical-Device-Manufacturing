@@ -2,7 +2,7 @@ In this section we report our numerical results. We start by showing how the bas
 
 \subsection{Synthetic Benchmark}
 \label{subsec:synthetic-benchmark}
-We first consider the benchmark in \cite{shenoy2026uncertainty}. In particular, as, to the best of our knowledge, the official data had not been released we have reproduced the generation process for the benchmark as described in the aforementioned paper to the best of our capabilities, ensuring that for a comparable \gls*{mlp} net we obtain the same performance (cf. \cref{subsec:benchmark_gen}). We thus consider a three-classes (no defect, open circuit, and solder bridging) and six-features problem (relative humidity, temperature, pressure, paste viscosity, stencil thickness, time above liquidus, and peak reflow temperature). A plot showing the per-feature class distribution is available in \cref{fig:baseline}. One can notice how some classes are easily separated by the feature values making the classification problem rather simple. Nevertheless, 
+We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \emph{baseline}. In particular, as, to the best of our knowledge, the official data had not been released we have reproduced the generation process for the benchmark as described in the aforementioned paper to the best of our capabilities, ensuring that for a comparable \gls*{mlp} net we obtain the same performance (cf. \cref{subsec:benchmark_gen}). We thus consider a three-classes (no defect, open circuit, and solder bridging) and six-features problem (relative humidity, temperature, pressure, paste viscosity, stencil thickness, time above liquidus, and peak reflow temperature). A plot showing the per-feature class distribution is available in \cref{fig:baseline}. One can notice how some classes are easily separated by the feature values making the classification problem rather simple. Nevertheless, \cref{fig:cascade-vs-abstention-synthetic} shows how by abstaining on less than \(10\%\) of the samples one can achieve a significant increase in accuracy of about \(4\) percentage points, by abstaining on the samples that are more likely to be misclassified.
 \begin{figure*}[!htbp]
     \centering
 
@@ -42,6 +42,6 @@ We first consider the benchmark in \cite{shenoy2026uncertainty}. In particular, 
 
 \begin{figure}[!htbp]
     \includegraphics[width=.48\textwidth]{../tex/img/fig_cascade_vs_abstention_selective.png}
-    \caption{Accuracy bar plot over multiple seeds for the baseline benchmark, comparing the performance of a single model w/ and w/o abstention.}
+    \caption{(Best) Accuracy bar plot over multiple seeds for the baseline benchmark, comparing the performance of a single model w/o and w/ abstention (target coverage \(\ge 90\%\)).}
     \label{fig:cascade-vs-abstention-synthetic}
 \end{figure}
