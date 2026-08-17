@@ -45,3 +45,23 @@ We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \
     \caption{(Best) Accuracy bar plot over multiple seeds for the baseline benchmark, comparing the performance of a single model w/o and w/ abstention (target coverage \(\ge 90\%\)).}
     \label{fig:cascade-vs-abstention-synthetic}
 \end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}[t]{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../tex/img/fig_selective_risk_baseline.pdf}
+        \caption{Baseline}
+        \label{fig:risk-baseline}
+    \end{subfigure}
+    \hspace{0.005\linewidth}
+    \begin{subfigure}[t]{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../tex/img/fig_selective_risk_harder.pdf}
+        \caption{Increased class posterior overlap}
+        \label{fig:risk-harder}
+    \end{subfigure}
+
+    \caption{Selective risk as a function of coverage.}
+    \label{fig:selective-risk}
+\end{figure}
