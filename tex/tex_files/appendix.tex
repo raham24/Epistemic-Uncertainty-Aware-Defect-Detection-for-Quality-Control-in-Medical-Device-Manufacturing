@@ -207,7 +207,7 @@ Thus, the following holds:
 \begin{proof}
     The optimization problem in Eq.~\eqref{eq:cmp_problem} can be analyzed using the \gls*{kkt} conditions. The corresponding Lagrangian is given by
     \begin{align*}
-        \mathcal{L}(\hat{\mathbf{p}}, \lambda, \boldsymbol{\mu}) & = \W{r} \\ & +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\ & +\sum_{i=1}^{C+1}\mu_i\phat_i,
+        \mathcal{L}(\phat, \lambda, \mu) & = \W{r} \\ & +\lambda\left(1-\sum_{i=1}^{C+1}\phat_i\right) \\ & +\sum_{i=1}^{C+1}\mu_i\phat_i,
     \end{align*}
     where $\lambda\in\mathbb{R}$ is the Lagrange multiplier associated with the equality constraint and $\mu_i\ge0$ are the multipliers corresponding to the non-negativity constraints.
     The \gls*{kkt} conditions are
