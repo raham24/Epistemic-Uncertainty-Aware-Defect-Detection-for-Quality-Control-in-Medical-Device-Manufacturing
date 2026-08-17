@@ -11,7 +11,7 @@ f^\star(\x)  \triangleq   \argmax_{y\in\calY}~\PYX(y|\x).
 \)
 Notice that $\PYXhat$ can be interpreted as the prediction of the class (label) posterior probability given a sample (e.g., \(\PYXhat(y~|\x)\equiv \fun{softmax}(\mathbf{\x})_y\)), while \(\PYX\) is the true (unknown)  probability.
 
-In general, during training, the cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a model. The cross-entropy loss \(\mathcal{L}_{\mathrm{CE}}(\calD_n)\) is defined as
+In general, during training, the empirical cross-entropy loss is minimized to learn the model \(\PYXhat\) from the training set \(\calD_n\) by optimizing the parameters of a model. The cross-entropy loss \(\mathcal{L}_{\mathrm{CE}}(\calD_n)\) is defined as
 % \begin{align}
 %     \label{eq:cross_entropy_long}
 %     \mathcal{L}_{\text{CE}}(\calD_n) = -\frac{1}{n}\sum_{i=1}^{n}\sum_{j=1}^{C} p_{i,j}\log\left(\PYXhat(y_j|\x_i;\calD_n)\right),
@@ -19,11 +19,11 @@ In general, during training, the cross-entropy loss is minimized to learn the mo
 % where \(p_{i,j}\) is the element of the one-hot encoded label vector for the \(i\)-th sample and the \(j\)-th class. If \(p_{i,j} = 1\), then \(p_{i,k} = 0\) for \(k \neq j\).  
 \begin{align}
     \label{eq:cross_entropy}
-    \mathcal{L}_{\mathrm{CE}}(\calD_n)
-    = -\frac{1}{n}\sum_{i=1}^{n}
-    \log \PYXhat(y_i \mid \x_i;\calD_n),
+     & \mathcal{L}_{\mathrm{CE}}(\calD_n)
+    \nonumber
+    = -\frac{1}{n}\sum_{i=1}^{n}\Bigg[\\
+                                    &\sum_{j=1}^{C}\PYX(y_j \mid \x_i)\log\PYXhat(y_j \mid \x_i;\calD_n)\Bigg].
 \end{align}
-where \(y_i\) is the true label for the \(i\)-th sample.
 % The cross-entropy loss can be interpreted as the negative log-likelihood of the true labels given the predicted probabilities. 
 Minimizing \cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes.
 % For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\sum_{j=1}^{C} p_{i,j}\log \PYXhat(y_j|\x_i;\calD_n)\) as
@@ -32,7 +32,7 @@ For each sample \(\x\), \cref{eq:cross_entropy_internal} indicates the likelihoo
     \label{eq:cross_entropy_internal}
     \W=\sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right),
 \end{align}
-where \(\phat=\PYXhat(\cdot|\x;\calD_n)\) represents the predicted class probabilities for the input \(\x\) and \(p\) is the one-hot encoded true label vector for the sample.
+where \(\phat=\PYXhat(\cdot|\x;\calD_n)\) represents the predicted class probabilities for the input \(\x\) and \(p\) is the true posterior probability\footnote{In the empirical setting, the true posterior is usually represented as one-hot encoded vectors, and \cref{eq:cross_entropy} becomes \(\mathcal{L}_{\mathrm{CE}}(\calD_n)=-\frac{1}{n}\sum_{i=1}^{n}\log\PYXhat(y_i \mid \x_i;\calD_n)\). In this case, the term in \cref{eq:cross_entropy_internal} becomes \(\W=\log\left(\phat_{j}\right)\), where \(j\) is the index of the true class label for the input \(\x\).}.
 
 Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explicitly account for uncertainty by modifying the training objective in \cref{eq:cross_entropy}, to enable the model to learn when to abstain. Specifically, we introduce a reservation variable represented as an additional class label, allowing the model to defer predictions when uncertainty is high. In particular, the term in \cref{eq:cross_entropy_internal} is replaced by
 \begin{align}
@@ -42,12 +42,12 @@ Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explic
 where \(\phat_{C+1}\) is the reservation variable for a given input \(\x\), subject to the constraints
 \begin{align}
     \label{eq:reject_cross_entropy_sum}
-    \sum_{j=1}^{C} p_{j}+p_{C+1}=1,
+    \sum_{j=1}^{C} \phat_{j}+\phat_{C+1}=1,
 \end{align}
 and
 \begin{align}
     \label{eq:reject_cross_entropy_nonneg}
-    p_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
+    \phat_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
 \end{align}
 where \(\costmult\in\R_{+}\) is a positive hyperparameter that controls the trade-off between making a prediction and abstaining. Higher values of \(\costmult\) encourages the model to make predictions, while lower values promote abstention.
 While neural networks provide a practical means of obtaining generally suboptimal solutions that can be applied to arbitrary inputs, as noted in \cite{liu2019deep}, a principled reformulation and analysis of the underlying optimization problem (cf. \cite{boyd2004convex}) can yield further theoretical insights. In particular, such an analysis allows us to characterize the uncertainty threshold for abstention and identify previously unrecognized degenerate cases. These findings provide further insight into the principled management of epistemic uncertainty in high-stakes applications, such as fault detection in medical devices.
@@ -92,8 +92,7 @@ Finally, \cref{fig:margin_histogram} provides further insight into the mechanism
 \subsection{Optimization problem with the reservation variable}
 \label{subsec:optimization_problem}
 
-We now present the main theoretical results of this work, providing a principled characterization of the role of the reservation variable in managing epistemic uncertainty. Proofs based on the \gls*{kkt} optimality conditions, together with the necessary auxiliary results, are provided in \cref{sec:appendix}.
-
+We now present the main theoretical results of this work, providing a principled characterization of the role of the reservation variable in managing epistemic uncertainty. For the sake of generality, in this section, we consider true posterior probabilities \(p=\PYX(\cdot\mid\x)\), rather than empirical one-hot encoded labels. Results for one-hot encoded labels can be obtained as a special case, often reducing general results to trivial ones. Proofs based on the \gls*{kkt} optimality conditions, together with the necessary auxiliary results, are provided in \cref{sec:appendix}.
 
 \begin{restatable}{theorem}{theoremKKT}
     \label{theorem:kkt}
@@ -102,22 +101,30 @@ We now present the main theoretical results of this work, providing a principled
         \label{eq:kkt_conditions_solution}
         \hat p_i^\star = \max\left\{\frac{p_i}{\lambda} - \frac{\hat p_{C+1}^\star}{\costmult}, \,0 \right\}.
     \end{align}
-    Moreover, the quantity
-    \begin{align}
-        \label{eq:threshold}
-        \frac{\hat p_{C+1}^\star}{\costmult}
-    \end{align}
-    acts as an adaptive threshold that determines which class probabilities remain active in the optimal solution.
 \end{restatable}
+Moreover, the quantity
+% \begin{align}
+\(
+\label{eq:threshold}
+\frac{\hat p_{C+1}^\star}{\costmult}
+\)
+% \end{align}
+defines an adaptive threshold that determines which class probabilities
+remain active at the optimum. An increase in the optimal reserve probability
+$\hat p_{C+1}^\star$, or a decrease in the cost multiplier $\costmult$, raises
+this threshold, thereby causing a larger number of class probabilities to
+become inactive. This characterization provides an optimization-based
+interpretation of the reserve output as an adaptive measure of uncertainty.
+The corresponding derivation is provided in \cref{sec:proof_kkt_conditions} of the appendix.
 
-\marco{Rephrase \Cref{theorem:kkt} shows that the reserve output induces an adaptive confidence threshold. As the reserve output increases (or the cost multiplier decreases), the threshold rises, causing more classes to become inactive. This provides a principled optimization-based interpretation of the reserve output as a learned uncertainty score. The proof is provided in \dots}
-
+% \begin{restatable}{theorem}{theoremThreshold}
+%     \label{theorem:threshold}
+%     Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
+%     \in \{1, \dots, C\}\). Then necessarily \(1<\costmult<C\) (cf. \cite{liu2019deep}). Moreover, for \(k<1\) abstaining is the optimal strategy, while for \(k>C\) the optimal solution is to always make a prediction. Finally, \(k=1\) and \(k=C\) are degenerate cases, where there may be multiple optimal solutions.
+% \end{restatable}
 \begin{restatable}{theorem}{theoremThreshold}
     \label{theorem:threshold}
-    Suppose an optimal solution satisfies \(0<\phat^{\star}_{C+1}<1\) and at least one class with positive posterior mass is inactive, i.e.\ \(\phat^{\star}_i>0\) for some \(i
-    \in \{1, \dots, C\}\). Then necessarily \(1<\costmult<C\) (cf. \cite{liu2019deep}). Moreover, for \(k<1\) abstaining is the optimal strategy, while for \(k>C\) the optimal solution is to always make a prediction. Finally, \(k=1\) and \(k=C\) are degenerate cases, where there may be multiple optimal solutions.
+    Consider the maximization of \cref{eq:reject_cross_entropy_internal} subject to \cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}. The cost-multiplier mixed-regime is \begin{align*} 1<\costmult<C. \end{align*} In particular, if \(\costmult<1\), full reservation is optimal, whereas if \(\costmult>C\), every optimal solution has \(\phat_{C+1}^\star=0\) and the prediction coordinates satisfy \(\phat_j^\star=p_j\) for \(j=1,\ldots,C\). The boundary cases \(\costmult=1\) and \(\costmult=C\) are degenerate: the optimizer need not be unique, and distinct prediction--reservation allocations may attain the same optimal value.
 \end{restatable}
-
-\marco{Explain \Cref{theorem:threshold} and its implications. The proof is provided in \dots}
-
-
+The proof is provided in \cref{sec:proof_threshold} of the appendix.
+\Cref{theorem:threshold} provides a principled characterization of the cost multiplier \(\costmult\) and its relationship to the number of classes \(C\), providing guidance for selecting \(\costmult\) in practice, as shown in the ablation studies in \cref{sec:experiments}.

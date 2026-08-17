@@ -2,6 +2,7 @@ In this section we report our numerical results. We start by showing how the bas
 
 \subsection{Synthetic Benchmark}
 \label{subsec:synthetic-benchmark}
+We first consider the benchmark in \cite{shenoy2026uncertainty}. In particular, as, to the best of our knowledge, the official data had not been released we have reproduced the generation process for the benchmark as described in the aforementioned paper to the best of our capabilities, ensuring that for a comparable \gls*{mlp} net we obtain the same performance (cf. \cref{subsec:benchmark_gen}). We thus consider a three-classes (no defect, open circuit solder bridging) and six-features problem. A plot showing the per-feature class distribution is available in \cref{fig:baseline}. One can notice how some classes are easily separated by the feature values making the classification problem rather simple. Nevertheless, 
 \begin{enumerate}
     \item \marco{Description of the data, in particular the fact the original synthetic data had very simple feature to separate the classes, and why we propose a more challegning benchmark.}
     \item \raham{Added pseudocode for dataset generation below - awaiting approval}
@@ -14,47 +15,6 @@ In this section we report our numerical results. We start by showing how the bas
 %     \centering
 %     \includegraphics[scale=0.4]{../tex/img/fig_feature_separability_baseline.png}
 % \end{figure*}
-
-\begin{algorithm}[t]
-\caption{Synthetic data generation}
-\label{alg:generator}
-\DontPrintSemicolon
-\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
-\SetKwComment{Comment}{// }{}
-    \Input{$N$ boards, $p$ parameters, $K$ defect classes; nominals $\bm\mu$, spreads $\bm\sigma$, spec half-widths $\mathbf h$, correlation $\mathbf R$, drift $\bm\delta_i$; causal weights $\mathbf W$; class priors $\bm\pi$; target Bayes error $\varepsilon^\star$; risk map $\rho$; seed $s$.}
-    \Output{labeled boards $\{(\x_i,\,y_i,\,m_i,\,\mathbf r_i)\}_{i=1}^{N}$, split into train / validation / test.}
-    \BlankLine
-    \Comment{Cholesky factor of the process correlation}
-    $\mathbf L \leftarrow \mathrm{cholesky}(\mathbf R)$, \ \ so that $\mathbf L\mathbf L^{\!\top}=\mathbf R$\;
-    \BlankLine
-    \Comment{parameter values per board $i=1,\dots,N$: correlated, drifting ($\bm z_i$ latent standard-normal draw; $\bm\delta_i=$ wear $+$ diurnal; $\odot$ elementwise)}
-    $\bm z_i \sim \mathcal N(\mathbf 0,\mathbf I_p)$, \quad $\x_i \leftarrow \bm\mu + \bm\sigma \odot (\mathbf L\bm z_i + \bm\delta_i)$\;
-    \BlankLine
-    \Comment{normalized deviation; $|\mathrm{dev}|=1$ sits at the spec limit}
-    $\mathrm{dev}_{ij} \leftarrow (x_{ij}-\mu_j)/h_j, \quad j=1,\dots,p$\;
-    \BlankLine
-    \Comment{Ishikawa causal score per defect $d$ ($|W_{dj}|$ edge strength, $\mathrm{sign}\,W_{dj}$ direction, $0$ no edge); class $0=$ no-defect}
-    $u_{id} \leftarrow \sum_{j=1}^{p}\mathrm{ReLU}(W_{dj}\,\mathrm{dev}_{ij}), \quad u_{i0}\equiv 0$\;
-    \BlankLine
-    \Comment{calibrate: gain $\gamma$ to the target Bayes error, offsets $\bm\beta$ to the class priors}
-    $\gamma \leftarrow$ bisection s.t.\ Bayes error $=\varepsilon^\star$; \quad $\bm\beta \leftarrow$ IPF s.t.\ class marginals $=\bm\pi$\;
-    \BlankLine
-    \Comment{exact class posterior, then sample the label (not thresholded)}
-    $\PYX(d\mid\x_i) \leftarrow \mathrm{softmax}_d\!\big(\gamma\,u_{id}+\beta_d\big); \quad y_i \sim \mathrm{Categorical}\!\big(\PYX(\cdot\mid\x_i)\big)$\;
-    \BlankLine
-    \Comment{ground-truth mechanism per stage $\ell$ ($\mathrm{st}(j)=$ stage of parameter $j$): strongest firing edge of the drawn defect $y_i$}
-    $m_i^{\ell} \leftarrow \argmax_{\{j:\,\mathrm{st}(j)=\ell\}} \mathrm{ReLU}(W_{y_i j}\,\mathrm{dev}_{ij})$, \ \ or \textsc{none} if none fires\;
-    \BlankLine
-    \Comment{graded per-parameter risk target, two-sided in $|\mathrm{dev}|$}
-    $r_{ij} \leftarrow \rho(\mathrm{dev}_{ij}), \quad j=1,\dots,p$\;
-    \BlankLine
-    \Comment{leakage-free split: each whole batch goes to a single split}
-    partition the $N$ boards into batches; assign each whole batch to train / val / test\;
-    \BlankLine
-    \textbf{Return:} $\{(\x_i,\,y_i,\,m_i,\,\mathbf r_i)\}_{i=1}^{N}$, \ with $m_i=(m_i^{\ell})_{\ell}$\;
-\end{algorithm}
-
-
 
 \begin{figure*}[t]
     \centering

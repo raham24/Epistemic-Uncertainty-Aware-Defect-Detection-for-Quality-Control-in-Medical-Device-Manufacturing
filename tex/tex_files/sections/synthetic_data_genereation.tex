@@ -1,0 +1,142 @@
+\captionof{algorithm}{Synthetic Data Generation with Target Bayes Error}
+\label{alg:generator}
+
+\begin{algorithmic}[1]
+
+\Require Number of samples $N$; feature means $\bm{\mu}$ and scales
+$\bm{\sigma}$; correlation matrix $\mathbf{R}$; causal defect map
+$\mathcal{E}$; class priors $\bm{\pi}$; target Bayes error
+$\varepsilon^\star$
+\Ensure Synthetic labeled dataset $\mathcal{D}$
+
+\State Sample correlated process noise
+\[
+    \mathbf{Z} \sim \mathcal{N}(\mathbf{0},\mathbf{R})
+\]
+
+\State Generate process features
+\[
+    \mathbf{X}
+    = \bm{\mu} + \bm{\sigma}\odot\mathbf{Z}
+\]
+
+\State Normalize each feature relative to its specification limits
+to obtain deviations $\bm{\Delta}$
+
+\State Compute class scores $s_k(\bm{\Delta};\mathcal{E})$
+from the causal defect map
+
+\State Initialize gain interval $[g_{\min},g_{\max}]$
+
+\Repeat
+    \State $g \gets (g_{\min}+g_{\max})/2$
+
+    \State Calibrate class offsets $b_k$ so that the mean posterior
+    probabilities match the desired priors $\pi_k$
+
+    \State Compute the class posterior
+    \[
+        p_{ik}
+        =
+        P(Y=k\mid\mathbf{x}_i)
+        =
+        \operatorname{softmax}_k
+        \left(g\,s_k(\bm{\Delta}_i)+b_k\right)
+    \]
+
+    \State Compute the resulting Bayes error
+    \[
+        \varepsilon_B
+        =
+        \frac{1}{N}
+        \sum_{i=1}^{N}
+        \left(1-\max_k p_{ik}\right)
+    \]
+
+    \If{$\varepsilon_B > \varepsilon^\star$}
+        \State $g_{\min} \gets g$
+    \Else
+        \State $g_{\max} \gets g$
+    \EndIf
+\Until{$\varepsilon_B \approx \varepsilon^\star$}
+
+\For{$i=1,\ldots,N$}
+    \State Sample
+    $y_i \sim \operatorname{Categorical}(p_{i1},\ldots,p_{iK})$
+\EndFor
+
+\State $\mathcal{D}\gets\{(\mathbf{x}_i,y_i)\}_{i=1}^{N}$
+
+\State \Return $\mathcal{D}$
+
+\end{algorithmic}
+% \begin{algorithm}[t]
+% \caption{Synthetic Data Generation with Target Bayes Error}
+% \label{alg:generator}
+% \begin{algorithmic}[1]
+
+% \Require Number of samples $N$; feature means $\bm{\mu}$ and scales
+% $\bm{\sigma}$; correlation matrix $\mathbf{R}$; causal defect map
+% $\mathcal{E}$; class priors $\bm{\pi}$; target Bayes error
+% $\varepsilon^\star$
+% \Ensure Synthetic labeled dataset $\mathcal{D}$
+
+% \State Sample correlated process noise
+% \[
+%     \mathbf{Z} \sim \mathcal{N}(\mathbf{0},\mathbf{R})
+% \]
+
+% \State Generate process features
+% \[
+%     \mathbf{X}
+%     = \bm{\mu} + \bm{\sigma}\odot\mathbf{Z}
+% \]
+
+% \State Normalize each feature relative to its specification limits
+% to obtain deviations $\bm{\Delta}$
+
+% \State Compute class scores $s_k(\bm{\Delta};\mathcal{E})$
+% from the causal defect map
+
+% \State Initialize gain interval $[g_{\min},g_{\max}]$
+
+% \Repeat
+%     \State $g \gets (g_{\min}+g_{\max})/2$
+%     \State Calibrate class offsets $b_k$ so that the mean posterior
+%     probabilities match the desired priors $\pi_k$
+%     \State Compute the class posterior
+%     \[
+%         p_{ik}
+%         =
+%         P(Y=k\mid\mathbf{x}_i)
+%         =
+%         \operatorname{softmax}_k
+%         \left(g\,s_k(\bm{\Delta}_i)+b_k\right)
+%     \]
+%     \State Compute the resulting Bayes error
+%     \[
+%         \varepsilon_B
+%         =
+%         \frac{1}{N}
+%         \sum_{i=1}^{N}
+%         \left(1-\max_k p_{ik}\right)
+%     \]
+%     \If{$\varepsilon_B > \varepsilon^\star$}
+%         \State $g_{\min} \gets g$
+%     \Else
+%         \State $g_{\max} \gets g$
+%     \EndIf
+% \Until{$\varepsilon_B \approx \varepsilon^\star$}
+
+% \For{$i=1,\ldots,N$}
+%     \State Sample $y_i \sim
+%     \operatorname{Categorical}(p_{i1},\ldots,p_{iK})$
+% \EndFor
+
+% \State $\mathcal{D}\gets
+% \{(\mathbf{x}_i,y_i)\}_{i=1}^{N}$
+
+% \State \Return $\mathcal{D}$
+
+% \end{algorithmic}
+% \end{algorithm}
