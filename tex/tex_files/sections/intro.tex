@@ -7,14 +7,13 @@ Crucially, this can lead to detection failures and misclassification of defects.
 We argue that addressing this issue is critical and, therefore, investigate the impact of epistemic uncertainty on detection failures in medical device manufacturing and examine a principled approach to mitigating its effects. Specifically, we adopt a cost-sensitive classification framework that explicitly accounts for uncertainty in the decision-making process by allowing the model to abstain from uncertain predictions. This formulation aims to improve the robustness and reliability of defect detection while accounting for the costs associated with erroneous decisions.
 
 In our framework, the task performed by \gls*{mlp} Head 1 is treated as a critical decision point, as an incorrect prediction at this stage may compromise the reliability of subsequent decisions and risk assessment. To mitigate this risk, the model is allowed to abstain when its prediction is uncertain, thereby reducing the likelihood of misclassification and improving the overall reliability of the defect detection system. Although outside the scope of this work, abstained predictions could subsequently be subjected to further scrutiny by human experts or additional automated checks. Such a mechanism provides a more cautious approach to defect detection in high-stakes settings and could further enhance the reliability and safety of medical device manufacturing.
-
 \subsection{Contributions}
 \label{subsec:contributions}
 We summarize the contributions contained in the rest of this paper as follows:
 \begin{enumerate}
     \item We investigate detection failures arising from epistemic uncertainty in recent root-cause analysis approaches for semiconductor manufacturing, and extend it to high-stakes domain such as medical device production, where misclassification can lead to substantial costs and serious risks to patient safety.
-    \item Building on prior work, we analyze a simple yet effective approach to mitigate the impact of epistemic uncertainty on detection failures, leveraging a cost-sensitive classification framework that incorporates uncertainty handling into the decision-making training process.
+    \item Building on prior work, we analyze a simple yet effective approach to mitigate the impact of epistemic uncertainty on detection failures, leveraging a cost-sensitive classification framework that incorporates uncertainty handling into the decision-making training process, allowing the model to abstain from uncertain predictions.
     \item We evaluate the proposed approach through extensive experiments on a synthetic benchmark, demonstrating its effectiveness under varying levels of epistemic uncertainty.
-    \item We further validate our approach through a real-world medical device case study and introduce a reproducible benchmark, publicly accessible as a \gls*{kg}through \gls*{protookn} (cf. \cite{protookn,oknregistry}), demonstrating the practical applicability of the proposed method in a high-stakes setting.
+    \item We further validate our approach through a real-world medical device case study and introduce a reproducible benchmark, publicly accessible as a \gls*{kg} through the \gls*{protookn} (cf. \cite{protookn,oknregistry}), demonstrating the practical applicability of the proposed method in a high-stakes setting.
 
 \end{enumerate}
