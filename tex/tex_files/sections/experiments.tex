@@ -1,10 +1,24 @@
 \input{tex_files/synthetic_dist_fig}
 
-In this section we report our numerical results. We start by showing how the baseline data benchmark presented in \cite{shenoy2026uncertainty} is affected by epistemic uncertainty, and how our proposed approach can mitigate its impact. Furthermore, we propose a more nuanced version of their benchmark, where the detection task at end is more challenging, further highlighting the validity of our mitigation approach in less ad-hoc settings. Finally, we present a real-world case study of a medical device, introducing a benchmark easily downloadable through Proto-OKN, demonstrating the practical applicability and benefits of our proposed method in a high-stakes setting.
+In this section, we present our numerical results and summarize the main findings through a series of plots.
 
-\marco{We present our results in terms of accuracy coverage and risk.}
+We begin by examining how epistemic uncertainty affects the baseline benchmark introduced in \cite{shenoy2026uncertainty} and evaluate the extent to which our proposed approach mitigates its effects. Despite the relative simplicity of this task, it illustrates how models with otherwise strong predictive performance can remain susceptible to epistemic uncertainty, and how abstention can reduce the resulting decision risk. Furthermore, we introduce a more challenging variant of the original benchmark, in which the final detection task is more difficult by tweaking the data generative process, allowing us to evaluate the effectiveness of our mitigation approach under more realistic conditions.
 
-\raham{Description of the model used for all the experiments, and the training procedure must be added in \Cref{subsubsec:mlp_architecture}.}
+Finally, we present a real-world medical device case study and introduce a benchmark that is publicly accessible through the \gls*{protookn}, demonstrating the practical applicability of our approach in a high-stakes setting.
+
+In line with the literature, we report results over 5 different random seeds, controlling the models' initialization and the data splits. The results are reported in terms of accuracy or its converse, i.e., empirical risk. As we must account for the fact that the model may abstain on some samples, we also report the coverage, i.e., the fraction of samples on which the model makes a prediction. Importantly, note that in case of abstention, the accuracy and risk are only computed on the samples for which the model makes a prediction, i.e., the coverage. Thus, while our framework may abstain on some samples which may be correctly classified, \emph{increased accuracy and reduced risk} on the retained samples is a clear indication that \emph{the abstained set must contain a higher proportion of misclassified samples than the original dataset}, i.e. the abstention mechanism is preferentially rejecting predictions that are more likely to be incorrect.
+
+\subsection{Models and Computational Setup}
+
+\subsection{Models and Computational Setup}
+
+For the synthetic experiments, we consider Head 1 of the multi-head cascade \gls*{mlp} architecture introduced in \cite{shenoy2026uncertainty}, which performs defect classification. The model consists of two hidden layers with 256 neurons each, ReLU activations, and a dropout rate of \(0.1\), and it is trained using Adam with a learning rate of \(10^{-3}\) and a batch size of 128 for up to 40 epochs, with early stopping using a patience of six epochs.
+
+For the real-world experiments, the model consists of two hidden layers with 256 and 128 neurons, respectively, and ReLU activations, and it is trained using Adam with a learning rate of \(10^{-3}\), weight decay of \(10^{-4}\), and a batch size of 32 for up to 80 epochs, with early stopping using a patience of 10 epochs.
+
+All models are implemented in PyTorch \cite{paszke2019pytorch}.
+
+Development and preliminary experiments were conducted on Apple Silicon, while the main experimental sweeps were executed on a SLURM-based computing cluster using NVIDIA A100 and H100 GPUs, with one GPU allocated per run.
 
 \subsection{Synthetic Benchmark}
 \label{subsec:synthetic-benchmark}
@@ -22,7 +36,8 @@ Finally, an ablation study sampling over different target coverage is presented 
 
 \subsection{Experiment on real medical devices data}
 \label{subsec:real-medical-devices-data}
-\marco{Explain data and classes, and the task. Describe the results.}
+\marco{Explain data and classes, and the task. Describe the results.
+    For the real-world experiments, MAUDE report narratives are represented using TF--IDF features with up to 50,000 unigram and bigram features, followed by TruncatedSVD to obtain a 300-dimensional representation and subsequent feature standardization.followed by an output layer corresponding to four outcome classes: malfunction, basic injury, serious injury, and death. }
 
 
 \input{tex_files/maude_ablation_fig.tex}

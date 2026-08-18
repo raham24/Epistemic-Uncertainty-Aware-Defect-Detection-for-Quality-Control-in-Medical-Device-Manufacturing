@@ -27,16 +27,16 @@ In general, during training, the empirical cross-entropy loss is minimized to le
                                     &\sum_{j=1}^{C}\PYX(y_j \mid \x_i)\log\PYXhat(y_j \mid \x_i;\calD_n)\Bigg].
 \end{align}
 % The cross-entropy loss can be interpreted as the negative log-likelihood of the true labels given the predicted probabilities. 
-Minimizing \cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes.
+Minimizing \Cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes.
 % For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\sum_{j=1}^{C} p_{i,j}\log \PYXhat(y_j|\x_i;\calD_n)\) as
-For each sample \(\x\), \cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities, i.e.,
+For each sample \(\x\), \Cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities, i.e.,
 \begin{align}
     \label{eq:cross_entropy_internal}
     \W=\sum_{j=1}^{C} p_{j}\log\left(\phat_{j}\right),
 \end{align}
-where \(\phat=\PYXhat(\cdot|\x;\calD_n)\) represents the predicted class probabilities for the input \(\x\) and \(p\) is the true posterior probability\footnote{In the empirical setting, the true posterior is usually represented as one-hot encoded vectors, and \cref{eq:cross_entropy} becomes \(\mathcal{L}_{\mathrm{CE}}(\calD_n)=-\frac{1}{n}\sum_{i=1}^{n}\log\PYXhat(y_i \mid \x_i;\calD_n)\). In this case, the term in \cref{eq:cross_entropy_internal} becomes \(\W=\log\left(\phat_{j}\right)\), where \(j\) is the index of the true class label for the input \(\x\).}.
+where \(\phat=\PYXhat(\cdot|\x;\calD_n)\) represents the predicted class probabilities for the input \(\x\) and \(p\) is the true posterior probability\footnote{In the empirical setting, the true posterior is usually represented as one-hot encoded vectors, and \Cref{eq:cross_entropy} becomes \(\mathcal{L}_{\mathrm{CE}}(\calD_n)=-\frac{1}{n}\sum_{i=1}^{n}\log\PYXhat(y_i \mid \x_i;\calD_n)\). In this case, the term in \Cref{eq:cross_entropy_internal} becomes \(\W=\log\left(\phat_{j}\right)\), where \(j\) is the index of the true class label for the input \(\x\).}.
 
-Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explicitly account for uncertainty by modifying the training objective in \cref{eq:cross_entropy}, to enable the model to learn when to abstain. Specifically, we introduce a reservation variable represented as an additional class label, allowing the model to defer predictions when uncertainty is high. In particular, the term in \cref{eq:cross_entropy_internal} is replaced by
+Inspired by \cite{chow1970optimum,markowitz1952portfolio,liu2019deep}, we explicitly account for uncertainty by modifying the training objective in \Cref{eq:cross_entropy}, to enable the model to learn when to abstain. Specifically, we introduce a reservation variable represented as an additional class label, allowing the model to defer predictions when uncertainty is high. In particular, the term in \Cref{eq:cross_entropy_internal} is replaced by
 \begin{align}
     \label{eq:reject_cross_entropy_internal}
     \W{r}=\sum_{j=1}^{C} p_{j}\log\left(\costmult\cdot\phat_{j}+\phat_{C+1}\right),
@@ -56,20 +56,20 @@ While neural networks provide a practical means of obtaining generally suboptima
 
 \subsection{Illustrative example}
 \label{subsec:illustrative_example}
-We first illustrate the effect of the reservation variable on a toy classification problem with two-dimensional features and (C=3) classes in \cref{fig:illustrative_example}. As shown in \cref{fig:decision_regions}, introducing the reservation variable allows the model to identify and reject observations concentrated around the decision boundaries. These regions correspond to inputs for which the classifier has difficulty distinguishing between competing classes and are therefore associated with greater predictive uncertainty.
+We first illustrate the effect of the reservation variable on a toy classification problem with two-dimensional features and (C=3) classes in \Cref{fig:illustrative_example}. Each class has the same amount of samples. As shown in \Cref{fig:decision_regions}, introducing the reservation variable allows the model to identify and reject observations concentrated around the decision boundaries. These regions correspond to inputs for which the classifier has difficulty distinguishing between competing classes and are therefore associated with greater predictive uncertainty.
 
-This behavior translates directly into improved performance on the retained predictions. The selective risk curve in \cref{fig:risk_curve} shows that reducing the coverage to approximately \(81\%\) results in a reduction in classification risk of approximately \(50\%\). Thus, by abstaining on a relatively small fraction of uncertain observations, the model can substantially reduce the error rate among the predictions it retains.
+This behavior translates directly into improved performance on the retained predictions. The selective risk curve in \Cref{fig:risk_curve} shows that reducing the coverage to approximately \(81\%\) results in a reduction in classification risk of approximately \(50\%\). Thus, by abstaining on a relatively small fraction of uncertain observations, the model can substantially reduce the error rate among the predictions it retains.
 
-Finally, \cref{fig:margin_histogram} provides further insight into the mechanism underlying this behavior. Rejected observations are predominantly associated with smaller classification margins, indicating weaker separation between the most likely competing classes. Together, these results illustrate how the reservation mechanism enables the model to identify uncertain predictions and trade coverage for lower classification risk.
+Finally, \Cref{fig:margin_histogram} provides further insight into the mechanism underlying this behavior. Rejected observations are predominantly associated with smaller classification margins, indicating weaker separation between the most likely competing classes. Together, these results illustrate how the reservation mechanism enables the model to identify uncertain predictions and trade coverage for lower classification risk.
 
 \subsection{Optimization problem with the reservation variable}
 \label{subsec:optimization_problem}
 
-We now present the main theoretical results of this work, providing a principled characterization of the role of the reservation variable in managing epistemic uncertainty. For the sake of generality, in this section, we consider true posterior probabilities \(p=\PYX(\cdot\mid\x)\), rather than empirical one-hot encoded labels. Results for one-hot encoded labels can be obtained as a special case, often reducing general results to trivial ones. Proofs based on the \gls*{kkt} optimality conditions, together with the necessary auxiliary results, are provided in \cref{sec:appendix}.
+We now present the main theoretical results of this work, providing a principled characterization of the role of the reservation variable in managing epistemic uncertainty. For the sake of generality, in this section, we consider true posterior probabilities \(p=\PYX(\cdot\mid\x)\), rather than empirical one-hot encoded labels. Results for one-hot encoded labels can be obtained as a special case, often reducing general results to trivial ones. Proofs based on the \gls*{kkt} optimality conditions, together with the necessary auxiliary results, are provided in \Cref{sec:appendix}.
 
 \begin{restatable}{theorem}{theoremKKT}
     \label{theorem:kkt}
-    Let $\hat{\mathbf p}^\star$ be a \gls*{kkt} optimal point for the maximization of \cref{eq:reject_cross_entropy_internal} with constraints \cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
+    Let $\hat{\mathbf p}^\star$ be a \gls*{kkt} optimal point for the maximization of \Cref{eq:reject_cross_entropy_internal} with constraints \Cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}, and suppose that $\hat p^\star_{C+1}>0$. Then there exists a scalar $\lambda>0$ such that, for every class $i\in\{1,\ldots,C\}$,
     \begin{align}
         \label{eq:kkt_conditions_solution}
         \hat p_i^\star = \max\left\{\frac{p_i}{\lambda} - \frac{\hat p_{C+1}^\star}{\costmult}, \,0 \right\}.
@@ -88,7 +88,7 @@ $\hat p_{C+1}^\star$, or a decrease in the cost multiplier $\costmult$, raises
 this threshold, thereby causing a larger number of class probabilities to
 become inactive. This characterization provides an optimization-based
 interpretation of the reserve output as an adaptive measure of uncertainty.
-The corresponding derivation is provided in \cref{sec:proof_kkt_conditions} of the appendix.
+The corresponding derivation is provided in \Cref{sec:proof_kkt_conditions} of the appendix.
 
 % \begin{restatable}{theorem}{theoremThreshold}
 %     \label{theorem:threshold}
@@ -97,7 +97,7 @@ The corresponding derivation is provided in \cref{sec:proof_kkt_conditions} of t
 % \end{restatable}
 \begin{restatable}{theorem}{theoremThreshold}
     \label{theorem:threshold}
-    Consider the maximization of \cref{eq:reject_cross_entropy_internal} subject to \cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}. The cost-multiplier mixed-regime is \begin{align*} 1<\costmult<C. \end{align*} In particular, if \(\costmult<1\), full reservation is optimal, whereas if \(\costmult>C\), every optimal solution has \(\phat_{C+1}^\star=0\) and the prediction coordinates satisfy \(\phat_j^\star=p_j\) for \(j=1,\ldots,C\). The boundary cases \(\costmult=1\) and \(\costmult=C\) are degenerate: the optimizer need not be unique, and distinct prediction--reservation allocations may attain the same optimal value.
+    Consider the maximization of \Cref{eq:reject_cross_entropy_internal} subject to \Cref{eq:reject_cross_entropy_sum,eq:reject_cross_entropy_nonneg}. The cost-multiplier mixed-regime is \begin{align*} 1<\costmult<C. \end{align*} In particular, if \(\costmult<1\), full reservation is optimal, whereas if \(\costmult>C\), every optimal solution has \(\phat_{C+1}^\star=0\) and the prediction coordinates satisfy \(\phat_j^\star=p_j\) for \(j=1,\ldots,C\). The boundary cases \(\costmult=1\) and \(\costmult=C\) are degenerate: the optimizer need not be unique, and distinct prediction--reservation allocations may attain the same optimal value.
 \end{restatable}
-The proof is provided in \cref{sec:proof_threshold} of the appendix.
-\Cref{theorem:threshold} provides a principled characterization of the cost multiplier \(\costmult\) and its relationship to the number of classes \(C\), providing guidance for selecting \(\costmult\) in practice, as shown in the ablation studies in \cref{sec:experiments}.
+The proof is provided in \Cref{sec:proof_threshold} of the appendix.
+\Cref{theorem:threshold} provides a principled characterization of the cost multiplier \(\costmult\) and its relationship to the number of classes \(C\), providing guidance for selecting \(\costmult\) in practice, as shown in the ablation studies in \Cref{sec:experiments}.
