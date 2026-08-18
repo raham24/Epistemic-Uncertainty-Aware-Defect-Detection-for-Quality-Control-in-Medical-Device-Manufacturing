@@ -8,10 +8,6 @@ Finally, we present a real-world medical device case study and introduce a bench
 
 In line with the literature, we report results over 5 different random seeds, controlling the models' initialization and the data splits. The results are reported in terms of accuracy or its converse, i.e., empirical risk. As we must account for the fact that the model may abstain on some samples, we also report the coverage, i.e., the fraction of samples on which the model makes a prediction. Importantly, note that in case of abstention, the accuracy and risk are only computed on the samples for which the model makes a prediction, i.e., the coverage. Thus, while our framework may abstain on some samples which may be correctly classified, \emph{increased accuracy and reduced risk} on the retained samples is a clear indication that \emph{the abstained set must contain a higher proportion of misclassified samples than the original dataset}, i.e. the abstention mechanism is preferentially rejecting predictions that are more likely to be incorrect.
 
-\subsection{Models and Computational Setup}
-
-\subsection{Models and Computational Setup}
-
 For the synthetic experiments, we consider Head 1 of the multi-head cascade \gls*{mlp} architecture introduced in \cite{shenoy2026uncertainty}, which performs defect classification. The model consists of two hidden layers with 256 neurons each, ReLU activations, and a dropout rate of \(0.1\), and it is trained using Adam with a learning rate of \(10^{-3}\) and a batch size of 128 for up to 40 epochs, with early stopping using a patience of six epochs.
 
 For the real-world experiments, the model consists of two hidden layers with 256 and 128 neurons, respectively, and ReLU activations, and it is trained using Adam with a learning rate of \(10^{-3}\), weight decay of \(10^{-4}\), and a batch size of 32 for up to 80 epochs, with early stopping using a patience of 10 epochs.
@@ -23,22 +19,23 @@ Development and preliminary experiments were conducted on Apple Silicon, while t
 \subsection{Synthetic Benchmark}
 \label{subsec:synthetic-benchmark}
 We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \emph{baseline}. In particular, as, to the best of our knowledge, the official data had not been released we have reproduced the generation process for the benchmark as described in the aforementioned paper to the best of our capabilities, ensuring that for a comparable \gls*{mlp} net we obtain the same performance (cf. \Cref{subsec:benchmark_gen}).
-
+\input{tex_files/synthetic_cascade_vs_abstention_fig}
 Therefore, we consider a three-classes (no defect, open circuit, and solder bridging) and six-features problem (relative humidity, temperature, pressure, paste viscosity, stencil thickness, time above liquidus, and peak reflow temperature). A plot showing the per-feature class distribution is available in \Cref{fig:baseline}. One can notice how some classes are easily separated by the feature values making the classification problem rather simple. Nevertheless, \Cref{fig:cascade-vs-abstention-synthetic} shows how by abstaining on less than \(10\%\) of the samples one can achieve a significant increase in accuracy of about \(4\) percentage points, by abstaining on the samples that are more likely to be misclassified.
 
 Next, we artificially increase the difficulty of the problem by modeling features such that the class posteriors given the feature are more overlapped, i.e., we artificially increase the Bayes error, as can be observed in \Cref{fig:overlap_harder}. Though the accuracy of the classifier on this task decreases, we can still observe in \Cref{fig:cascade-vs-abstention-synthetic} how abstention allows for higher accuracy.
 
 Finally, an ablation study sampling over different target coverage is presented in \Cref{fig:risk-baseline} for the baseline and \Cref{fig:risk-harder} for the higher overlap. Moreover, an ablation study over possible values of the payoff, confirming the results in \Cref{fig:selective-risk} are relegated to the appendix in \Cref{subsec:additional_numerical_results}.
 
-\input{tex_files/synthetic_cascade_vs_abstention_fig}
-
 \input{tex_files/synthetic_ablation_study_fig}
+
+\clearpage
+page left blank
+\clearpage
 
 \subsection{Experiment on real medical devices data}
 \label{subsec:real-medical-devices-data}
-\marco{Explain data and classes, and the task. Describe the results.
-    For the real-world experiments, MAUDE report narratives are represented using TF--IDF features with up to 50,000 unigram and bigram features, followed by TruncatedSVD to obtain a 300-dimensional representation and subsequent feature standardization.followed by an output layer corresponding to four outcome classes: malfunction, basic injury, serious injury, and death. }
-
 
 \input{tex_files/maude_ablation_fig.tex}
+\marco{Explain data and classes, and the task. Describe the results.
+    For the real-world experiments, MAUDE report narratives are represented using TF--IDF features with up to 50,000 unigram and bigram features, followed by TruncatedSVD to obtain a 300-dimensional representation and subsequent feature standardization.followed by an output layer corresponding to four outcome classes: malfunction, basic injury, serious injury, and death. }
 \input{tex_files/maude_barplot_fig.tex}
