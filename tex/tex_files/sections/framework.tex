@@ -1,33 +1,6 @@
 We focus on the classification task associated with head \(\h{1}\), where errors can result in either false or missed defect alarms, increasing production costs and risk. The same analysis extends naturally to other classification heads. We therefore formulate the task for \(\h{1}\) as a multi-class classification problem.
 
-% \begin{figure*}[!ht]
-%     \centering
-%     \begin{subfigure}[c]{0.55\textwidth}
-%         \centering
-%         \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
-%         \caption{Decision regions and rejected points.}
-%         \label{fig:decision_regions}
-%     \end{subfigure}
-%     \hspace{0.01\textwidth}
-%     \begin{minipage}[c]{0.3\textwidth}
-%         \centering
-%         \begin{subfigure}{\linewidth}
-%             \centering
-%             \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
-%             \caption{Selective risk curve.}
-%             \label{fig:risk_curve}
-%         \end{subfigure}
-%         \vspace{0.8em}
-%         \begin{subfigure}{\linewidth}
-%             \centering
-%             \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
-%             \caption{Classification margin histogram.}
-%             \label{fig:margin_histogram}
-%         \end{subfigure}
-%     \end{minipage}
-%     \caption{The impact of the reservation variable on the decision regions, selective risk curve, and classification margin histogram for a toy dataset with bidimensional features and \(C=3\), illustrating how the model can achieve lower classification risk by abstaining on a small fraction of uncertain predictions.}
-%     \label{fig:illustrative_example}
-% \end{figure*}
+% \input{tex_files/toy_example_fig.tex}
 
 Let \(\calX\subseteq\R^d\) be the (possibly continuous) feature space and let  \(\calY=\{1,\dots,C\}\) be the label space for the classification task, thus \(\card{\calY}=C\). Moreover, let \(\pXY\) be the underlying (unknown) \gls*{pdf} over \(\calX\times\calY\).
 Let \(\calD_{n} = \!\left\{( \x_1, y_1),\dots,( \x_n, y_n)\right\}\sim \pXY\) be a random realization of $n$ i.i.d. samples according to \(\pXY\)  denoting the \textit{training set}, where \(\x_i \in \calX\) is the input (feature), \(y_i \in \calY\) is the output class among $C$ possible classes and $n$ denotes the size of the training set. A predictor \({f}_{\calD_{n}}: \calX\rightarrow\calY\), i.e.,
