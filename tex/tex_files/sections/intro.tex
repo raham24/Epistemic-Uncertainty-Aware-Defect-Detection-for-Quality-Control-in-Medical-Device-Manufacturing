@@ -7,6 +7,34 @@ Crucially, this can lead to detection failures and misclassification of defects.
 We argue that addressing this issue is critical and, therefore, investigate the impact of epistemic uncertainty on detection failures in medical device manufacturing and examine a principled approach to mitigating its effects. Specifically, we adopt a cost-sensitive classification framework that explicitly accounts for uncertainty in the decision-making process by allowing the model to abstain from uncertain predictions. This formulation aims to improve the robustness and reliability of defect detection while accounting for the costs associated with erroneous decisions.
 
 In our framework, the task performed by \gls*{mlp} Head 1 is treated as a critical decision point, as an incorrect prediction at this stage may compromise the reliability of subsequent decisions and risk assessment. To mitigate this risk, the model is allowed to abstain when its prediction is uncertain, thereby reducing the likelihood of misclassification and improving the overall reliability of the defect detection system. Although outside the scope of this work, abstained predictions could subsequently be subjected to further scrutiny by human experts or additional automated checks. Such a mechanism provides a more cautious approach to defect detection in high-stakes settings and could further enhance the reliability and safety of medical device manufacturing.
+\begin{figure*}[!h]
+    \centering
+    \begin{subfigure}[c]{0.55\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/toy_example_rejection_model.png}
+        \caption{Decision regions and rejected points.}
+        \label{fig:decision_regions}
+    \end{subfigure}
+    \hspace{0.01\textwidth}
+    \begin{minipage}[c]{0.3\textwidth}
+        \centering
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_selective_risk_curve.png}
+            \caption{Selective risk curve.}
+            \label{fig:risk_curve}
+        \end{subfigure}
+        \vspace{0.8em}
+        \begin{subfigure}{\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{img/toy_example_margin_histogram.png}
+            \caption{Classification margin histogram.}
+            \label{fig:margin_histogram}
+        \end{subfigure}
+    \end{minipage}
+    \caption{The impact of abstention on the decision regions, selective risk curve, and classification margin histogram for a toy dataset with bidimensional features and \(C=3\), illustrating how the model can achieve lower classification risk by abstaining on a small fraction of uncertain predictions.}
+    \label{fig:illustrative_example}
+\end{figure*}
 \subsection{Contributions}
 \label{subsec:contributions}
 We summarize the contributions contained in the rest of this paper as follows:
