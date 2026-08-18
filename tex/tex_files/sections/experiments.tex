@@ -1,89 +1,29 @@
+\input{tex_files/synthetic_dist_fig}
+
 In this section we report our numerical results. We start by showing how the baseline data benchmark presented in \cite{shenoy2026uncertainty} is affected by epistemic uncertainty, and how our proposed approach can mitigate its impact. Furthermore, we propose a more nuanced version of their benchmark, where the detection task at end is more challenging, further highlighting the validity of our mitigation approach in less ad-hoc settings. Finally, we present a real-world case study of a medical device, introducing a benchmark easily downloadable through Proto-OKN, demonstrating the practical applicability and benefits of our proposed method in a high-stakes setting.
 
 \marco{We present our results in terms of accuracy coverage and risk.}
 
-\raham{Description of the model used for all the experiments, and the training procedure must be added in \cref{subsubsec:mlp_architecture}.}
+\raham{Description of the model used for all the experiments, and the training procedure must be added in \Cref{subsubsec:mlp_architecture}.}
 
 \subsection{Synthetic Benchmark}
 \label{subsec:synthetic-benchmark}
-We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \emph{baseline}. In particular, as, to the best of our knowledge, the official data had not been released we have reproduced the generation process for the benchmark as described in the aforementioned paper to the best of our capabilities, ensuring that for a comparable \gls*{mlp} net we obtain the same performance (cf. \cref{subsec:benchmark_gen}). We thus consider a three-classes (no defect, open circuit, and solder bridging) and six-features problem (relative humidity, temperature, pressure, paste viscosity, stencil thickness, time above liquidus, and peak reflow temperature). A plot showing the per-feature class distribution is available in \cref{fig:baseline}. One can notice how some classes are easily separated by the feature values making the classification problem rather simple. Nevertheless, \cref{fig:cascade-vs-abstention-synthetic} shows how by abstaining on less than \(10\%\) of the samples one can achieve a significant increase in accuracy of about \(4\) percentage points, by abstaining on the samples that are more likely to be misclassified.
+We first consider the benchmark in \cite{shenoy2026uncertainty}, which we call \emph{baseline}. In particular, as, to the best of our knowledge, the official data had not been released we have reproduced the generation process for the benchmark as described in the aforementioned paper to the best of our capabilities, ensuring that for a comparable \gls*{mlp} net we obtain the same performance (cf. \Cref{subsec:benchmark_gen}).
 
-Next, we artificially increase the difficulty of the problem by modeling features such that the class posteriors given the feature are more overlapped, i.e., we artificially increase the Bayes error, as can be observed in \cref{fig:overlap_harder}. Though the accuracy of the classifier on this task decreases, we can still observe in \Cref{fig:cascade-vs-abstention-synthetic} how abstention allows for higher accuracy.
+Therefore, we consider a three-classes (no defect, open circuit, and solder bridging) and six-features problem (relative humidity, temperature, pressure, paste viscosity, stencil thickness, time above liquidus, and peak reflow temperature). A plot showing the per-feature class distribution is available in \Cref{fig:baseline}. One can notice how some classes are easily separated by the feature values making the classification problem rather simple. Nevertheless, \Cref{fig:cascade-vs-abstention-synthetic} shows how by abstaining on less than \(10\%\) of the samples one can achieve a significant increase in accuracy of about \(4\) percentage points, by abstaining on the samples that are more likely to be misclassified.
 
-Finally, an ablation study sampling over different target coverage is presented in \Cref{fig:risk-baseline} for the baseline and \Cref{fig:risk-harder} for the higher overlap. Moreover, an ablation study over possible values of the payoff, confirming the results in \cref{fig:selective-risk} are relegated to the appendix in \cref{subsec:additional_numerical_results}.
-\begin{figure*}[!htbp]
-    \centering
+Next, we artificially increase the difficulty of the problem by modeling features such that the class posteriors given the feature are more overlapped, i.e., we artificially increase the Bayes error, as can be observed in \Cref{fig:overlap_harder}. Though the accuracy of the classifier on this task decreases, we can still observe in \Cref{fig:cascade-vs-abstention-synthetic} how abstention allows for higher accuracy.
 
-    \begin{subfigure}{.9\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{../tex/img/fig_feature_separability_baseline.png}
-        \caption{Baseline.}
-        \label{fig:baseline}
-    \end{subfigure}
+Finally, an ablation study sampling over different target coverage is presented in \Cref{fig:risk-baseline} for the baseline and \Cref{fig:risk-harder} for the higher overlap. Moreover, an ablation study over possible values of the payoff, confirming the results in \Cref{fig:selective-risk} are relegated to the appendix in \Cref{subsec:additional_numerical_results}.
 
-    \vspace{0.5em}
+\input{tex_files/synthetic_cascade_vs_abstention_fig}
 
-    \begin{subfigure}{.9\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{../tex/img/fig_feature_separability_harder.png}
-        \caption{Increased class posterior overlap.}
-        \label{fig:overlap_harder}
-    \end{subfigure}
-
-    \caption{Feature distributions under different levels of class posterior overlap.}
-    \label{fig:feature-separability}
-\end{figure*}
-
-\begin{figure}[!htbp]
-    \includegraphics[width=.48\textwidth]{../tex/img/fig_cascade_vs_abstention_selective.png}
-    \caption{(Best) Accuracy bar plot over multiple seeds for the baseline benchmark, comparing the performance of a single model w/o and w/ abstention (target coverage \(\ge 90\%\)).}
-    \label{fig:cascade-vs-abstention-synthetic}
-\end{figure}
-
-\begin{figure}[!htbp]
-    \centering
-    \begin{subfigure}[t]{0.48\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{../tex/img/fig_selective_risk_baseline.png}
-        \caption{Baseline}
-        \label{fig:risk-baseline}
-    \end{subfigure}
-    \hspace{0.005\linewidth}
-    \begin{subfigure}[t]{0.48\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{../tex/img/fig_selective_risk_harder.png}
-        \caption{Increased class posterior overlap}
-        \label{fig:risk-harder}
-    \end{subfigure}
-    \caption{Selective risk as a function of coverage.}
-    \label{fig:selective-risk}
-\end{figure}
+\input{tex_files/synthetic_ablation_study_fig}
 
 \subsection{Experiment on real medical devices data}
 \label{subsec:real-medical-devices-data}
 \marco{Explain data and classes, and the task. Describe the results.}
-\begin{figure}[t]
-    \centering
-    \begin{subfigure}[t]{0.49\columnwidth}
-        \centering
-        \includegraphics[width=\linewidth]{../tex/img/fig_maude_selective_vs_k.png}
-        \caption{Accuracy vs.\ payoff $k$.}
-        \label{fig:maude-k}
-    \end{subfigure}
-    \hspace{-.05\columnwidth}
-    \begin{subfigure}[t]{0.49\columnwidth}
-        \centering
-        \includegraphics[width=\linewidth]{../tex/img/fig_maude_accuracy_vs_coverage.png}
-        \caption{Accuracy vs.\ coverage.}
-        \label{fig:maude-coverage}
-    \end{subfigure}
 
-    \caption{Selective prediction performance across payoff and coverage.}
-    \label{fig:maude-selective}
-\end{figure}
 
-\begin{figure}
-    \includegraphics[width=.48\textwidth]{../tex/img/fig_maude_noabstain_vs_abstain_bar.png}
-    \caption{Performance comparison between no abstention and abstention.}
-    \label{fig:maude-noabstain-vs-abstain}
-\end{figure}
+\input{tex_files/maude_ablation_fig.tex}
+\input{tex_files/maude_barplot_fig.tex}

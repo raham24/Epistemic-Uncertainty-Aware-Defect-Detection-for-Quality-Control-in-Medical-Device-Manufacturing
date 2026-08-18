@@ -7,7 +7,7 @@
         \label{fig:decision_regions}
     \end{subfigure}
     \hspace{0.01\textwidth}
-    \begin{minipage}[c]{0.3\textwidth}
+    \begin{minipage}[c]{0.35\textwidth}
         \centering
         \begin{subfigure}{\linewidth}
             \centering
@@ -23,6 +23,6 @@
             \label{fig:margin_histogram}
         \end{subfigure}
     \end{minipage}
-    \caption{The impact of abstention on the decision regions, selective risk curve, and classification margin histogram for a toy dataset with bidimensional features and \(C=3\), illustrating how the model can achieve lower classification risk by abstaining on a small fraction of uncertain predictions.}
+    \caption{Illustrative example -- The impact of abstention on the decision regions, selective risk curve, and classification margin histogram for a toy dataset with 2-dimensional features and3 classes, illustrating how the model can achieve lower classification risk by abstaining on a small fraction of uncertain predictions. Abstention allows the model to focus on high-confidence predictions, resulting in improved overall performance, i.e., lower decision risk. Softmax margins, used as a proxy for uncertainty, except for a small overlap between the two histograms, further show that the technique can identify points for which the model's decision is more likely to be incorrect.}
     \label{fig:illustrative_example}
 \end{figure*}
