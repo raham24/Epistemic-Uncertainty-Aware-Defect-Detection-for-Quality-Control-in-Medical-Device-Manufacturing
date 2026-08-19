@@ -113,4 +113,4 @@ Thumbs.db
 # Except PDFs inside figures/images folders
 !figures/**/*.pdf
 !images/**/*.pdf
-ieee_tbme/
+ieee_tbme/tex/
