@@ -114,3 +114,5 @@ Thumbs.db
 !figures/**/*.pdf
 !images/**/*.pdf
 ieee_tbme/tex/
+
+tex/
