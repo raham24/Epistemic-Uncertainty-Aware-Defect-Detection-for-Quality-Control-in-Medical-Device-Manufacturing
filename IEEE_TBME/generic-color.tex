@@ -1,0 +1,120 @@
+\documentclass[journal,twoside,web]{ieeecolor2}
+
+% =====================================================================
+%  TBME template base packages (from the official template).
+%  NOTE: the template's \usepackage{algorithmic} is intentionally NOT
+%  loaded here -- our content uses algpseudocode (loaded below), and both
+%  packages define \algorithmic, which clashes.
+% =====================================================================
+\usepackage{generic}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{textcomp}
+
+% =====================================================================
+%  Our project's packages (curated copy of tex_files/packages.tex).
+%  We do NOT \input tex_files/packages.tex wholesale because:
+%    * it loads geometry[showframe] and tex_files/settings.tex sets
+%      \geometry{margin=1in}, which would override the required TBME
+%      two-column journal layout -- so geometry is omitted here;
+%    * the ieeecolor2 (IEEEtran) class predefines \proof and \labelindent,
+%      which amsthm and enumitem try to redefine -> \let ...\relax first.
+%  Only this file (generic-color.tex) is edited; our source .tex files are
+%  reused unchanged.
+% =====================================================================
+% \usepackage[utf8]{inputenc}
+% \usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsfonts}
+% \let\proof\relax
+% \let\endproof\relax          % ieeecolor2 predefines \proof/\endproof
+% \usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{bbm}
+\usepackage{hyperref}
+\usepackage{glossaries}
+% \let\labelindent\relax        % ieeecolor2 predefines \labelindent
+% \usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{xparse}
+\usepackage{thmtools}
+\usepackage{subcaption}
+\usepackage{thm-restate}
+\usepackage{comment}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{cleveref}         % load last (after hyperref, amsmath, algorithm)
+
+% Our figure files reference images as ../tex/img/... and img/...; the images
+% live in tex/img/, so this graphicspath resolves both forms.
+% \graphicspath{{tex/}}
+
+% Our notation, macros, acronyms, and theorem environments (reused unchanged).
+\input{../tex/tex_files/macros}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\markboth{\journalname, VOL. XX, NO. XX, XXXX 2026}
+{Author \MakeLowercase{\textit{et al.}}: \customtitle}
+
+\begin{document}
+
+\title{\customtitle}
+
+\author{Raham A. Butt, Marco Romanelli, and Roche C. deGuzman
+    % First A. Author, \IEEEmembership{Fellow, IEEE}, Second B. Author, and Third C. Author, Jr., \IEEEmembership{Member, IEEE}
+\thanks{This paragraph of the first footnote will contain the date on 
+which you submitted your paper for review. It will also contain support 
+information, including sponsor and financial support acknowledgment. For 
+example, ``This work was supported in part by the U.S. Department of 
+Commerce under Grant BS123456.'' }
+\thanks{The next few paragraphs should contain 
+the authors' current affiliations, including current address and e-mail. For 
+example, F. A. Author is with the National Institute of Standards and 
+Technology, Boulder, CO 80305 USA (e-mail: author@boulder.nist.gov). }
+\thanks{M. R. is with the Department of Computer Science, Hofstra University, Hempstead, NY 11549 USA (e-mail: marco.romanelli@hofstra.edu).}
+\thanks{T. C. Author is with 
+the Electrical Engineering Department, University of Colorado, Boulder, CO 
+80309 USA, on leave from the National Research Institute for Metals, 
+Tsukuba, Japan (e-mail: author@nrim.go.jp).}}
+
+\maketitle
+
+\begin{abstract}
+\input{../tex/tex_files/sections/abstract}
+\end{abstract}
+
+\begin{IEEEkeywords}
+Anomaly detection, decision making, machine learning, medical devices, quality control, uncertainty.
+\end{IEEEkeywords}
+
+% \section{Introduction}
+% \label{sec:introduction}
+% \input{tex_files/sections/intro.tex}
+
+% \section{Related Work}
+% \label{sec:related-work}
+% \input{tex_files/sections/related_work.tex}
+
+% \section{Framework}
+% \label{sec:framework}
+% \input{tex_files/sections/framework}
+
+% \section{Experiments}
+% \label{sec:experiments}
+% \input{tex_files/sections/experiments.tex}
+
+% \section{Conclusion}
+% \label{sec:conclusion}
+% \input{tex_files/sections/conclusion.tex}
+
+% \bibliographystyle{IEEEtran}
+% \bibliography{bibliography}
+
+% \appendix
+% \section{Appendix}
+% \label{sec:appendix}
+% \input{tex_files/appendix.tex}
+
+\end{document}
