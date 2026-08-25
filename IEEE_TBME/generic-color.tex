@@ -46,12 +46,10 @@
 \usepackage{algpseudocode}
 \usepackage{cleveref}         % load last (after hyperref, amsmath, algorithm)
 
-% Our figure files reference images as ../tex/img/... and img/...; the images
-% live in tex/img/, so this graphicspath resolves both forms.
-% \graphicspath{{tex/}}
+\newcommand{\projecttex}{../tex}
 
 % Our notation, macros, acronyms, and theorem environments (reused unchanged).
-\input{../tex/tex_files/macros}
+\input{\projecttex/tex_files/macros}
 
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
@@ -64,57 +62,57 @@
 
 \author{Raham A. Butt, Marco Romanelli, and Roche C. deGuzman
     % First A. Author, \IEEEmembership{Fellow, IEEE}, Second B. Author, and Third C. Author, Jr., \IEEEmembership{Member, IEEE}
-\thanks{This paragraph of the first footnote will contain the date on 
-which you submitted your paper for review. It will also contain support 
-information, including sponsor and financial support acknowledgment. For 
-example, ``This work was supported in part by the U.S. Department of 
-Commerce under Grant BS123456.'' }
-\thanks{The next few paragraphs should contain 
-the authors' current affiliations, including current address and e-mail. For 
-example, F. A. Author is with the National Institute of Standards and 
-Technology, Boulder, CO 80305 USA (e-mail: author@boulder.nist.gov). }
-\thanks{M. R. is with the Department of Computer Science, Hofstra University, Hempstead, NY 11549 USA (e-mail: marco.romanelli@hofstra.edu).}
-\thanks{T. C. Author is with 
-the Electrical Engineering Department, University of Colorado, Boulder, CO 
-80309 USA, on leave from the National Research Institute for Metals, 
-Tsukuba, Japan (e-mail: author@nrim.go.jp).}}
+    \thanks{This paragraph of the first footnote will contain the date on
+        which you submitted your paper for review. It will also contain support
+        information, including sponsor and financial support acknowledgment. For
+        example, ``This work was supported in part by the U.S. Department of
+        Commerce under Grant BS123456.'' }
+    \thanks{The next few paragraphs should contain
+        the authors' current affiliations, including current address and e-mail. For
+        example, F. A. Author is with the National Institute of Standards and
+        Technology, Boulder, CO 80305 USA (e-mail: author@boulder.nist.gov). }
+    \thanks{M. R. is with the Department of Computer Science, Hofstra University, Hempstead, NY 11549 USA (e-mail: marco.romanelli@hofstra.edu).}
+    \thanks{T. C. Author is with
+        the Electrical Engineering Department, University of Colorado, Boulder, CO
+        80309 USA, on leave from the National Research Institute for Metals,
+        Tsukuba, Japan (e-mail: author@nrim.go.jp).}}
 
 \maketitle
 
 \begin{abstract}
-\input{../tex/tex_files/sections/abstract}
+    \input{\projecttex/tex_files/sections/abstract}
 \end{abstract}
 
 \begin{IEEEkeywords}
-Anomaly detection, decision making, machine learning, medical devices, quality control, uncertainty.
+    Anomaly detection, decision making, machine learning, medical devices, quality control, uncertainty.
 \end{IEEEkeywords}
 
-% \section{Introduction}
-% \label{sec:introduction}
-% \input{tex_files/sections/intro.tex}
+\section{Introduction}
+\label{sec:introduction}
+\input{\projecttex/tex_files/sections/intro.tex}
 
-% \section{Related Work}
-% \label{sec:related-work}
-% \input{tex_files/sections/related_work.tex}
+\section{Related Work}
+\label{sec:related-work}
+\input{\projecttex/tex_files/sections/related_work.tex}
 
-% \section{Framework}
-% \label{sec:framework}
-% \input{tex_files/sections/framework}
+\section{Framework}
+\label{sec:framework}
+\input{\projecttex/tex_files/sections/framework.tex}
 
-% \section{Experiments}
-% \label{sec:experiments}
-% \input{tex_files/sections/experiments.tex}
+\section{Experiments}
+\label{sec:experiments}
+\input{\projecttex/tex_files/sections/experiments.tex}
 
-% \section{Conclusion}
-% \label{sec:conclusion}
-% \input{tex_files/sections/conclusion.tex}
+\section{Conclusion}
+\label{sec:conclusion}
+\input{\projecttex/tex_files/sections/conclusion.tex}
 
-% \bibliographystyle{IEEEtran}
-% \bibliography{bibliography}
+\bibliographystyle{IEEEtran}
+\bibliography{\projecttex/bibliography}
 
-% \appendix
-% \section{Appendix}
-% \label{sec:appendix}
-% \input{tex_files/appendix.tex}
+\appendix
+\section{Appendix}
+\label{sec:appendix}
+\input{\projecttex/tex_files/appendix.tex}
 
 \end{document}
