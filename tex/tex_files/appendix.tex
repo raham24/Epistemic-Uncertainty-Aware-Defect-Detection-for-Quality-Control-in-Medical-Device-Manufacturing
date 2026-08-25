@@ -1,4 +1,4 @@
-In this section we present the proofs for the main theoretical results in \cref{sec:framework}. We first present some auxiliary results that will be used in the proofs of \cref{theorem:kkt,theorem:threshold}. For the sake of generality, in this section, we consider true posterior probabilities \(p=\PYX(\cdot\mid\x)\), rather than empirical one-hot encoded labels. Indeed, let \(Z=(Z_1,\ldots,Z_C)\) denote the observed one-hot target, where
+In this section we present the proofs for the main theoretical results in \Cref{sec:framework}. We first present some auxiliary results that will be used in the proofs of \Cref{theorem:kkt,theorem:threshold}. For the sake of generality, in this section, we consider true posterior probabilities \(p=\PYX(\cdot\mid\x)\), rather than empirical one-hot encoded labels. Indeed, let \(Z=(Z_1,\ldots,Z_C)\) denote the observed one-hot target, where
 \begin{align}
     Z_i = \mathbbm{1}\{Y=i\},
     \qquad i\in\{1,\ldots,C\}.
@@ -76,7 +76,7 @@ over the conditional distribution of \(Y\) given \(X=\x\).
 
 \subsection{Auxiliary results}
 \label{subsec:auxiliary_results}
-First, let us consider the problem of optimizing \cref{eq:reject_cross_entropy_internal} in the probability simplex
+First, let us consider the problem of optimizing \Cref{eq:reject_cross_entropy_internal} in the probability simplex
 \begin{align}
     \label{eq:probability_simplex}
     \nonumber
@@ -85,7 +85,7 @@ First, let us consider the problem of optimizing \cref{eq:reject_cross_entropy_i
 \end{align}
 \begin{restatable}{lemma}{lemmaSimplex}
     \label{lemma:simplex_properties}
-    The probability simplex \(\Delta^{C}\) defined in \cref{eq:probability_simplex} is convex, closed, and bounded.
+    The probability simplex \(\Delta^{C}\) defined in \Cref{eq:probability_simplex} is convex, closed, and bounded.
 \end{restatable}
 % \lemmaSimplex*
 \begin{proof}
@@ -161,7 +161,7 @@ First, let us consider the problem of optimizing \cref{eq:reject_cross_entropy_i
 Moreover, the following holds:
 \begin{restatable}{lemma}{lemmaConcavity}
     \label{lemma:concavity}
-    The function in \cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
+    The function in \Cref{eq:reject_cross_entropy_internal} is concave in \(\PYXhat\) over the domain \(\Delta^{C}\).
 \end{restatable}
 \begin{proof}
     %     \propConcavity*
@@ -254,7 +254,7 @@ Due to the nature of the problem analyzed, we can build the following \gls*{cmp}
 Thus, the following holds:
 \begin{restatable}{proposition}{propEquivalence}
     \label{prop:equivalence}
-    The formulation in \cref{eq:cmp_problem} encompasses the standard training with \cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
+    The formulation in \Cref{eq:cmp_problem} encompasses the standard training with \Cref{eq:cross_entropy} as a special case when \(\phat_{C+1}=0\) (cf. \cite{liu2019deep}), as it reduces to the minimization of the Kullback-Leibler divergence between the true and predicted distributions, which is equivalent to the cross-entropy loss.
 \end{restatable}
 \begin{proof}
     % \propEquivalence*
@@ -275,7 +275,7 @@ Thus, the following holds:
     \end{align*}
     where $H(p)$ is the Shannon entropy of $p$ and $D_{\text{KL}}(p\| \phat)$ is the Kullback-Leibler divergence between $p$ and $\phat$. Since $\log\!\left(\costmult\right)$ and $H(p)$ are constants with respect to $\phat$, maximizing $\W{r}$ is equivalent to minimizing $D_{\text{KL}}(p\| \phat)$, which is equivalent to minimizing the cross-entropy loss.
 \end{proof}
-\subsection{Proof of \cref{theorem:kkt}}
+\subsection{Proof of \Cref{theorem:kkt}}
 \label{sec:proof_kkt_conditions}
 \theoremKKT*
 \begin{proof}
@@ -302,7 +302,7 @@ Thus, the following holds:
         \end{aligned}
         \right.
     \end{align*}
-    For the objective in \cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
+    For the objective in \Cref{eq:reject_cross_entropy_internal}, the stationarity conditions yield
     \begin{align*}
         \frac{\partial\mathcal{L}}{\partial\phat_i} & = \frac{\costmult\cdot p_i}{\costmult\cdot\phat_i+\phat_{C+1}}-\lambda+\mu_i = 0,
     \end{align*}
@@ -365,7 +365,7 @@ Thus, the following holds:
     which proves the result.
 \end{proof}
 
-\subsection{Proof of \cref{theorem:threshold}}
+\subsection{Proof of \Cref{theorem:threshold}}
 \label{sec:proof_threshold}
 \theoremThreshold*
 \begin{proof}
@@ -395,7 +395,7 @@ Thus, the following holds:
     \begin{align*}
         S=\{j:\phat_j^\star>0\}, \qquad a=|S|, \qquad P_{\bar S}=\sum_{j\notin S}p_j.
     \end{align*}
-    Since \(\phat_{C+1}^\star>0\), complementary slackness gives \(\mu_{C+1}=0\). Moreover, for every \(j\in S\), \cref{eq:kkt_conditions_solution} implies
+    Since \(\phat_{C+1}^\star>0\), complementary slackness gives \(\mu_{C+1}=0\). Moreover, for every \(j\in S\), \Cref{eq:kkt_conditions_solution} implies
     \begin{align*}
         \costmult\phat_j^\star+\phat_{C+1}^\star=\frac{\costmult p_j}{\lambda}.
     \end{align*}
@@ -408,7 +408,7 @@ Thus, the following holds:
     \begin{align*}
         P_{\bar S}=\lambda\left(1-\frac{a}{\costmult}\right)\phat_{C+1}^\star.
     \end{align*}
-    Summing \cref{eq:kkt_conditions_solution} over \(j\in S\) and using \(\sum_{j\in S}\phat_j^\star=1-\phat_{C+1}^\star\) gives
+    Summing \Cref{eq:kkt_conditions_solution} over \(j\in S\) and using \(\sum_{j\in S}\phat_j^\star=1-\phat_{C+1}^\star\) gives
     \begin{align*} \frac{1-P_{\bar S}}{\lambda}-\frac{a\phat_{C+1}^\star}{\costmult}=1-\phat_{C+1}^\star. \end{align*}
     Substituting the preceding expression for \(P_{\bar S}\) yields
     \(\lambda=1 \).
@@ -416,7 +416,7 @@ Thus, the following holds:
     \begin{align*}
         P_{\bar S}=(\costmult-a)\frac{\phat_{C+1}^\star}{\costmult}.
     \end{align*}
-    On the other hand, for every inactive coordinate \(j\notin S\), \cref{eq:kkt_conditions_solution} implies
+    On the other hand, for every inactive coordinate \(j\notin S\), \Cref{eq:kkt_conditions_solution} implies
     \begin{align*}
         p_j\le\frac{\phat_{C+1}^\star}{\costmult}.
     \end{align*}
@@ -505,14 +505,14 @@ Thus, the following holds:
 \subsection{Additional numerical results}
 \label{subsec:additional_numerical_results}
 In this section, we present additional numerical results, which complement the results already presented in the main body of the paper.
-% \subsubsection{Details on the \gls*{mlp} architectures used in \cref{subsec:synthetic-benchmark} and \cref{subsec:real-medical-devices-data}}
+% \subsubsection{Details on the \gls*{mlp} architectures used in \Cref{subsec:synthetic-benchmark} and \Cref{subsec:real-medical-devices-data}}
 % \raham{Description of the model used for all the experiments, and the training procedure must be added here.}
 % \label{subsubsec:mlp_architecture}
 \begin{figure}[!h]
-    \includegraphics[width=.48\textwidth]{../tex/img/fig_accuracy_vs_k.png}
+    \includegraphics[width=.48\textwidth]{\projecttex/img/fig_accuracy_vs_k.png}
     \caption{Synthetic benchmark data -- Ablation study over the variable \(k\) for the higher posterior overlap case for the benchmark in \Cref{subsec:synthetic-benchmark}.}
     \label{fig:ablation-k-synthetic}
 \end{figure}
 \subsection{Benchmark generation}
 \label{subsec:benchmark_gen}
-\input{tex_files/sections/synthetic_data_genereation.tex}
+\input{\projecttex/tex_files/sections/synthetic_data_genereation.tex}
