@@ -37,6 +37,9 @@ Finally, we present an ablation study across different target coverage levels in
 
 In this section, we present the results of our experiments on real-world medical device data. The dataset consists of report narratives, extracted from \cite{fda_maude,fda_510k} through the contributed \gls*{kg} within the \gls*{protookn} project (cf. \cite{protookn}).
 \input{\projecttex/tex_files/maude_ablation_fig.tex}
+
+The final dataset comprises 266,170 reports (185,477 malfunction, 44,995 injury, 33,897 serious injury, 1801 death), partitioned into training, validation, and test splits of [64/14/20]\% stratified by outcome class. Severity labels are derived from the MAUDE event_type field as follows: reports typed Death and Malfunction map directly to the Death and Malfunction classes, while Injury reports are split into basic vs. serious injury. An serious injury if its raw (pre-redaction) narrative matches a serious-injury cue and basic injury otherwise, reports typed Other or No answer, or carrying no narrative are discarded. Duplicate reports were removed based on exact narrative text duplications.
+
 These narratives consist of structured key--value pairs, including textual descriptions of adverse events associated with medical devices. The datasets are connected by the device identifiers, which are used to link the narratives to the corresponding device information.
 
 The task we select is to classify these text-based features into four outcome classes: malfunction, basic injury, serious injury, and death, in increasing order of severity. The underlying objective is to identify patterns associated with adverse events in previously unseen data, with the broader goal of supporting their early detection and potentially preventing similar events from occurring in the future.
