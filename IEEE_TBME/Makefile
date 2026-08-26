@@ -1,4 +1,4 @@
-MAIN = main
+MAIN = generic-color
 TEX  = $(MAIN).tex
 PDF  = $(MAIN).pdf
 
