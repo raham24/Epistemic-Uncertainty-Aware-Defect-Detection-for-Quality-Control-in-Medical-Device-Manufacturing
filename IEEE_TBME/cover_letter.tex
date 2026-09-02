@@ -1,0 +1,55 @@
+\documentclass[11pt]{letter}
+\usepackage[margin=1in]{geometry}
+\newcommand{\projecttex}{../tex}
+\input{\projecttex/tex_files/metadata.tex}
+
+\signature{Marco Romanelli\\
+on behalf of all authors}
+
+\begin{document}
+
+\begin{letter}{Editor-in-Chief\\
+        IEEE Transactions on Biomedical Engineering}
+
+    \opening{Dear Editor-in-Chief,}
+
+    We are pleased to submit our manuscript, entitled \emph{\customtitle}
+    for consideration as a Full Paper in
+    \textit{IEEE Transactions on Biomedical Engineering}.
+
+    This work introduces a principled rejection strategy for improving
+    the reliability of machine-learning-based defect detection in medical
+    device manufacturing. The method leverages epistemic uncertainty to identify
+    predictions on which the model should abstain. Our theoretical analysis
+    establishes the validity of the approach and characterizes the regimes
+    and parameter settings under which it is effective. Experiments on
+    synthetic benchmarks and real-world medical device report data show
+    that the strategy enables explicit control of predictive coverage while
+    improving accuracy on the retained samples.
+
+    The significance of this work lies in its potential to support safer
+    and more reliable quality assurance in medical device manufacturing.
+    By flagging uncertain cases for additional inspection, the proposed
+    approach can reduce the risks and costs associated with incorrect
+    automated decisions.
+
+    We confirm that this manuscript is entirely original and has not been
+    copyrighted, published, submitted, or accepted for publication
+    elsewhere. All authors have approved the manuscript and its submission.
+
+    % Retain exactly one of the following two paragraphs:
+    There are no prior or concurrently submitted conference proceedings
+    papers related to this work.
+
+    % A preliminary version of this work was reported in [citation].
+    % The present manuscript is substantially different because [explain
+    % the additional theory, methods, experiments, and findings].
+
+    The manuscript has not previously been rejected by this journal.
+
+    Thank you for considering our manuscript.
+    \vspace{\baselineskip}
+    \closing{Sincerely,}
+
+\end{letter}
+\end{document}
