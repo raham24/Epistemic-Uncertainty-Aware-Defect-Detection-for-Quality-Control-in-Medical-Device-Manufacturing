@@ -3,7 +3,7 @@ We focus on the classification task associated with head \(\h{1}\), where errors
 % \input{tex_files/toy_example_fig.tex}
 
 Let \(\calX\subseteq\R^d\) be the (possibly continuous) feature space and let  \(\calY=\{1,\dots,C\}\) be the label space for the classification task, thus \(\card{\calY}=C\). Moreover, let \(\pXY\) be the underlying (unknown) \gls*{pdf} over \(\calX\times\calY\).
-Let \(\calD_{n} = \!\left\{( \x_1, y_1),\dots,( \x_n, y_n)\right\}\sim \pXY\) be a random realization of $n$ i.i.d. samples according to \(\pXY\)  denoting the \textit{training set}, where \(\x_i \in \calX\) is the input (feature), \(y_i \in \calY\) is the output class among $C$ possible classes and $n$ denotes the size of the training set. 
+Let \(\calD_{n} = \!\left\{( \x_1, y_1),\dots,( \x_n, y_n)\right\}\sim \pXY\) be a random realization of $n$ i.i.d. samples according to \(\pXY\)  denoting the \textit{training set}, where \(\x_i \in \calX\) is the input (feature), \(y_i \in \calY\) is the output class among $C$ possible classes and $n$ denotes the size of the training set.
 
 A predictor is a function \({f}_{\calD_{n}}: \calX\rightarrow\calY\), defined as \(
 f_{\calD_{n}}(\x) \triangleq \argmax_{y\in\calY}~\PYXhat(y|\x;\calD_{n}),
@@ -52,7 +52,7 @@ and
     \phat_j\ge 0,\ \forall j\in\{1,\ldots,C+1\},
 \end{align}
 where \(\costmult\in\R_{+}\) is a positive hyperparameter that controls the trade-off between making a prediction and abstaining. Higher values of \(\costmult\) encourages the model to make predictions, while lower values promote abstention.
-While neural networks provide a practical means of obtaining generally suboptimal solutions that can be applied to arbitrary inputs, as noted in \cite{liu2019deep}, a principled reformulation and analysis of the underlying optimization problem (cf. \cite{boyd2004convex}) can yield further theoretical insights. In particular, such an analysis allows us to characterize the uncertainty threshold for abstention and identify previously unrecognized degenerate cases. These findings provide further insight into the principled management of epistemic uncertainty in high-stakes applications, such as fault detection in medical devices.
+Though neural networks provide a practical means of obtaining (generally suboptimal) solutions that can be applied to arbitrary inputs, as noted in \cite{Hornik1991} and \cite{liu2019deep}, a principled reformulation and analysis of the underlying optimization problem (cf. \cite{boyd2004convex}) can yield further theoretical insights. In particular, such an analysis allows us to characterize the uncertainty threshold for abstention and identify previously unrecognized degenerate cases. These findings provide further insight into the principled management of epistemic uncertainty in high-stakes applications, such as fault detection in medical devices.
 
 \subsection{Illustrative example}
 \label{subsec:illustrative_example}
