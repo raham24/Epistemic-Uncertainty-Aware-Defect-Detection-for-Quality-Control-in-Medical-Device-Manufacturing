@@ -48,7 +48,7 @@ Text content is represented using TF--IDF features with up to 50,000 unigram and
 \input{\projecttex/tex_files/maude_barplot_fig.tex}
 
 \Cref{fig:maude-k} and \Cref{fig:maude-coverage} show the effectiveness of abstention on the retained predictions, confirming the expected results. Additionally, for this task, it is possible to achieve almost perfect accuracy for \(\approx 70\%\) coverage.
-\textcolor{red}{report coverage and risk redction here}. This indicates that the abstention mechanism is preferentially rejecting predictions that are more likely to be incorrect, thereby improving the accuracy of the retained predictions, though nearly optimal accuracy may incur a high cost in terms of the number of predictions that are abstained from. The ablation study across different target coverage levels in \Cref{fig:maude-k} further supports this conclusion, demonstrating that the benefits of abstention persist across a range of coverage levels.
+This indicates that the abstention mechanism is preferentially rejecting predictions that are more likely to be incorrect, thereby improving the accuracy of the retained predictions, though nearly optimal accuracy may incur a high cost in terms of the number of predictions that are abstained from. The ablation study across different target coverage levels in \Cref{fig:maude-k} further supports this conclusion, demonstrating that the benefits of abstention persist across a range of coverage levels.
 
 Finally, \Cref{fig:maude-noabstain-vs-abstain} shows the performance comparison between the standard cross-entropy model and its version equipped with abstention, showing consistent and favorable results across multiple independent runs.
 
