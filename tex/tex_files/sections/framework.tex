@@ -3,11 +3,11 @@ We focus on the classification task associated with head \(\h{1}\), where errors
 % \input{tex_files/toy_example_fig.tex}
 
 Let \(\calX\subseteq\R^d\) be the (possibly continuous) feature space and let  \(\calY=\{1,\dots,C\}\) be the label space for the classification task, thus \(\card{\calY}=C\). Moreover, let \(\pXY\) be the underlying (unknown) \gls*{pdf} over \(\calX\times\calY\).
-Let \(\calD_{n} = \!\left\{( \x_1, y_1),\dots,( \x_n, y_n)\right\}\sim \pXY\) be a random realization of $n$ i.i.d. samples according to \(\pXY\)  denoting the \textit{training set}, where \(\x_i \in \calX\) is the input (feature), \(y_i \in \calY\) is the output class among $C$ possible classes and $n$ denotes the size of the training set. A predictor \({f}_{\calD_{n}}: \calX\rightarrow\calY\), i.e.,
-\(
+Let \(\calD_{n} = \!\left\{( \x_1, y_1),\dots,( \x_n, y_n)\right\}\sim \pXY\) be a random realization of $n$ i.i.d. samples according to \(\pXY\)  denoting the \textit{training set}, where \(\x_i \in \calX\) is the input (feature), \(y_i \in \calY\) is the output class among $C$ possible classes and $n$ denotes the size of the training set. 
+
+A predictor is a function \({f}_{\calD_{n}}: \calX\rightarrow\calY\), defined as \(
 f_{\calD_{n}}(\x) \triangleq \argmax_{y\in\calY}~\PYXhat(y|\x;\calD_{n}),
-\)
-uses the inferred model \(\PYXhat\equiv \PYXhat(y|\x;\calD_{n})\) to approximate the optimal (Bayes) decision rule
+\), which uses the inferred model \(\PYXhat\equiv \PYXhat(y|\x;\calD_{n})\) to approximate the optimal (Bayes) decision rule
 \(
 f^\star(\x)  \triangleq   \argmax_{y\in\calY}~\PYX(y|\x).
 \)
