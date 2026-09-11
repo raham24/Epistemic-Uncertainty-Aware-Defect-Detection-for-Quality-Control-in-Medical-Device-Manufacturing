@@ -23,6 +23,17 @@
             \label{fig:margin_histogram}
         \end{subfigure}
     \end{minipage}
-    \caption{Illustrative example -- The impact of abstention on the decision regions, selective risk curve, and classification margin histogram for a toy dataset with 2-dimensional features and3 classes, illustrating how the model can achieve lower classification risk by abstaining on a small fraction of uncertain predictions. Abstention allows the model to focus on high-confidence predictions, resulting in improved overall performance, i.e., lower decision risk. Softmax margins, used as a proxy for uncertainty, except for a small overlap between the two histograms, further show that the technique can identify points for which the model's decision is more likely to be incorrect.}
+    \caption{Illustrative example -- The impact of principled abstention on the decision regions (\Cref{fig:decision_regions}), 
+    %selective 
+    risk-coverage curve (\Cref{fig:risk_curve}), and classification margin histogram (\Cref{fig:margin_histogram}) for a toy dataset with 2-dimensional features and 3 balanced classes. The model rejects observations concentrated near decision boundaries, where predictions are more uncertain. Lowering the coverage
+        %to approximately \(81\%\) 
+        by 
+        %about 
+        \(19\%\) reduces the classification risk on retained predictions by 
+        %approximately 
+        \(50\%\). The softmax-margin distributions further show that rejected observations generally have smaller margins than retained observations, with only limited overlap, indicating that the reservation mechanism effectively identifies uncertain predictions and trades coverage for lower selective risk.
+        % The impact of abstention on the decision regions, selective risk curve, and classification margin histogram for a toy dataset with 2-dimensional features and 3 classes, illustrating how the model can achieve lower classification risk by abstaining on a small fraction of uncertain predictions. Abstention allows the model to focus on high-confidence predictions, resulting in improved overall performance, i.e., lower decision risk. Softmax margins, used as a proxy for uncertainty, except for a small overlap between the two histograms, further show that the technique can identify points for which the model's decision is more likely to be incorrect.
+        % 
+    }
     \label{fig:illustrative_example}
 \end{figure*}
