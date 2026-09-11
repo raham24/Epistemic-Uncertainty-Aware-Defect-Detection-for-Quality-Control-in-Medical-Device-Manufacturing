@@ -27,7 +27,7 @@ In general, during training, the empirical cross-entropy loss is minimized to le
                                     &\sum_{j=1}^{C}\PYX(y_j \mid \x_i)\log\PYXhat(y_j \mid \x_i;\calD_n)\Bigg].
 \end{align}
 % The cross-entropy loss can be interpreted as the negative log-likelihood of the true labels given the predicted probabilities. 
-Minimizing \Cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes.
+Minimizing \Cref{eq:cross_entropy} encourages the model to assign high probabilities to the correct classes (cf. \cite{shalev2014understanding,bishop2006pattern,goodfellow2016deep}).
 % For the sake of clarity, for each sample \(\x_i\), we can rewrite the term \(\sum_{j=1}^{C} p_{i,j}\log \PYXhat(y_j|\x_i;\calD_n)\) as
 For each sample \(\x\), \Cref{eq:cross_entropy_internal} indicates the likelihood of the predicted class probabilities, i.e.,
 \begin{align}
