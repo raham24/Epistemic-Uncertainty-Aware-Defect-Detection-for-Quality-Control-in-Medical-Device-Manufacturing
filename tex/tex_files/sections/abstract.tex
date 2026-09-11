@@ -3,7 +3,7 @@
 \textit{Methods:} We consider a \acrlong*{ml} framework that operates on heterogeneous manufacturing and device-report data %integrated and 
 %distributed 
 %through 
-represented with \acrlongpl*{kg}. To mitigate errors arising from uncertainty in the decision model, we analyze a principled rejection strategy to abstain from predictions whose estimated epistemic uncertainty exceeds a specified threshold. We evaluate the approach using standard synthetic benchmarks and real-world medical device report data.
+represented with \acrlongpl*{kg}. To mitigate errors arising from uncertainty in the decision model, we analyze a principled rejection strategy to abstain (reject) from predictions whose estimated epistemic uncertainty exceeds a specified threshold. We evaluate the approach using standard synthetic benchmarks and real-world medical device report data.
 
 \textit{Results:} The theoretical results establish the validity of the proposed method characterizing the regimes 
 %and parameter settings 
@@ -16,7 +16,7 @@ under which it is expected to be effective. Empirically, the rejection strategy 
 % \approx 
 48\%\) error reduction is observed for \(10\%\) abstention rate, and where more aggressive rejection, corresponding to approximately \(70\%\) coverage, yields near-perfect accuracy on the retained samples.
 
-\textit{Conclusions:} Rejecting predictions with high epistemic uncertainty can provide a practical tool for controlling the reliability of \acrlong*{ml}-based defect detection, especially in high-stakes applications such as medical device manufacturing.
+\textit{Conclusions:} Abstaining from predictions with high epistemic uncertainty can provide a practical tool for controlling the reliability of \acrlong*{ml}-based defect detection, especially in high-stakes applications such as medical device manufacturing.
 
 \textit{Significance:} Uncertainty-aware defect detection may support safer and more reliable quality assurance in medical device manufacturing by identifying cases that require additional inspection rather than issuing potentially harmful predictions.
 
