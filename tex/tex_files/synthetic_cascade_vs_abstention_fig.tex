@@ -1,5 +1,8 @@
 \begin{figure}[!htbp]
     \includegraphics[width=.48\textwidth]{\projecttex/img/fig_cascade_vs_abstention_selective.png}
-    \caption{Synthetic benchmark data -- (Best) Accuracy bar plot over multiple seeds for the baseline benchmark, comparing the performance of a single model w/o and w/ abstention (target coverage \(\ge 90\%\)).}
+    \caption{Synthetic benchmark data -- (Best) Accuracy bar plot over multiple seeds for the baseline benchmark, comparing the performance of a single model w/o and w/ abstention (target coverage \(\ge 90\%\)). 
+    For the baseline setting, abstention increases mean accuracy from \(95.10\%\) to \(98.17\%\) (\(+3.07\) percentage points), reducing classification error by \(62.65\%\). At higher overlap, it increases mean accuracy from \(87.59\%\) to \(89.94\%\) (\(+2.35\) percentage points), reducing classification error by \(18.94\%\).
+    The narrow error bars, which represent variability across multiple random seeds, indicate that performance remains consistent under different random initializations.
+    }
     \label{fig:cascade-vs-abstention-synthetic}
 \end{figure}
