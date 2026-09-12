@@ -1,4 +1,4 @@
-# Uncertainty-Aware Neurosymbolic Root-Cause Analysis
+# Epistemic Uncertainty-Aware Defect Detection for Quality Control in Medical Device Manufacturing
 
 Code for the paper's experiments. A shared-trunk multi-head MLP with an optional
 **learned-abstention** head (selective classification: predict, or decline when
