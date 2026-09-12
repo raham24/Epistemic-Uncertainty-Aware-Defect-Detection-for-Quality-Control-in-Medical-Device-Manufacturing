@@ -3,16 +3,16 @@
 \textit{Methods:} We consider a \acrlong*{ml} framework that operates on heterogeneous manufacturing and device-report data %integrated and 
 %distributed 
 %through 
-represented with \acrlongpl*{kg}. To mitigate errors arising from uncertainty in the decision model, we analyze a principled rejection strategy to abstain (reject) from predictions whose estimated epistemic uncertainty exceeds a specified threshold. We evaluate the approach using standard synthetic benchmarks and real-world medical device report data.
+represented with \acrlongpl*{kg}. To mitigate errors arising from uncertainty in the decision model, we analyze a principled rejection strategy to abstain from predictions whose estimated epistemic uncertainty exceeds a specified threshold. We evaluate the approach using standard synthetic benchmarks and real-world medical device report data.
 
 \textit{Results:} The theoretical results establish the validity of the method characterizing the regimes 
 %and parameter settings 
 under which it is expected to be effective. Empirically, the rejection strategy enables explicit control of coverage, that is, the proportion of samples for which the model issues predictions, while improving performance on the retained samples. On standard synthetic benchmarks, abstaining on
 \(
 %\approx 
-9\%\) of the decisions, the proposed approach reduces the risk up to \(
+9\%\) of the decisions, our approach reduces the risk up to \(
 % \approx 
-63\%\) compared with the standard no-abstention approach. Similar improvements are observed on real-world medical device report data, where \(
+63\%\) compared with the standard no-abstention approach. Similar improvements occur on real-world medical device report data, where \(
 % \approx 
 48\%\) error reduction is observed for \(10\%\) abstention rate, and where more aggressive rejection, corresponding to approximately \(70\%\) coverage, yields near-perfect accuracy on the retained samples.
 
